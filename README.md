@@ -25,6 +25,8 @@ Optional:
 - **On your phone** (same Wi-Fi): `npm run dev:phone` and open the "Network" URL.
 - **Tests**: `npm test`
 
+The floating financial chat uses the server's `/api/chat` endpoint and an Anthropic API key. Questions sent there include a financial summary from connected Plaid accounts and your savings goals. The dashboard's Polaris assistant continues to answer locally on-device.
+
 ## 30-second demo
 
 1. **Home**: tap **Try it with sample data**. In "How much can you save this week?", turn the dial from $15 to $30. The hoodie moves 21 days sooner and is on time for Christmas. Tap **Save $30/week to my plan**.

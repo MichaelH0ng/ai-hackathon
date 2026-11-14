@@ -6,10 +6,11 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Router } from "express";
 import { Configuration, CountryCode, PlaidApi, PlaidEnvironments, Products } from "plaid";
+import type { BankData } from "../src/lib/money.ts";
 import { studentBanks } from "./sandboxStudent.ts";
 
 const ENV = process.env.PLAID_ENV || "sandbox";
-const configured = Boolean(process.env.PLAID_CLIENT_ID && process.env.PLAID_SECRET);
+export const plaidConfigured = Boolean(process.env.PLAID_CLIENT_ID && process.env.PLAID_SECRET);
 
 const plaid = new PlaidApi(
   new Configuration({
@@ -58,11 +59,11 @@ async function exchange(publicToken: string, institution: string, kind: "bank" |
 export const plaidRouter = Router();
 
 plaidRouter.get("/api/plaid/status", (_req, res) => {
-  res.json({ env: ENV, configured, missing: [!process.env.PLAID_CLIENT_ID && "PLAID_CLIENT_ID", !process.env.PLAID_SECRET && "PLAID_SECRET"].filter(Boolean), items: getItems().map(({ itemId, institution, kind }) => ({ itemId, institution, kind: kind ?? "bank" })) });
+  res.json({ env: ENV, configured: plaidConfigured, missing: [!process.env.PLAID_CLIENT_ID && "PLAID_CLIENT_ID", !process.env.PLAID_SECRET && "PLAID_SECRET"].filter(Boolean), items: getItems().map(({ itemId, institution, kind }) => ({ itemId, institution, kind: kind ?? "bank" })) });
 });
 
 plaidRouter.use("/api/plaid", (_req, res, next) => {
-  if (!configured) {
+  if (!plaidConfigured) {
     res.status(503).json({ error: "Account connections need one more setup step. You can still add accounts manually." });
     return;
   }
@@ -148,12 +149,12 @@ plaidRouter.delete("/api/plaid/items/:id", async (req, res) => {
 });
 
 // Everything the dashboard needs: balances and recent transactions from every connected bank.
-plaidRouter.get("/api/plaid/dashboard", async (_req, res) => {
+export async function loadDashboardData(): Promise<BankData> {
   const perItem = await Promise.all(
     getItems().map(async (item) => {
-      const accounts: unknown[] = [];
-      const transactions: unknown[] = [];
-      const holdings: unknown[] = [];
+      const accounts: BankData["accounts"] = [];
+      const transactions: BankData["transactions"] = [];
+      const holdings: NonNullable<BankData["holdings"]> = [];
       const investing = item.kind === "investments";
       let problem: string | undefined;
       let ready = true;
@@ -163,11 +164,11 @@ plaidRouter.get("/api/plaid/dashboard", async (_req, res) => {
           accounts.push({
             id: a.account_id,
             name: a.name,
-            mask: a.mask,
+            mask: a.mask ?? null,
             type: a.type,
-            subtype: a.subtype,
+            subtype: a.subtype ?? null,
             current: a.balances.current ?? 0,
-            available: a.balances.available,
+            available: a.balances.available ?? null,
             institution: item.institution,
           });
         }
@@ -216,12 +217,16 @@ plaidRouter.get("/api/plaid/dashboard", async (_req, res) => {
       return { accounts, transactions, holdings, status: { itemId: item.itemId, institution: item.institution, problem, ready } };
     }),
   );
-  res.json({
+  return {
     env: ENV,
     accounts: perItem.flatMap((r) => r.accounts),
     holdings: perItem.flatMap((r) => r.holdings),
     transactions: perItem.flatMap((r) => r.transactions).sort((a, b) => ((a as { date: string }).date < (b as { date: string }).date ? 1 : -1)),
     status: perItem.map((r) => r.status),
     fetchedAt: new Date().toISOString(),
-  });
+  };
+}
+
+plaidRouter.get("/api/plaid/dashboard", async (_req, res) => {
+  res.json(await loadDashboardData());
 });

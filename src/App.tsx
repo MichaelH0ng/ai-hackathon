@@ -10,6 +10,7 @@ import { Settings } from "./components/Settings";
 import SoftAurora from "./components/SoftAurora";
 import { StudyGoalForm } from "./components/StudyGoalForm";
 import { StudyGoalView } from "./components/StudyGoalView";
+import { FinancialChat } from "./components/FinancialChat";
 import { TopNav } from "./components/TopNav";
 import { BackButton } from "./components/ui";
 import { todayISO } from "./lib/dates";
@@ -201,6 +202,7 @@ export default function App() {
         active={screen.name === "goals" ? "goals" : screen.name === "settings" ? "settings" : screen.name === "home" ? "home" : screen.name === "check" ? "check" : screen.name === "money" ? "money" : "other"}
       />
       {isLanding ? body : <main id="main" className="mx-auto max-w-md px-4 pb-16 pt-6 sm:max-w-2xl">{body}</main>}
+      <FinancialChat goals={state.goals} />
     </div>
   );
 }
