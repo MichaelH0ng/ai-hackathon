@@ -1,5 +1,3 @@
-import type { Grade, PlanDay, StudyActivity, Topic } from "./study";
-
 export interface MoneyGoal {
   kind: "money";
   id: string;
@@ -11,21 +9,7 @@ export interface MoneyGoal {
   linkedAccountId?: string; // Plaid account whose balance counts as "saved"
 }
 
-export interface StudyGoal {
-  kind: "study";
-  id: string;
-  name: string; // e.g. "Statistics exam"
-  examDate: string; // YYYY-MM-DD
-  confidence: number; // 0–100, self-rated
-  targetGrade: Grade;
-  hoursAvailable: number; // total free hours before the exam
-  quizScores: number[]; // practice quiz results, 0–100
-  activities: StudyActivity[]; // things the user chose to do instead (movie, party…)
-  plan: PlanDay[];
-  topics?: Topic[];
-}
-
-export type Goal = MoneyGoal | StudyGoal;
+export type Goal = MoneyGoal;
 
 /** Last numbers pulled from the connected bank, so other screens can use them. */
 export interface BankSnapshot {
@@ -44,8 +28,7 @@ export interface Decision {
   goalId: string;
   goalName: string;
   label: string; // "Skipped AirPods"
-  kind: "money" | "study";
+  kind: "money";
   effectDays?: number; // + = goal sooner, − = goal later (money)
   amount?: number; // money kept (+) or spent (−)
-  hours?: number; // study hours used (−) or added (+)
 }

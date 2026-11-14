@@ -1,4 +1,4 @@
-import { ArrowRight, CalendarClock, Camera, GraduationCap, PiggyBank, ShoppingBag, Wallet } from "lucide-react";
+import { ArrowRight, CalendarClock, Camera, PiggyBank, ShoppingBag, Wallet } from "lucide-react";
 import { useMemo } from "react";
 import { formatMoney, goalPhrase, whatIfSpend } from "../lib/finance";
 import { assetsByInstitution, detectTransferIds, netWorthSeries, periodFlow, spendableCash, upcomingBills } from "../lib/money";
@@ -7,12 +7,11 @@ import type { Bank } from "../lib/useBank";
 import { AssetSplit } from "./AssetSplit";
 import { ConnectCard } from "./MoneyDashboard";
 import { NetWorthChart } from "./NetWorthChart";
-import type { PathKind } from "./PathCards";
 import { SavingsPlanner } from "./SavingsPlanner";
 
 /**
  * Home page = your money dashboard: net worth over time and where it's held.
- * Check a price (the photo feature) and Study sit alongside as add-ons.
+ * Check a price (the photo feature) sits alongside the savings dashboard.
  */
 export function Landing({
   bank,
@@ -21,7 +20,7 @@ export function Landing({
   onOpenGoal,
   onUpdateGoal,
   onMoney,
-  onPick,
+  onNewGoal,
   onDemo,
   onGoals,
   onCheck,
@@ -32,7 +31,7 @@ export function Landing({
   onOpenGoal: (id: string) => void;
   onUpdateGoal: (g: MoneyGoal) => void;
   onMoney: () => void;
-  onPick: (k: PathKind) => void;
+  onNewGoal: () => void;
   onDemo: () => void;
   onGoals: () => void;
   onCheck: () => void;
@@ -42,7 +41,7 @@ export function Landing({
   return (
     <main id="main">
       {bank.connected ? (
-        <Dashboard bank={bank} goal={goal} onCheck={onCheck} onMoney={onMoney} />
+        <HomeOverview data={bank.data!} goal={goal} onCheck={onCheck} onMoney={onMoney} />
       ) : bank.loading && !bank.status ? (
         <section className="px-4 pt-6">
           <div className="clay mx-auto h-[28rem] max-w-6xl animate-pulse" aria-label="Loading your accounts" />
@@ -54,9 +53,8 @@ export function Landing({
       {moneyGoals.length > 0 && <SavingsPlanner goals={moneyGoals} onUpdate={onUpdateGoal} onOpen={onOpenGoal} />}
 
       <section aria-label="More in NorthStar" className="px-4 pb-14">
-        <div className="mx-auto grid max-w-6xl gap-4 sm:grid-cols-2">
-          <MoreCard icon={<PiggyBank className="h-5 w-5" />} tint="bg-emerald-100 text-emerald-700" title="Save for something" line="Set a goal and a weekly amount. Your finish date moves with every choice." cta={moneyGoals.length ? "Add another goal" : "Start a savings goal"} onClick={() => onPick("money")} />
-          <MoreCard icon={<GraduationCap className="h-5 w-5" />} tint="bg-amber-100 text-amber-700" title="Study smarter" line="A day-by-day exam plan, hard topics first, and what a movie night really costs." cta="Plan my studying" onClick={() => onPick("study")} />
+        <div className="mx-auto max-w-6xl">
+          <MoreCard icon={<PiggyBank className="h-5 w-5" />} tint="bg-emerald-100 text-emerald-700" title="Save for something" line="Set a goal and a weekly amount. Your finish date moves with every choice." cta={moneyGoals.length ? "Add another goal" : "Start a savings goal"} onClick={onNewGoal} />
         </div>
       </section>
 
@@ -69,8 +67,7 @@ export function Landing({
 
 // ---------- connected: the dashboard ----------
 
-function Dashboard({ bank, goal, onCheck, onMoney }: { bank: Bank; goal?: MoneyGoal; onCheck: () => void; onMoney: () => void }) {
-  const data = bank.data!;
+export function HomeOverview({ data, onMoney }: { data: import("../lib/money").BankData; goal?: MoneyGoal; onCheck: () => void; onMoney: () => void }) {
   const view = useMemo(() => {
     const transferIds = detectTransferIds(data.transactions);
     return {
@@ -85,24 +82,23 @@ function Dashboard({ bank, goal, onCheck, onMoney }: { bank: Bank; goal?: MoneyG
   const lastSpent = view.flow.previous.out;
 
   return (
-    <section className="px-4 pb-10 pt-6">
+    <section className="dashboard-home-overview" aria-label="Money overview">
       <div className="mx-auto grid max-w-6xl gap-5 lg:grid-cols-[1.75fr_1fr] [&>*]:min-w-0">
         <div className="clay p-5 sm:p-7">
-          <NetWorthChart series={view.series} note={data.env === "sandbox" ? "Sandbox test data" : "Estimated from transactions"} />
+          <NetWorthChart series={view.series} note={data.env === "sandbox" ? "Includes sandbox test data; manual balances stay fixed in this estimate" : data.transactions.length ? "Estimated from transactions; manual balances stay fixed" : "Current balance snapshot; no transaction history available"} />
           <div className="mt-6">
             <AssetSplit slices={view.slices} />
           </div>
         </div>
 
         <aside className="space-y-4">
-          <PriceAddon goal={goal} cash={view.cash} onCheck={onCheck} />
 
           <div className="clay divide-y divide-stone-100 px-5 py-2">
             <Stat icon={<Wallet className="h-4 w-4 text-sky-600" />} label="Spendable cash" value={formatMoney(view.cash)} />
             <Stat
               icon={<ShoppingBag className="h-4 w-4 text-amber-600" />}
               label="Spent this month"
-              value={formatMoney(spent)}
+              value={data.transactions.length ? formatMoney(spent) : "No activity yet"}
               sub={lastSpent ? `${formatMoney(lastSpent)} last month` : undefined}
             />
             {view.bill && (
@@ -116,7 +112,7 @@ function Dashboard({ bank, goal, onCheck, onMoney }: { bank: Bank; goal?: MoneyG
           </div>
 
           <button onClick={onMoney} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-ink px-4 font-bold text-white transition-colors duration-200 hover:bg-brand-700">
-            Open full money dashboard <ArrowRight className="h-4 w-4" aria-hidden="true" />
+            View accounts and activity <ArrowRight className="h-4 w-4" aria-hidden="true" />
           </button>
         </aside>
       </div>

@@ -4,10 +4,10 @@
 
 NorthStar brings everyday accounts, savings plans, and spending choices into one beginner-friendly dashboard:
 
-1. **See your money.** Add accounts manually or connect through Plaid to review balances, holdings, and net worth in one place.
-2. **Plan ahead.** Set simple savings goals, estimate retirement savings, and see how a purchase could affect a goal's timeline.
+1. **See your money.** Add accounts manually or connect through Plaid to review balances, holdings, net worth, cash flow, top spending, upcoming bills, and recent transactions.
+2. **Plan ahead.** Set savings goals, estimate retirement savings, and see how a purchase could affect a goal's timeline.
 3. **Track your NorthStar.** A solar-system visualization brings planets into orbit as you reach savings-goal milestones.
-4. **Ask Polaris.** Ask common questions about balances, goals, budget, or retirement. Answers use dashboard data on-device and are not sent to an AI service.
+4. **Ask Polaris.** Ask questions about balances, goals, spending, or retirement using your dashboard data. Financial-chat context is sent to the configured AI service.
 5. **Check a price or study.** Compare a purchase with your goals, or create a day-by-day exam plan.
 
 ## Run it
@@ -17,7 +17,7 @@ npm install
 npm run dev              # app on http://localhost:5173 (+ API on :8787)
 ```
 
-On the home page, tap **Try it with sample data** to load the hoodie, stats exam and spring break examples.
+On the home page, tap **Try it with sample data** to load the hoodie and spring break examples.
 
 Optional:
 - **Photo reading**: `cp .env.example .env`, add an Anthropic API key, then restart. Typed prices work without a key.
@@ -25,7 +25,6 @@ Optional:
 - **On your phone** (same Wi-Fi): `npm run dev:phone` and open the "Network" URL.
 - **Tests**: `npm test`
 
-The floating financial chat uses the server's `/api/chat` endpoint and an Anthropic API key. Questions sent there include a financial summary from connected Plaid accounts and your savings goals. The dashboard's Polaris assistant continues to answer locally on-device.
 
 ## 30-second demo
 
@@ -36,18 +35,16 @@ The floating financial chat uses the server's `/api/chat` endpoint and an Anthro
 3. **Hoodie goal**: in "What if I buy something?", enter dinner out for $20 and cook at home for $5.
    - Dinner out adds 9.3 days and cooking adds 2.3 days.
    - Tap **Get cook at home instead**.
-4. **Statistics exam**: a 5-day plan with hard topics first. Turn the quiz dial to 90% and suggested study drops from 7h to 2.5h. Add a 2h movie and the schedule adjusts. The app never promises a grade.
 
 ## Code map
 
 | | |
 |---|---|
 | `src/lib/finance.ts` | Weeks to goal, what-if delay, deadline amount, recommendation text, hours of work |
-| `src/lib/study.ts` | Suggested hours, schedule, topic order, replanning, activity what-if |
 | `src/lib/storage.ts` | Browser storage (localStorage) + sample data |
 | `src/components/Landing.tsx` | Home page: hero, `SavingsPlanner` (weekly-savings `CometDial`), three feature cards |
 | `src/components/PriceCheck.tsx` | Photo or typed price → hours of work, delay per goal, skip / cheaper / buy |
-| `src/components/Money*.tsx`, `Study*.tsx` | Goal forms and goal pages |
+| `src/components/Money*.tsx` | Savings-goal forms and goal pages |
 | `src/lib/money.ts` | Net worth, cash flow, top categories, upcoming bills, transfer detection (ported from money-dashboard) |
 | `src/components/WealthDashboard.tsx` | Accounts, goal progress, budget, opportunity cost, and retirement planning |
 | `src/components/NorthStar.tsx` | Solar-system progress visualization tied to savings-goal milestones |

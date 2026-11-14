@@ -1,31 +1,26 @@
 import { useEffect, useState } from "react";
-import { Home } from "./components/Home";
 import { MoneyGoalForm } from "./components/MoneyGoalForm";
-import { WealthDashboard } from "./components/WealthDashboard";
+import { WealthDashboard, type DashboardTab } from "./components/WealthDashboard";
 import { MoneyGoalView } from "./components/MoneyGoalView";
 import type { LogDecision } from "./components/MoneyWhatIf";
-import { PathCards, type PathKind } from "./components/PathCards";
 import { PriceCheck } from "./components/PriceCheck";
 import { Settings } from "./components/Settings";
+import { TopNav, type NavPage } from "./components/TopNav";
 import SoftAurora from "./components/SoftAurora";
-import { StudyGoalForm } from "./components/StudyGoalForm";
-import { StudyGoalView } from "./components/StudyGoalView";
-import { FinancialChat } from "./components/FinancialChat";
-import { TopNav } from "./components/TopNav";
-import { BackButton } from "./components/ui";
 import { todayISO } from "./lib/dates";
 import { EMPTY_STATE, type SavedState, demoState, loadState, saveState } from "./lib/storage";
 import type { Goal, MoneyGoal } from "./lib/types";
 import { spendableCash } from "./lib/money";
 import { useBank } from "./lib/useBank";
 
-// Three things: check a price, save for something, plan your studying.
+const pageHashes: Record<NavPage, string> = { Overview: "overview", Accounts: "accounts", Goals: "my-goals", Retirement: "retirement", Budget: "budget", "Price check": "price-check" };
+const pageFromHash = (): NavPage => (Object.entries(pageHashes).find(([, hash]) => hash === window.location.hash.slice(1))?.[0] as NavPage) ?? "Overview";
+
+// Check a price, save for something, and understand your money.
 type Screen =
   | { name: "home" } // landing page
   | { name: "goals" } // dashboard
-  | { name: "new" } // pick a goal type
   | { name: "new-money" }
-  | { name: "new-study" }
   | { name: "goal"; id: string }
   | { name: "settings" }
   | { name: "check" } // snap a price tag / type a price
@@ -33,9 +28,25 @@ type Screen =
 
 export default function App() {
   const [state, setState] = useState<SavedState>(loadState);
-  const [screen, setScreen] = useState<Screen>({ name: "home" });
+  const [screen, setScreen] = useState<Screen>(() => ({ name: pageFromHash() === "Price check" ? "check" : "money" }));
 
+  const [dashboardTab, setDashboardTab] = useState<DashboardTab>(() => { const page = pageFromHash(); return page === "Price check" ? "Overview" : page; });
   const bank = useBank();
+  const navigate = (page: NavPage) => {
+    if (page !== "Price check") setDashboardTab(page);
+    setScreen(page === "Price check" ? { name: "check" } : { name: "money" });
+    if (window.location.hash !== "#" + pageHashes[page]) window.location.hash = pageHashes[page];
+    window.scrollTo(0, 0);
+  };
+  useEffect(() => {
+    const syncPage = () => {
+      const page = pageFromHash();
+      if (page !== "Price check") setDashboardTab(page);
+      setScreen(page === "Price check" ? { name: "check" } : { name: "money" });
+    };
+    window.addEventListener("hashchange", syncPage);
+    return () => window.removeEventListener("hashchange", syncPage);
+  }, []);
 
   useEffect(() => {
     saveState(state);
@@ -61,9 +72,8 @@ export default function App() {
   }, [screen]);
 
   const moneyGoals = state.goals.filter((g): g is MoneyGoal => g.kind === "money");
-  const goHome = () => setScreen({ name: "home" });
-  const goGoals = () => setScreen(state.goals.length ? { name: "goals" } : { name: "home" });
-  const pick = (k: PathKind) => setScreen(k === "money" ? { name: "new-money" } : { name: "new-study" });
+  const goHome = () => navigate("Overview");
+  const goGoals = () => navigate("Goals");
   const addGoal = (g: Goal) => {
     setState((s) => ({ ...s, goals: [...s.goals, g] }));
     setScreen({ name: "goal", id: g.id });
@@ -72,7 +82,7 @@ export default function App() {
   const deleteGoal = (id: string) => {
     const goals = state.goals.filter((g) => g.id !== id);
     setState((s) => ({ ...s, goals }));
-    setScreen(goals.length ? { name: "goals" } : { name: "home" });
+    goGoals();
   };
   const logFor = (goal: Goal) => (d: LogDecision & { goalId?: string; goalName?: string }) =>
     setState((s) => ({
@@ -84,27 +94,31 @@ export default function App() {
           date: todayISO(),
           goalId: d.goalId ?? goal.id,
           goalName: d.goalName ?? goal.name,
-          kind: goal.kind === "study" ? "study" : "money",
+          kind: "money",
           label: d.label,
           effectDays: d.effectDays,
           amount: d.amount,
-          hours: d.hours,
         },
       ],
     }));
   const loadDemo = () => {
     setState(demoState());
-    setScreen({ name: "goals" });
+    goGoals();
   };
-  const back = () => setScreen(state.goals.length ? { name: "new" } : { name: "home" });
+  const back = goGoals;
 
   let body: React.ReactNode;
   switch (screen.name) {
     case "home":
+    case "goals":
     case "money":
       body = (
         <WealthDashboard
           bank={bank}
+          selectedTab={dashboardTab}
+          onTabChange={(page) => { if (page === "Activity") setDashboardTab(page); else navigate(page); }}
+          onCheck={() => navigate("Price check")}
+          onSettings={() => setScreen({ name: "settings" })}
           goals={moneyGoals}
           onUpdateGoal={updateGoal}
           onOpenGoal={(id) => setScreen({ name: "goal", id })}
@@ -125,27 +139,14 @@ export default function App() {
         />
       );
       break;
-    case "new":
-      body = (
-        <div>
-          <BackButton onClick={goGoals} label="My goals" />
-          <h1 className="mb-5 text-3xl font-bold text-ink">Add a goal</h1>
-          <PathCards onPick={pick} />
-        </div>
-      );
-      break;
     case "new-money":
       body = <MoneyGoalForm onCreate={addGoal} onBack={back} />;
-      break;
-    case "new-study":
-      body = <StudyGoalForm onCreate={addGoal} onBack={back} />;
       break;
     case "goal": {
       const g = state.goals.find((x) => x.id === screen.id);
       const common = { onDelete: () => g && deleteGoal(g.id), onBack: goGoals };
       if (!g) body = null;
-      else if (g.kind === "money") body = <MoneyGoalView goal={g} onChange={updateGoal} onLog={logFor(g)} {...common} />;
-      else body = <StudyGoalView goal={g} onChange={updateGoal} onLog={logFor(g)} {...common} />;
+      else body = <MoneyGoalView goal={g} onChange={updateGoal} onLog={logFor(g)} {...common} />;
       break;
     }
     case "settings":
@@ -157,17 +158,17 @@ export default function App() {
           onReset={() => {
             try { localStorage.removeItem("tradeoff:wealth:v1"); } catch { /* Storage can be blocked. */ }
             setState(EMPTY_STATE);
-            setScreen({ name: "home" });
+            goHome();
           }}
           onBack={goGoals}
         />
       );
       break;
     default:
-      body = <Home goals={state.goals} history={state.history} onOpen={(id) => setScreen({ name: "goal", id })} onNew={() => setScreen({ name: "new" })} onCheck={() => setScreen({ name: "check" })} />;
+      body = null;
   }
 
-  const isLanding = screen.name === "home" || screen.name === "money"; // these render their own full-width layout
+  const isLanding = screen.name === "home" || screen.name === "money" || screen.name === "goals"; // these render their own full-width layout
   return (
     <div className="relative min-h-dvh isolate">
       <SoftAurora
@@ -192,17 +193,8 @@ export default function App() {
         lightMode={false}
         className="soft-aurora-background"
       />
-      <TopNav
-        onHome={goHome}
-        onGoals={goGoals}
-        onSettings={() => setScreen({ name: "settings" })}
-        onCheck={() => setScreen({ name: "check" })}
-        onMoney={() => setScreen({ name: "money" })}
-        goalCount={state.goals.length}
-        active={screen.name === "goals" ? "goals" : screen.name === "settings" ? "settings" : screen.name === "home" ? "home" : screen.name === "check" ? "check" : screen.name === "money" ? "money" : "other"}
-      />
+      <TopNav onNavigate={navigate} active={screen.name === "check" ? "Price check" : screen.name === "goal" || screen.name === "new-money" ? "Goals" : screen.name === "settings" ? null : dashboardTab === "Activity" ? "Accounts" : dashboardTab} />
       {isLanding ? body : <main id="main" className="mx-auto max-w-md px-4 pb-16 pt-6 sm:max-w-2xl">{body}</main>}
-      <FinancialChat goals={state.goals} />
     </div>
   );
 }

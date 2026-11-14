@@ -31,7 +31,7 @@ export function Settings({
       </Card>
       <Card>
         <h3 className="font-bold text-stone-900">Demo</h3>
-        <p className="mb-3 text-sm text-stone-600">Loads the hoodie, stats exam and spring break examples. Replaces your current goals.</p>
+        <p className="mb-3 text-sm text-stone-600">Loads the hoodie and spring break savings examples. Replaces your current goals.</p>
         <div className="grid grid-cols-2 gap-2">
           <Button variant="secondary" onClick={onDemo}>
             Load demo
