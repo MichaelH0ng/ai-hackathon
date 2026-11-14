@@ -551,3 +551,5 @@ body {
 
 .soft-aurora-background { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; background: radial-gradient(ellipse at 18% 25%, rgb(84 226 194 / 18%) 0, transparent 62%), linear-gradient(120deg, #f8fcff, #f8f6ff); }
 .soft-aurora-background canvas { display: block; width: 100%; height: 100%; }
+/* Each navigation destination owns its content instead of nesting dashboard tabs. */
+.wealth-page-head { margin-bottom: 26px; }

@@ -1,4 +1,4 @@
-import { Camera, House, LayoutGrid, Settings, Target } from "lucide-react";
+import { Camera, House, Landmark, Target, ChartNoAxesCombined, CircleDollarSign } from "lucide-react";
 
 export function Logo({ onClick }: { onClick: () => void }) {
   return (
@@ -25,22 +25,21 @@ export function Logo({ onClick }: { onClick: () => void }) {
   );
 }
 
-export function TopNav({ onHome, onMoney, onCheck, onGoals, onSettings, active }: {
-  onHome: () => void; onMoney: () => void; onCheck: () => void; onGoals: () => void; onSettings: () => void;
-  active: "home" | "money" | "check" | "goals" | "settings" | "other";
-}) {
+export type NavPage = "Overview" | "Accounts" | "Goals" | "Retirement" | "Budget" | "Price check";
+export function TopNav({ onNavigate, active }: { onNavigate: (page: NavPage) => void; active: NavPage | null }) {
   const links = [
-    { id: "home", label: "Home", Icon: House, action: onHome },
-    { id: "money", label: "Dashboard", Icon: LayoutGrid, action: onMoney },
-    { id: "check", label: "Price check", Icon: Camera, action: onCheck },
-    { id: "goals", label: "My goals", Icon: Target, action: onGoals },
-  ];
+    { id: "Overview", label: "Overview", Icon: House },
+    { id: "Accounts", label: "Accounts", Icon: Landmark },
+    { id: "Goals", label: "My goals", Icon: Target },
+    { id: "Retirement", label: "Retirement", Icon: ChartNoAxesCombined },
+    { id: "Budget", label: "Budget", Icon: CircleDollarSign },
+    { id: "Price check", label: "Price check", Icon: Camera },
+  ] as const;
   return <header className="sticky top-0 z-40 border-b border-brand-100 bg-white/85 backdrop-blur-md">
-    <nav aria-label="Main" className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-2 px-4 py-2">
-      <Logo onClick={onHome} />
-      <div className="flex items-center gap-1 max-[600px]:w-full max-[600px]:justify-between">
-        {links.map(({ id, label, Icon, action }) => <button key={id} onClick={action} aria-current={active === id ? "page" : undefined} className={"flex min-h-11 items-center gap-1.5 rounded-xl px-2 text-xs font-bold sm:px-3 sm:text-sm " + (active === id ? "bg-brand-100 text-brand-700" : "text-stone-700 hover:bg-brand-50")}><Icon size={17} aria-hidden="true" />{label}</button>)}
-        <button aria-label="Settings" aria-current={active === "settings" ? "page" : undefined} onClick={onSettings} className="flex h-11 w-11 items-center justify-center rounded-xl text-stone-600 hover:bg-brand-50"><Settings size={19} /></button>
+    <nav aria-label="Main" className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-2">
+      <Logo onClick={() => onNavigate("Overview")} />
+      <div className="flex max-w-full items-center gap-1 overflow-x-auto max-[950px]:w-full">
+        {links.map(({ id, label, Icon }) => <button key={id} onClick={() => onNavigate(id)} aria-current={active === id ? "page" : undefined} className={"flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl px-3 text-xs font-bold sm:text-sm " + (active === id ? "bg-brand-100 text-brand-700" : "text-stone-700 hover:bg-brand-50")}><Icon size={17} aria-hidden="true" />{label}</button>)}
       </div>
     </nav>
   </header>;
