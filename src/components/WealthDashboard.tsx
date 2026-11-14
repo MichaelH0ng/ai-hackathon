@@ -6,7 +6,7 @@ import { HomeOverview } from "./Landing";
 import { SavingsPlanner } from "./SavingsPlanner";
 import { isLiability } from "../lib/money";
 import { formatMoney } from "../lib/finance";
-import { budgetBalanceProgress, opportunityCost, retirementProjection, type RetirementPoint, type SpendingFrequency } from "../lib/planning";
+import { annualSpending, budgetBalanceProgress, opportunityCost, retirementProjection, type RetirementPoint, type SpendingFrequency, type RepeatUnit } from "../lib/planning";
 import { BudgetNorthStar, NorthStar } from "./NorthStar";
 import { MoneyAssistant } from "./MoneyAssistant";
 import type { MoneyAssistantContext } from "../lib/moneyAssistant";
@@ -41,6 +41,35 @@ const months = (n: number) => !Number.isFinite(n) ? "Not funded" : n === 0 ? "Fu
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="wealth-field"><span>{label}</span>{children}</label>; }
 function Amount({ label, value, onChange }: { label: string; value: number; onChange: (n: number) => void }) { return <Field label={label}><div className="wealth-currency"><span>$</span><input type="number" min="0" max="1000000000000" step="0.01" required value={value || ""} placeholder="0" onChange={e => onChange(Math.max(0, Number(e.target.value)))} /></div></Field>; }
+function GrowthRateField({ value, onChange }: { value: number; onChange: (value: number) => void }) {
+  // Keep the draft as text: coercion while typing removes decimal points and
+  // replaces an empty field with zero, moving the caret during digit edits.
+  const [draft, setDraft] = useState(() => String(value));
+  const [error, setError] = useState(false);
+  function commit() {
+    const trimmed = draft.trim();
+    const rate = Number(trimmed);
+    if (!/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(trimmed) || !Number.isFinite(rate) || rate < 0 || rate > 20) {
+      setError(true);
+      return;
+    }
+    setError(false);
+    setDraft(String(rate));
+    onChange(rate);
+  }
+  return <Field label="Estimated annual growth"><div className="wealth-percent"><input
+    type="text"
+    inputMode="decimal"
+    value={draft}
+    aria-invalid={error}
+    aria-describedby="retirement-growth-help"
+    onChange={event => { setDraft(event.target.value); setError(false); }}
+    onBlur={commit}
+    onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); event.currentTarget.blur(); } }}
+  /><span>%</span></div><small id="retirement-growth-help" className="wealth-note" role={error ? "status" : undefined}>{error
+    ? `Enter a number from 0 to 20. The estimate still uses ${value}%.`
+    : "Enter 0–20%. Applied when you leave the field or press Enter."}</small></Field>;
+}
 function holdingMoney(value: number, currency: string | null) {
   if (!currency) return `${value.toLocaleString(undefined, { maximumFractionDigits: 2 })} (currency unavailable)`;
   try { return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(value); }
@@ -189,7 +218,7 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; onUpdat
     retirementEstimate: retirementPoints.at(-1)?.balance ?? null,
     retirementAge: retirementPoints.length ? retirementAge : null,
   };
-  return <main id="main" className="wealth-dashboard">
+  return <main id="main" className={`wealth-dashboard${tab === "Goals" ? " goals-page" : ""}`}>
     <div className="wealth-page-head"><div><h1>{tab === "Goals" ? "My goals" : tab === "Activity" ? "Account activity" : tab}</h1><p>{tab === "Overview" ? "Your whole financial picture, in one place." : tab === "Accounts" || tab === "Activity" ? "Track your balances and connected accounts." : tab === "Goals" ? "Plan your savings and watch your progress grow." : tab === "Retirement" ? "Explore your long-term savings plan." : "Give your monthly income a plan."}</p></div>{(tab === "Overview" || tab === "Accounts") && <button className="wealth-primary" onClick={addAsset}><Plus size={16} /> Add account</button>}</div>
     {tab === "Overview" && <>
       {bank.loading && !bank.data && !assets.length ? <section className="wealth-card" role="status">Loading your money overview…</section> : <HomeOverview data={{
@@ -232,7 +261,7 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; onUpdat
       </div>
       <div className="wealth-two-fields">
         <Amount label="Monthly retirement savings" value={retirementMonthly} onChange={retirementMonthly => update({ retirementMonthly })} />
-        <Field label="Estimated annual growth"><div className="wealth-percent"><input type="number" min="0" max="20" step="0.1" value={retirementReturn} onChange={e => update({ retirementReturn: Math.min(20, Math.max(0, Number(e.target.value))) })} /><span>%</span></div></Field>
+        <GrowthRateField value={retirementReturn} onChange={retirementReturn => update({ retirementReturn })} />
       </div>
       {currentAge !== null && retirementAge !== null && retirementAge <= currentAge
         ? <p className="wealth-retirement-warning" role="status">Choose a retirement age that is higher than your current age to see an estimate.</p>
@@ -262,11 +291,16 @@ function OpportunityCalculator({ goals, totalGoalTarget, savedTowardGoals, onNew
 }) {
   const [cost, setCost] = useState(100);
   const [frequency, setFrequency] = useState<SpendingFrequency>("once");
+  const [repeatInterval, setRepeatInterval] = useState("2");
+  const [repeatUnit, setRepeatUnit] = useState<RepeatUnit>("weeks");
+  const interval = Number(repeatInterval);
+  const validFrequency = frequency !== "custom" || (Number.isSafeInteger(interval) && interval > 0);
+  const annualCost = validFrequency ? annualSpending(cost, frequency, interval, repeatUnit) : null;
   const [goalId, setGoalId] = useState(goals[0]?.id || "");
   const [label, setLabel] = useState("");
   const [previewReady, setPreviewReady] = useState(false);
   const goal = goals.find(g => g.id === goalId) ?? goals[0];
-  const result = goal ? opportunityCost(cost, frequency, goal.target, goal.saved, goal.weekly) : null;
+  const result = goal && validFrequency ? opportunityCost(cost, frequency, goal.target, goal.saved, goal.weekly, interval, repeatUnit) : null;
   const previewProgress = previewReady && goal && totalGoalTarget > 0
     ? (savedTowardGoals - Math.min(goal.target, Math.max(0, goal.saved)) + Math.max(0, Math.min(goal.target, goal.saved) - (frequency === "once" ? cost : 0))) / totalGoalTarget * 100
     : null;
@@ -275,8 +309,11 @@ function OpportunityCalculator({ goals, totalGoalTarget, savedTowardGoals, onNew
     return () => onPreviewProgress(null);
   }, [onPreviewProgress, previewProgress]);
 
-  return <section className="wealth-card wealth-opportunity"><div className="wealth-section-head"><div><h2>Spend or save?</h2><p>See what a purchase means for a savings goal. This trade-off is called opportunity cost.</p></div><span className="wealth-account-icon"><ArrowDownLeft size={22} /></span></div><div className="wealth-stack"><Field label="What are you considering?"><input value={label} onChange={e => setLabel(e.target.value)} placeholder="Dinner out, a new phone, a subscription…" /></Field><div className="wealth-two-fields"><Amount label="Cost" value={cost} onChange={value => { setCost(value); setPreviewReady(true); }} /><Field label="How often?"><select value={frequency} onChange={e => { setFrequency(e.target.value as SpendingFrequency); setPreviewReady(true); }}><option value="once">One-time</option><option value="weekly">Every week</option><option value="monthly">Every month</option></select></Field></div>{goal ? <Field label="Compare with this savings goal"><select value={goal.id} onChange={e => { setGoalId(e.target.value); setPreviewReady(true); }}>{goals.map(g => <option key={g.id} value={g.id}>{g.name} · {usd(g.weekly)}/week</option>)}</select></Field> : <div className="wealth-sample"><span>Add a savings goal to calculate the effect on your timeline.</span><button onClick={onNewGoal}>Create goal <Plus size={15} /></button></div>}
-    <div className="wealth-opportunity-result" aria-live="polite"><span className="wealth-tag">{frequency === "once" ? "ONE PURCHASE, A REAL TRADE-OFF" : "SMALL AMOUNTS ADD UP"}</span><strong>{usd(frequency === "once" ? cost : cost * (frequency === "weekly" ? 52 : 12))}</strong><p>{frequency === "once" ? `that could go toward ${goal?.name || "your future"}` : `per year spent on ${label || "this choice"}`}</p>{result && goal && <><div className="wealth-timeline-compare"><div><span>Keep your savings plan</span><strong>{months(result.baselineMonths)}</strong></div><ArrowRight size={18} /><div><span>{label ? `With ${label}` : "With this spending"}</span><strong>{months(result.afterMonths)}</strong></div></div><p className="wealth-delay">{goal.saved >= goal.target ? "This goal is already funded. Choose an unfinished goal to compare." : goal.weekly <= 0 ? "Set a weekly savings contribution to calculate a timeline." : !Number.isFinite(result.delayDays) ? "This recurring cost uses all of this goal’s contribution. The goal will not be reached on this plan." : `${Math.round(result.delayDays * 10) / 10} days later for ${goal.name}.`}</p></>}</div><p className="wealth-note">Assumes this spending comes entirely from the selected goal’s savings{frequency !== "once" ? " and continues until the goal is reached" : ""}. Uses 52 weeks per year. No interest, investment growth, taxes, or inflation. Calculator scenarios do not change your budget or balances.</p></div></section>;
+  return <section className="wealth-card wealth-opportunity"><div className="wealth-section-head"><div><h2>Spend or save?</h2><p>See what a purchase means for a savings goal. This trade-off is called opportunity cost.</p></div><span className="wealth-account-icon"><ArrowDownLeft size={22} /></span></div><div className="wealth-stack"><Field label="What are you considering?"><input value={label} onChange={e => setLabel(e.target.value)} placeholder="Dinner out, a new phone, a subscription…" /></Field><div className="wealth-two-fields"><Amount label="Cost" value={cost} onChange={value => { setCost(value); setPreviewReady(true); }} /><Field label="How often?"><select value={frequency} onChange={e => { setFrequency(e.target.value as SpendingFrequency); setPreviewReady(true); }}><option value="once">One-time</option><option value="weekly">Every week</option><option value="monthly">Every month</option><option value="custom">Custom interval…</option></select></Field></div>
+    {frequency === "custom" && <div className="wealth-two-fields"><Field label="Repeat every"><input type="number" min="1" step="1" value={repeatInterval} aria-invalid={!validFrequency} aria-describedby={!validFrequency ? "repeat-interval-error" : undefined} onChange={e => { setRepeatInterval(e.target.value); setPreviewReady(true); }} /></Field><Field label="Time unit"><select value={repeatUnit} onChange={e => { setRepeatUnit(e.target.value as RepeatUnit); setPreviewReady(true); }}><option value="days">Days</option><option value="weeks">Weeks</option><option value="months">Months</option><option value="years">Years</option></select></Field></div>}
+    {!validFrequency && <p id="repeat-interval-error" className="wealth-note" role="status">Enter a positive whole number for the repeat interval.</p>}
+    {goal ? <Field label="Compare with this savings goal"><select value={goal.id} onChange={e => { setGoalId(e.target.value); setPreviewReady(true); }}>{goals.map(g => <option key={g.id} value={g.id}>{g.name} · {usd(g.weekly)}/week</option>)}</select></Field> : <div className="wealth-sample"><span>Add a savings goal to calculate the effect on your timeline.</span><button onClick={onNewGoal}>Create goal <Plus size={15} /></button></div>}
+    <div className="wealth-opportunity-result" aria-live="polite"><span className="wealth-tag">{frequency === "once" ? "ONE PURCHASE, A REAL TRADE-OFF" : "SMALL AMOUNTS ADD UP"}</span><strong>{annualCost === null ? "—" : usd(annualCost)}</strong><p>{frequency === "once" ? `that could go toward ${goal?.name || "your future"}` : `per year spent on ${label || "this choice"}${frequency === "custom" && validFrequency ? ` · every ${interval} ${repeatUnit}` : ""}`}</p>{result && goal && <><div className="wealth-timeline-compare"><div><span>Keep your savings plan</span><strong>{months(result.baselineMonths)}</strong></div><ArrowRight size={18} /><div><span>{label ? `With ${label}` : "With this spending"}</span><strong>{months(result.afterMonths)}</strong></div></div><p className="wealth-delay">{goal.saved >= goal.target ? "This goal is already funded. Choose an unfinished goal to compare." : goal.weekly <= 0 ? "Set a weekly savings contribution to calculate a timeline." : !Number.isFinite(result.delayDays) ? "This recurring cost uses all of this goal’s contribution. The goal will not be reached on this plan." : `${Math.round(result.delayDays * 10) / 10} days later for ${goal.name}.`}</p></>}</div><p className="wealth-note">Assumes this spending comes entirely from the selected goal’s savings{frequency !== "once" ? " and continues until the goal is reached" : ""}. Uses averaged recurring costs, 52 weeks (364 days) and 12 months per year. No interest, investment growth, taxes, or inflation. Calculator scenarios do not change your budget or balances.</p></div></section>;
 }
 
 function RetirementChart({ points, currentAge, retirementAge }: { points: RetirementPoint[]; currentAge: number; retirementAge: number }) {
@@ -308,8 +345,8 @@ function RetirementChart({ points, currentAge, retirementAge }: { points: Retire
         <text x={left - 8} y={y(value) + 4} textAnchor="end" fill="#657360" fontSize="11">{shortMoney(value)}</text>
       </g>;
     })}
-    <path d={path("contributions")} fill="none" stroke="#a9b69a" strokeWidth="2" strokeDasharray="5 5" />
-    <path d={path("balance")} fill="none" stroke="#426745" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
+    <path className="retirement-contributions-line" d={path("contributions")} fill="none" strokeWidth="2" strokeDasharray="5 5" />
+    <path className="retirement-balance-line" d={path("balance")} fill="none" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
     {labels.map(year => <text key={year} x={x(year)} y={height - 8} textAnchor={year === 0 ? "start" : year === retirementAge - currentAge ? "end" : "middle"} fill="#657360" fontSize="11">{year === 0 ? `Age ${currentAge}` : `Age ${currentAge + year}`}</text>)}
   </svg>;
 }

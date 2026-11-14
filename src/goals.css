@@ -1,0 +1,71 @@
+/* Explicit Goals palette prevents older light-theme rules from dimming labels. */
+.goals-page { color: #f4f8ff; }
+.goals-page > .wealth-stack { gap: 28px; }
+.goals-page :is(.wealth-card, .northstar-summary, .savings-planner-panel) {
+  background: #0d1d35;
+  border: 1px solid #587393;
+  box-shadow: 0 12px 32px #0003;
+}
+.goals-page :is(h1, h2, h3) { color: #f4f8ff; }
+.goals-page h2 { font-size: 22px; line-height: 1.4; }
+.goals-page :is(.wealth-page-head p, .wealth-section-head p, .wealth-note,
+  .northstar-copy > p, .northstar-art, .northstar-progress-label) {
+  color: #d0def0;
+  font-size: 15px;
+  line-height: 1.7;
+}
+.goals-page :is(.northstar-kicker, .northstar-progress-label strong) { color: #9bf4df; }
+.goals-page .wealth-goal {
+  background: #152c49;
+  border: 1px solid #718cab;
+  padding: 22px;
+  color: #f4f8ff;
+}
+.goals-page .wealth-goal:hover { background: #203d5d; border-color: #9bcfff; }
+.goals-page .wealth-goal h3 { font-size: 19px; }
+.goals-page .wealth-goal p { font-size: 17px; line-height: 1.6; }
+.goals-page :is(.wealth-goal p > span, .wealth-goal-top, .wealth-goal-detail,
+  .wealth-goal-deadline, .wealth-goal-placeholder, .wealth-goal-placeholder p) { color: #d0def0; }
+.goals-page :is(.wealth-goal-detail, .wealth-goal-deadline) { font-size: 14px; line-height: 1.7; }
+.goals-page .wealth-goal-detail { flex-wrap: wrap; gap: 8px; }
+.goals-page .wealth-field > span { color: #f4f8ff; font-size: 15px; }
+.goals-page .wealth-field :is(input, select, textarea) {
+  color-scheme: dark;
+  background: #050b16;
+  color: #f4f8ff;
+  border-color: #718cab;
+}
+.goals-page .wealth-field :is(input, textarea)::placeholder { color: #b7c9df; opacity: 1; }
+.goals-page :is(button, input, select, textarea, summary):focus-visible { outline: 3px solid #94c9ff; outline-offset: 3px; }
+.goals-page .savings-planner-panel > [aria-hidden="true"] { display: none; }
+.goals-page .savings-planner-panel .text-brand-200 { color: #9bf4df; }
+.goals-page .savings-planner-panel button.bg-white {
+  background: #b8f4e5 !important;
+  color: #092c30 !important;
+  border: 1px solid #b8f4e5;
+}
+.goals-page .savings-planner-panel button.bg-white:hover { background: #d8fff4 !important; }
+.goals-page .savings-planner-panel button:disabled { opacity: .7; }
+.goals-page .wealth-opportunity-result { background: #050f20; border: 1px solid #718cab; }
+.goals-page .wealth-opportunity-result > strong { color: #f4f8ff; }
+.goals-page .wealth-opportunity-result :is(.wealth-tag, p) { color: #d0def0; }
+.goals-page .wealth-timeline-compare { border: 0; padding: 0; align-items: stretch; color: #d0def0; }
+.goals-page .wealth-timeline-compare > div { padding: 18px; border: 1px solid #54e2c2; border-top-width: 4px; border-radius: 10px; background: #103435; }
+.goals-page .wealth-timeline-compare > div:last-child { border-color: #c294ff; background: #302443; }
+.goals-page .wealth-timeline-compare span { color: #f4f8ff; font-size: 15px; line-height: 1.5; }
+.goals-page .wealth-timeline-compare strong { color: #9bf4df; font-size: 25px; }
+.goals-page .wealth-timeline-compare > div:last-child strong { color: #e5d1ff; }
+.goals-page .wealth-timeline-compare > svg { align-self: center; flex-shrink: 0; }
+.goals-page .wealth-opportunity-result .wealth-delay { background: #193554; color: #f4f8ff; border-left: 3px solid #94c9ff; border-radius: 8px; padding: 16px; font-size: 16px; }
+.goals-page .wealth-preferences > summary { color: #f4f8ff; font-size: 19px; }
+.goals-page .wealth-preferences > summary small { color: #d0def0; font-size: 15px; margin-left: 0; }
+.goals-page .wealth-risk-options button { background: #050f20; border-color: #718cab; }
+.goals-page .wealth-risk-options button span { color: #f4f8ff; font-size: 16px; }
+.goals-page .wealth-risk-options button small { color: #d0def0; font-size: 15px; }
+.goals-page .wealth-risk-options button:hover { background: #203d5d; }
+.goals-page .wealth-risk-options button.selected { background: #103435; border: 2px solid #54e2c2; padding: 16px; }
+.goals-page .wealth-risk-options button.selected span { color: #9bf4df; }
+@media (max-width: 520px) {
+  .goals-page .wealth-timeline-compare { flex-direction: column; }
+  .goals-page .wealth-timeline-compare > svg { transform: rotate(90deg); }
+}

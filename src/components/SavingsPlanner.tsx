@@ -42,7 +42,7 @@ export function SavingsPlanner({ goals, onUpdate, onOpen }: { goals: MoneyGoal[]
 
   return (
     <section aria-labelledby="planner-title" className="px-4 pb-12">
-      <div className="relative mx-auto max-w-6xl overflow-hidden rounded-[2rem] bg-ink px-6 py-10 text-white shadow-[0_24px_60px_-24px_rgb(30_27_46/0.8)] sm:px-10">
+      <div className="savings-planner-panel relative mx-auto max-w-6xl overflow-hidden rounded-[2rem] px-6 py-10 text-white shadow-[0_24px_60px_-24px_rgb(30_27_46/0.8)] sm:px-10">
         <div aria-hidden="true" className="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-brand-600/40 blur-3xl" />
         <div aria-hidden="true" className="pointer-events-none absolute -bottom-28 -left-16 h-72 w-72 rounded-full bg-emerald-500/20 blur-3xl" />
 
@@ -76,13 +76,13 @@ export function SavingsPlanner({ goals, onUpdate, onOpen }: { goals: MoneyGoal[]
               }}
               onChangeEnd={(v) => setWeekly(Math.round(v))}
             />
-            <p className="mt-2 flex items-center gap-1.5 text-xs font-semibold text-white/55">
+            <p className="mt-2 flex items-center gap-1.5 text-sm font-semibold text-slate-200">
               <Hand className="h-3.5 w-3.5" aria-hidden="true" /> Turn the dial to change your weekly savings
             </p>
           </div>
 
           <div>
-            <p className="text-sm font-bold uppercase tracking-wider text-brand-200">Plan your week</p>
+            <p className="text-sm font-bold uppercase tracking-wider text-teal-200">Plan your week</p>
             <h2 id="planner-title" className="mt-1 text-3xl font-bold sm:text-4xl">How much can you save this week?</h2>
 
             <p className="mt-3 text-lg text-white/80" aria-live="polite">
@@ -149,7 +149,7 @@ export function SavingsPlanner({ goals, onUpdate, onOpen }: { goals: MoneyGoal[]
                 ))}
               </div>
             )}
-            <p className="mt-4 text-xs text-white/50">
+            <p className="mt-4 text-sm text-slate-200">
               {formatMoney(goal.saved)} of {formatMoney(goal.target)} saved ({pct}%) · {formatMoney(remaining)} to go
             </p>
           </div>

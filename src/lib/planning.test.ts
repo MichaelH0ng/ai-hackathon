@@ -1,6 +1,19 @@
 import { describe, expect, it } from "vitest";
-import { budgetBalanceProgress, opportunityCost, retirementProjection } from "./planning";
+import { annualSpending, budgetBalanceProgress, opportunityCost, retirementProjection } from "./planning";
 describe("budget opportunity cost", () => {
+  it("annualizes custom intervals consistently and applies them to goal timelines", () => {
+    expect(annualSpending(20, "custom", 2, "weeks")).toBe(520);
+    expect(annualSpending(90, "custom", 3, "months")).toBe(360);
+    expect(annualSpending(100, "custom", 2, "years")).toBe(50);
+    expect(annualSpending(10, "custom", 7, "days")).toBe(520);
+    expect(opportunityCost(20, "custom", 1000, 0, 100, 2, "weeks")).toEqual(opportunityCost(10, "weekly", 1000, 0, 100));
+    expect(opportunityCost(200, "custom", 1000, 0, 100, 2, "weeks").afterMonths).toBe(Infinity);
+  });
+  it("rejects invalid repeat intervals", () => {
+    for (const interval of [0, -1, 1.5, NaN, Infinity]) {
+      expect(() => annualSpending(20, "custom", interval, "weeks")).toThrow(RangeError);
+    }
+  });
   it("translates a one-time purchase to savings days", () => {
     expect(opportunityCost(100, "once", 1000, 0, 100).delayDays).toBeCloseTo(7);
   });
