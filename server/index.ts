@@ -235,6 +235,11 @@ app.post("/api/financial-chat", async (req, res) => {
     const response = await getClient().messages.create({
       model,
       max_tokens: model === "claude-sonnet-5-5" ? 500 : 350,
+      // The five-series models otherwise enable adaptive thinking by default.
+      // For a concise financial-data answer, reserve the small output budget for
+      // user-visible text instead of allowing internal thinking to consume it.
+      thinking: { type: "disabled" },
+      output_config: { effort: "low" },
       system: `${FINANCE_SYSTEM_PROMPT}\n\nCURRENT FINANCIAL CONTEXT:\n${financialContext(dashboard, parsed.data.goals, range)}`,
       messages: [...parsed.data.history.slice(-4), { role: "user", content: parsed.data.question }],
     });
