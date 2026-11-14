@@ -251,7 +251,6 @@ button, a, select, input[type="checkbox"], input[type="range"] { cursor: pointer
 .simple-calculator-link > span { display: grid; gap: 5px; }
 .simple-calculator-link strong { font-size: 16px; color: #35443b; }
 .simple-calculator-link span > span { font-size: 14px; }
-.simple-activity-button { align-self: flex-start; }
 .wealth-risk-options button span { font-size: 15px; }
 .wealth-risk-options button small { font-size: 14px; color: #4c5851; line-height: 1.6; }
 .wealth-budget-line { font-size: 14px; color: #45584d; gap: 12px; flex-wrap: wrap; }
@@ -731,3 +730,46 @@ header.sticky.top-0.z-40 {
   :focus-visible { outline-color: var(--aurora-teal); }
 }
 .divide-stone-100 > :not(:last-child) { border-color: var(--night-border) !important; }
+
+/* Accounts page: totals strip, grouped list, account status lines, add-account dialog. */
+.accounts-summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 18px 32px; }
+.accounts-summary-main { display: grid; gap: 4px; }
+.accounts-summary-main span { color: var(--night-muted); font-size: 13px; font-weight: 600; }
+.accounts-summary-main strong { color: var(--night-text); font-size: clamp(28px, 4vw, 34px); font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.accounts-summary-split { display: flex; flex-wrap: wrap; gap: 14px 28px; }
+.accounts-summary-split > span { display: grid; gap: 3px; }
+.accounts-summary-split small { color: var(--night-muted); font-size: 12px; font-weight: 600; }
+.accounts-summary-split strong { color: var(--night-text); font-size: 17px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.accounts-summary-split strong.is-debt { color: var(--color-cost); }
+.accounts-group + .accounts-group { margin-top: 18px; }
+.accounts-group-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 4px; padding: 12px 16px; border: 1px solid var(--night-border); border-radius: 12px; background: rgb(148 192 243 / 7%); }
+.accounts-group-head > div:first-child { display: grid; gap: 2px; min-width: 0; }
+.accounts-group-head h3 { color: var(--night-text); font-size: 16px; font-weight: 700; }
+.accounts-group-head > div:first-child span { color: var(--night-muted); font-size: 12px; }
+.accounts-group-total { display: grid; justify-items: end; gap: 1px; text-align: right; }
+.accounts-group-total small { color: var(--night-muted); font-size: 11px; font-weight: 600; }
+.accounts-group-total strong { color: var(--night-text); font-size: 19px; font-weight: 700; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+.accounts-group-total.is-debt strong { color: var(--color-cost); }
+.accounts-group-total.is-gain strong { color: var(--color-gain); }
+.accounts-group-head + .wealth-account-block { border-top: 0; }
+.wealth-account-block,
+.wealth-account { border-color: var(--night-border); }
+.wealth-account-name .wealth-account-status { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; color: var(--night-muted); }
+.wealth-account-name .wealth-account-status.stale { color: var(--color-cost); }
+.wealth-inline-link { display: inline-flex; align-items: center; gap: 3px; min-height: 28px; color: var(--aurora-teal); font-weight: 650; }
+.wealth-inline-link:hover { text-decoration: underline; }
+.wealth-icon-button { color: var(--night-muted); }
+.wealth-icon-button:hover { background: rgb(148 192 243 / 12%); color: var(--night-text); }
+.wealth-account-holdings summary { color: var(--aurora-teal); }
+.wealth-account-holdings li { color: var(--night-text); }
+.wealth-account-holdings li small { color: var(--night-muted); }
+.wealth-empty { color: var(--night-muted); }
+.wealth-empty h3 { color: var(--night-text); }
+.wealth-empty p { color: var(--night-muted); }
+.wealth-card-foot { border-color: var(--night-border); color: var(--night-muted); }
+.add-account-connect { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-top: 4px; padding: 16px; border: 1px solid var(--night-border); border-radius: 12px; background: rgb(84 226 194 / 6%); }
+.add-account-connect > div { display: grid; gap: 4px; min-width: 0; flex: 1 1 200px; }
+.add-account-connect strong { color: var(--night-text); font-size: 15px; }
+.add-account-connect span { color: var(--night-muted); font-size: 13px; line-height: 1.5; }
+.add-account-divider { display: flex; align-items: center; gap: 12px; margin: 18px 0 2px; color: var(--night-muted); font-size: 12px; }
+.add-account-divider::before, .add-account-divider::after { content: ""; flex: 1; height: 1px; background: var(--night-border); }
