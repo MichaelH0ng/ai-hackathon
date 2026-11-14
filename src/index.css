@@ -40,10 +40,14 @@ body {
 .clay-press:hover { transform: translateY(-3px); }
 .clay-press:active { transform: translateY(0) scale(0.98); }
 
-:focus-visible {
-  outline: 3px solid var(--color-brand-500);
-  outline-offset: 2px;
-  border-radius: 0.75rem;
+/* Default focus outline. In the base layer so components that draw their own
+   focus ring (e.g. `outline-none focus:ring-2`) can turn it off, avoiding a double border. */
+@layer base {
+  :focus-visible {
+    outline: 3px solid var(--color-brand-500);
+    outline-offset: 2px;
+    border-radius: 0.75rem;
+  }
 }
 
 @keyframes rise {
@@ -218,7 +222,7 @@ button, a, select, input[type="checkbox"], input[type="range"] { cursor: pointer
 .wealth-field > span { color: #3f4842; font-size: 14px; line-height: 1.6; }
 .wealth-field input, .wealth-field select, .wealth-field textarea { font-size: 16px; background: white; color: #323e37; min-height: 46px; }
 .wealth-field input::placeholder, .wealth-field textarea::placeholder { color: #59635d; }
-.wealth-field input:focus-visible, .wealth-field select:focus-visible, .wealth-field textarea:focus-visible { outline: 3px solid #96c5aa; outline-offset: 2px; }
+.wealth-field input:focus-visible, .wealth-field select:focus-visible, .wealth-field textarea:focus-visible { outline: 3px solid #96c5aa; outline-offset: -1px; } /* sits on top of the border so focus shows one ring */
 .wealth-net-worth.simple-money-summary { display: flex; align-items: center; flex-wrap: wrap; gap: 28px; background: white; color: #323e37; border: 1px solid #e3e8e5; padding: 27px; }
 .simple-money-summary > div:first-child { min-width: 210px; flex: 1; }
 .simple-money-summary .wealth-summary-label { font-size: 12px; color: #4b524e; letter-spacing: .7px; justify-content: flex-start; gap: 12px; }
