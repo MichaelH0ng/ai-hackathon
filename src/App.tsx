@@ -11,6 +11,7 @@ import { Settings } from "./components/Settings";
 import { StudyGoalForm } from "./components/StudyGoalForm";
 import { StudyGoalView } from "./components/StudyGoalView";
 import { TopNav } from "./components/TopNav";
+import { FinancialChat } from "./components/FinancialChat";
 import { BackButton } from "./components/ui";
 import { todayISO } from "./lib/dates";
 import { EMPTY_STATE, type SavedState, demoState, loadState, saveState } from "./lib/storage";
@@ -180,6 +181,7 @@ export default function App() {
         active={screen.name === "goals" ? "goals" : screen.name === "settings" ? "settings" : screen.name === "home" ? "home" : screen.name === "check" ? "check" : screen.name === "money" ? "money" : "other"}
       />
       {isLanding ? body : <main id="main" className="mx-auto max-w-md px-4 pb-16 pt-6 sm:max-w-2xl">{body}</main>}
+      <FinancialChat goals={state.goals} />
     </div>
   );
 }

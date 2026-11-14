@@ -9,7 +9,32 @@ import { Configuration, CountryCode, PlaidApi, PlaidEnvironments, Products } fro
 import { studentBanks } from "./sandboxStudent.ts";
 
 const ENV = process.env.PLAID_ENV || "sandbox";
-const configured = Boolean(process.env.PLAID_CLIENT_ID && process.env.PLAID_SECRET);
+export const plaidConfigured = Boolean(process.env.PLAID_CLIENT_ID && process.env.PLAID_SECRET);
+
+export interface DashboardData {
+  env: string;
+  accounts: Array<{
+    id: string;
+    name: string;
+    mask: string | null | undefined;
+    type: string;
+    subtype: string | null | undefined;
+    current: number;
+    available: number | null | undefined;
+    institution: string;
+  }>;
+  transactions: Array<{
+    id: string;
+    accountId: string;
+    date: string;
+    name: string;
+    amount: number;
+    category: string;
+    pending: boolean;
+  }>;
+  status: Array<{ itemId: string; institution: string; problem?: string; ready: boolean }>;
+  fetchedAt: string;
+}
 
 const plaid = new PlaidApi(
   new Configuration({
@@ -57,12 +82,74 @@ async function exchange(publicToken: string, institution: string) {
 export const plaidRouter = Router();
 
 plaidRouter.use("/api/plaid", (_req, res, next) => {
-  if (!configured) {
+  if (!plaidConfigured) {
     res.status(503).json({ error: "Plaid keys are missing. Add PLAID_CLIENT_ID and PLAID_SECRET to .env and restart." });
     return;
   }
   next();
 });
+
+/** Fetch a fresh, token-free view of the connected accounts for trusted server routes. */
+export async function loadDashboardData(): Promise<DashboardData> {
+  const perItem = await Promise.all(
+    getItems().map(async (item) => {
+      const accounts: DashboardData["accounts"] = [];
+      const transactions: DashboardData["transactions"] = [];
+      let problem: string | undefined;
+      let ready = true;
+      try {
+        const r = await plaid.accountsGet({ access_token: item.accessToken });
+        for (const a of r.data.accounts) {
+          accounts.push({
+            id: a.account_id,
+            name: a.name,
+            mask: a.mask,
+            type: a.type,
+            subtype: a.subtype,
+            current: a.balances.current ?? 0,
+            available: a.balances.available,
+            institution: item.institution,
+          });
+        }
+      } catch (err) {
+        problem = plaidError(err).code ?? "ACCOUNTS_FAILED";
+      }
+      try {
+        let cursor: string | undefined;
+        let more = true;
+        while (more) {
+          const r = await plaid.transactionsSync({ access_token: item.accessToken, cursor, count: 500 });
+          for (const t of r.data.added) {
+            transactions.push({
+              id: t.transaction_id,
+              accountId: t.account_id,
+              date: t.date,
+              name: t.merchant_name ?? t.name,
+              amount: t.amount, // Plaid: positive = money out
+              category: t.personal_finance_category?.primary ?? "OTHER",
+              pending: t.pending,
+            });
+          }
+          if ((r.data as { transactions_update_status?: string }).transactions_update_status === "NOT_READY") ready = false;
+          cursor = r.data.next_cursor;
+          more = r.data.has_more;
+        }
+      } catch (err) {
+        const code = plaidError(err).code;
+        if (code === "PRODUCT_NOT_READY") ready = false;
+        else problem ??= code ?? "TRANSACTIONS_FAILED";
+      }
+      return { accounts, transactions, status: { itemId: item.itemId, institution: item.institution, problem, ready } };
+    }),
+  );
+  return {
+    env: ENV,
+    accounts: perItem.flatMap((r) => r.accounts),
+    transactions: perItem.flatMap((r) => r.transactions).sort((a, b) => (a.date < b.date ? 1 : -1)),
+    status: perItem.map((r) => r.status),
+    fetchedAt: new Date().toISOString(),
+  };
+}
 
 plaidRouter.get("/api/plaid/status", (_req, res) => {
   res.json({ env: ENV, items: getItems().map(({ itemId, institution }) => ({ itemId, institution })) });
@@ -139,62 +226,5 @@ plaidRouter.delete("/api/plaid/items/:id", async (req, res) => {
 
 // Everything the dashboard needs: balances and recent transactions from every connected bank.
 plaidRouter.get("/api/plaid/dashboard", async (_req, res) => {
-  const perItem = await Promise.all(
-    getItems().map(async (item) => {
-      const accounts: unknown[] = [];
-      const transactions: unknown[] = [];
-      let problem: string | undefined;
-      let ready = true;
-      try {
-        const r = await plaid.accountsGet({ access_token: item.accessToken });
-        for (const a of r.data.accounts) {
-          accounts.push({
-            id: a.account_id,
-            name: a.name,
-            mask: a.mask,
-            type: a.type,
-            subtype: a.subtype,
-            current: a.balances.current ?? 0,
-            available: a.balances.available,
-            institution: item.institution,
-          });
-        }
-      } catch (err) {
-        problem = plaidError(err).code ?? "ACCOUNTS_FAILED";
-      }
-      try {
-        let cursor: string | undefined;
-        let more = true;
-        while (more) {
-          const r = await plaid.transactionsSync({ access_token: item.accessToken, cursor, count: 500 });
-          for (const t of r.data.added) {
-            transactions.push({
-              id: t.transaction_id,
-              accountId: t.account_id,
-              date: t.date,
-              name: t.merchant_name ?? t.name,
-              amount: t.amount, // Plaid: positive = money out
-              category: t.personal_finance_category?.primary ?? "OTHER",
-              pending: t.pending,
-            });
-          }
-          if ((r.data as { transactions_update_status?: string }).transactions_update_status === "NOT_READY") ready = false;
-          cursor = r.data.next_cursor;
-          more = r.data.has_more;
-        }
-      } catch (err) {
-        const code = plaidError(err).code;
-        if (code === "PRODUCT_NOT_READY") ready = false;
-        else problem ??= code ?? "TRANSACTIONS_FAILED";
-      }
-      return { accounts, transactions, status: { itemId: item.itemId, institution: item.institution, problem, ready } };
-    }),
-  );
-  res.json({
-    env: ENV,
-    accounts: perItem.flatMap((r) => r.accounts),
-    transactions: perItem.flatMap((r) => r.transactions).sort((a, b) => ((a as { date: string }).date < (b as { date: string }).date ? 1 : -1)),
-    status: perItem.map((r) => r.status),
-    fetchedAt: new Date().toISOString(),
-  });
+  res.json(await loadDashboardData());
 });
