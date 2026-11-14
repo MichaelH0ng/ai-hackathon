@@ -1,5 +1,6 @@
 import {
   ArrowRight,
+  ArrowUp,
   Camera,
   ChartNoAxesGantt,
   ChefHat,
@@ -18,7 +19,7 @@ import {
   Utensils,
   type LucideIcon,
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { formatWeeks, whatIfSpend } from "../lib/finance";
 import { type PathKind, PathCards } from "./PathCards";
 
@@ -56,6 +57,7 @@ export function Landing({
       <Features />
       <FinalCta onStart={() => scrollTo("paths")} onDemo={onDemo} />
       <Footer />
+      <BackToTop />
     </main>
   );
 }
@@ -426,5 +428,27 @@ function Footer() {
         <p>An educational planning tool, not financial advice. Grades aren't guaranteed.</p>
       </div>
     </footer>
+  );
+}
+
+/** Floating "Back to top" button that appears after scrolling down the page. */
+function BackToTop() {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    const onScroll = () => setShow(window.scrollY > 900);
+    onScroll();
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
+  }, []);
+  return (
+    <button
+      onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+      aria-label="Back to top"
+      className={`fixed bottom-5 right-5 z-30 flex h-12 w-12 items-center justify-center rounded-2xl bg-brand-600 text-white shadow-[0_6px_0_0_rgb(59_7_100/0.25)] transition-all duration-200 hover:bg-brand-700 ${
+        show ? "translate-y-0 opacity-100" : "pointer-events-none translate-y-4 opacity-0"
+      }`}
+    >
+      <ArrowUp className="h-5 w-5" aria-hidden="true" />
+    </button>
   );
 }
