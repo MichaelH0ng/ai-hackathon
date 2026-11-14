@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { Home } from "./components/Home";
-import { Landing } from "./components/Landing";
 import { MoneyGoalForm } from "./components/MoneyGoalForm";
 import { WealthDashboard } from "./components/WealthDashboard";
 import { MoneyGoalView } from "./components/MoneyGoalView";
