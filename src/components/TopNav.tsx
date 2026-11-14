@@ -1,4 +1,4 @@
-import { Camera, House, Landmark, Target, ChartNoAxesCombined, CircleDollarSign } from "lucide-react";
+import { Camera, House, Landmark, Target, ChartNoAxesCombined, CircleDollarSign, CircleUserRound } from "lucide-react";
 
 export function Logo({ onClick }: { onClick: () => void }) {
   return (
@@ -25,7 +25,7 @@ export function Logo({ onClick }: { onClick: () => void }) {
   );
 }
 
-export type NavPage = "Overview" | "Accounts" | "Goals" | "Retirement" | "Budget" | "Price check";
+export type NavPage = "Overview" | "Accounts" | "Goals" | "Retirement" | "Budget" | "Price check" | "Profile";
 export function TopNav({ onNavigate, active }: { onNavigate: (page: NavPage) => void; active: NavPage | null }) {
   const links = [
     { id: "Overview", label: "Overview", Icon: House },
@@ -38,9 +38,13 @@ export function TopNav({ onNavigate, active }: { onNavigate: (page: NavPage) => 
   return <header className="sticky top-0 z-40 border-b border-brand-100 bg-white/85 backdrop-blur-md">
     <nav aria-label="Main" className="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-2 px-4 py-2">
       <Logo onClick={() => onNavigate("Overview")} />
-      <div className="flex max-w-full items-center gap-1 overflow-x-auto max-[950px]:w-full">
+      {/* On narrow screens the links wrap to their own row, so the profile icon stays beside the logo. */}
+      <div className="flex max-w-full items-center gap-1 overflow-x-auto min-[951px]:ml-auto max-[950px]:order-last max-[950px]:w-full">
         {links.map(({ id, label, Icon }) => <button key={id} onClick={() => onNavigate(id)} aria-current={active === id ? "page" : undefined} className={"flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl px-3 text-xs font-bold sm:text-sm " + (active === id ? "bg-brand-100 text-brand-700" : "text-stone-700 hover:bg-brand-50")}><Icon size={17} aria-hidden="true" />{label}</button>)}
       </div>
+      <button onClick={() => onNavigate("Profile")} aria-label="Your profile" title="Your profile" aria-current={active === "Profile" ? "page" : undefined} className={"flex h-11 w-11 shrink-0 items-center justify-center rounded-full " + (active === "Profile" ? "bg-brand-100 text-brand-700" : "text-stone-700 hover:bg-brand-50")}>
+        <CircleUserRound size={26} aria-hidden="true" />
+      </button>
     </nav>
   </header>;
 }

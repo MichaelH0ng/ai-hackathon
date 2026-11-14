@@ -61,16 +61,21 @@ export function TextField({
   onChange,
   placeholder,
   hint,
+  type = "text",
+  autoComplete,
 }: {
   label?: string;
   value: string;
   onChange: (v: string) => void;
   placeholder?: string;
   hint?: string;
+  /** "email" / "tel" bring up the right phone keyboard. */
+  type?: "text" | "email" | "tel";
+  autoComplete?: string;
 }) {
   return (
     <Label text={label} hint={hint}>
-      <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={inputClass} />
+      <input type={type} autoComplete={autoComplete} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={inputClass} />
     </Label>
   );
 }
@@ -148,7 +153,8 @@ export function Progress({ value }: { value: number }) {
 }
 
 export function Stat({ label, value, sub, tone = "default" }: { label: string; value: ReactNode; sub?: ReactNode; tone?: "default" | "good" | "warn" }) {
-  const color = { default: "text-stone-900", good: "text-emerald-800", warn: "text-amber-800" }[tone];
+  // Theme tokens (not fixed shades) so these stay readable in the dark theme too.
+  const color = { default: "text-stone-900", good: "text-gain", warn: "text-cost" }[tone];
   return (
     <div className="rounded-xl bg-stone-50 p-3 text-center">
       <p className="text-xs text-stone-500">{label}</p>

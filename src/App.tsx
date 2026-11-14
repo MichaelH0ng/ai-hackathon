@@ -4,6 +4,7 @@ import { WealthDashboard, type DashboardTab } from "./components/WealthDashboard
 import { MoneyGoalView } from "./components/MoneyGoalView";
 import type { LogDecision } from "./components/MoneyWhatIf";
 import { PriceCheck } from "./components/PriceCheck";
+import { Profile } from "./components/Profile";
 import { Settings } from "./components/Settings";
 import { TopNav, type NavPage } from "./components/TopNav";
 import SoftAurora from "./components/SoftAurora";
@@ -13,7 +14,7 @@ import type { Goal, MoneyGoal } from "./lib/types";
 import { spendableCash } from "./lib/money";
 import { useBank } from "./lib/useBank";
 
-const pageHashes: Record<NavPage, string> = { Overview: "overview", Accounts: "accounts", Goals: "my-goals", Retirement: "retirement", Budget: "budget", "Price check": "price-check" };
+const pageHashes: Record<NavPage, string> = { Overview: "overview", Accounts: "accounts", Goals: "my-goals", Retirement: "retirement", Budget: "budget", "Price check": "price-check", Profile: "profile" };
 const pageFromHash = (): NavPage => (Object.entries(pageHashes).find(([, hash]) => hash === window.location.hash.slice(1))?.[0] as NavPage) ?? "Overview";
 
 // Check a price, save for something, and understand your money.
@@ -24,25 +25,31 @@ type Screen =
   | { name: "goal"; id: string }
   | { name: "settings" }
   | { name: "check" } // snap a price tag / type a price
+  | { name: "profile" }
   | { name: "money" }; // bank dashboard (Plaid)
+
+/** Top-nav pages that are their own screen rather than a tab of the money dashboard. */
+const screenForPage = (page: NavPage): Screen =>
+  page === "Price check" ? { name: "check" } : page === "Profile" ? { name: "profile" } : { name: "money" };
+const isDashboardTab = (page: NavPage): page is Exclude<NavPage, "Price check" | "Profile"> => page !== "Price check" && page !== "Profile";
 
 export default function App() {
   const [state, setState] = useState<SavedState>(loadState);
-  const [screen, setScreen] = useState<Screen>(() => ({ name: pageFromHash() === "Price check" ? "check" : "money" }));
+  const [screen, setScreen] = useState<Screen>(() => screenForPage(pageFromHash()));
 
-  const [dashboardTab, setDashboardTab] = useState<DashboardTab>(() => { const page = pageFromHash(); return page === "Price check" ? "Overview" : page; });
+  const [dashboardTab, setDashboardTab] = useState<DashboardTab>(() => { const page = pageFromHash(); return isDashboardTab(page) ? page : "Overview"; });
   const bank = useBank();
   const navigate = (page: NavPage) => {
-    if (page !== "Price check") setDashboardTab(page);
-    setScreen(page === "Price check" ? { name: "check" } : { name: "money" });
+    if (isDashboardTab(page)) setDashboardTab(page);
+    setScreen(screenForPage(page));
     if (window.location.hash !== "#" + pageHashes[page]) window.location.hash = pageHashes[page];
     window.scrollTo(0, 0);
   };
   useEffect(() => {
     const syncPage = () => {
       const page = pageFromHash();
-      if (page !== "Price check") setDashboardTab(page);
-      setScreen(page === "Price check" ? { name: "check" } : { name: "money" });
+      if (isDashboardTab(page)) setDashboardTab(page);
+      setScreen(screenForPage(page));
     };
     window.addEventListener("hashchange", syncPage);
     return () => window.removeEventListener("hashchange", syncPage);
@@ -139,6 +146,20 @@ export default function App() {
         />
       );
       break;
+    case "profile":
+      body = (
+        <Profile
+          profile={state.profile}
+          onProfile={(p) => setState((s) => ({ ...s, profile: p }))}
+          goals={moneyGoals}
+          history={state.history}
+          bank={bank}
+          onGoals={goGoals}
+          onAccounts={() => navigate("Accounts")}
+          onSettings={() => setScreen({ name: "settings" })}
+        />
+      );
+      break;
     case "new-money":
       body = <MoneyGoalForm onCreate={addGoal} onBack={back} />;
       break;
@@ -193,7 +214,7 @@ export default function App() {
         lightMode={false}
         className="soft-aurora-background"
       />
-      <TopNav onNavigate={navigate} active={screen.name === "check" ? "Price check" : screen.name === "goal" || screen.name === "new-money" ? "Goals" : screen.name === "settings" ? null : dashboardTab === "Activity" ? "Accounts" : dashboardTab} />
+      <TopNav onNavigate={navigate} active={screen.name === "check" ? "Price check" : screen.name === "profile" ? "Profile" : screen.name === "goal" || screen.name === "new-money" ? "Goals" : screen.name === "settings" ? null : dashboardTab === "Activity" ? "Accounts" : dashboardTab} />
       {isLanding ? body : <main id="main" className="mx-auto max-w-md px-4 pb-16 pt-6 sm:max-w-2xl">{body}</main>}
     </div>
   );
