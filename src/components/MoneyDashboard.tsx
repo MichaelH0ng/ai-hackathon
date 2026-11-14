@@ -356,7 +356,7 @@ function FlowRow({ icon, label, value, prev }: { icon: React.ReactNode; label: s
 }
 
 /** Opens Plaid Link. The link token is fetched only when you click. */
-function ConnectButton({ label, variant = "primary", onConnected }: { label: string; variant?: "primary" | "secondary"; onConnected: () => void }) {
+function ConnectButton({ label, variant = "primary", kind = "bank", onConnected }: { label: string; variant?: "primary" | "secondary"; kind?: "bank" | "investments"; onConnected: () => void }) {
   const [token, setToken] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -365,7 +365,7 @@ function ConnectButton({ label, variant = "primary", onConnected }: { label: str
     onSuccess: async (publicToken, meta) => {
       setBusy(true);
       try {
-        await post("/api/plaid/exchange", { public_token: publicToken, institution: meta.institution?.name });
+        await post("/api/plaid/exchange", { public_token: publicToken, institution: meta.institution?.name, kind });
         onConnected();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Couldn't save that connection.");
@@ -374,7 +374,7 @@ function ConnectButton({ label, variant = "primary", onConnected }: { label: str
         setToken(null);
       }
     },
-    onExit: () => setToken(null),
+    onExit: (error) => { setToken(null); if (error) setError(error.display_message || "The connection was interrupted. Please try again."); },
   });
   useEffect(() => {
     if (token && ready) open();
@@ -389,7 +389,7 @@ function ConnectButton({ label, variant = "primary", onConnected }: { label: str
           setError(null);
           setBusy(true);
           try {
-            setToken((await post<{ link_token: string }>("/api/plaid/link-token")).link_token);
+            setToken((await post<{ link_token: string }>("/api/plaid/link-token", { kind })).link_token);
           } catch (e) {
             setError(e instanceof Error ? e.message : "Couldn't start Plaid.");
           } finally {
@@ -404,41 +404,25 @@ function ConnectButton({ label, variant = "primary", onConnected }: { label: str
   );
 }
 
-export function ConnectCard({ sandbox, onConnected }: { sandbox: boolean; onConnected: () => void }) {
+export function ConnectCard({ sandbox, configured = true, onConnected }: { sandbox: boolean; configured?: boolean; onConnected: () => void }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  return (
-    <Card className="mx-auto max-w-xl text-center">
-      <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-100 text-brand-700"><Landmark className="h-7 w-7" aria-hidden="true" /></span>
-      <h2 className="mt-3 text-2xl font-bold text-ink">Connect your bank</h2>
-      <p className="mx-auto mt-1 max-w-md text-stone-600">
-        See your balances, cash flow, top spending and upcoming bills, and what your spending costs your goals in days. Uses Plaid; your login never touches NorthStar.
-      </p>
-      <div className="mt-5 flex flex-wrap justify-center gap-3">
-        <ConnectButton label="Connect a bank" onConnected={onConnected} />
-        {sandbox && (
-          <Button
-            variant="secondary"
-            disabled={busy}
-            onClick={async () => {
-              setBusy(true);
-              setError(null);
-              try {
-                await post("/api/plaid/sandbox-connect");
-                onConnected();
-              } catch (e) {
-                setError(e instanceof Error ? e.message : "Couldn't connect the test bank.");
-              } finally {
-                setBusy(false);
-              }
-            }}
-          >
-            {busy ? "Connecting…" : "Use a test student bank"}
-          </Button>
-        )}
-      </div>
-      {error && <p className="mt-3 text-sm text-red-700" role="alert">{error}</p>}
-      {sandbox && <p className="mt-4 text-xs text-stone-500">Sandbox mode: no real money. The test student bank has a part-time job, a phone bill and everyday spending. "Connect a bank" uses Plaid's own test data (user_good / pass_good).</p>}
-    </Card>
-  );
+  const testConnect = async (profile: string) => {
+    setBusy(true); setError(null);
+    try { await post("/api/plaid/sandbox-connect", { profile }); await onConnected(); }
+    catch (e) { setError(e instanceof Error ? e.message : "Couldn’t connect. Please try again."); }
+    finally { setBusy(false); }
+  };
+  return <section className="connection-card" aria-labelledby="connection-title">
+    <span className="connection-badge"><Landmark size={22} /></span>
+    <h2 id="connection-title">Connect your accounts</h2>
+    <p>Bring bank balances and investment holdings into one place. Choose what you want to connect.</p>
+    <div className="connection-mode">{sandbox ? "Sandbox · test accounts only" : "Production · your real accounts"}</div>
+    {!configured ? <div className="connection-setup" role="status"><strong>Connection setup is almost ready.</strong><p>The app owner needs to finish setting up the connection. You can keep using manual accounts in the meantime.</p></div> : <>
+      <div className="connection-options"><div><h3>Bank accounts</h3><p>Checking, savings, and everyday spending.</p><ConnectButton label="Connect a bank" onConnected={onConnected} /></div><div><h3>Investment accounts</h3><p>Brokerage, IRA, and retirement holdings.</p><ConnectButton label="Connect a portfolio" kind="investments" onConnected={onConnected} /></div></div>
+      {sandbox && <div className="connection-tests"><span>Try student sandbox data: checking, savings, a credit card, and investment balances.</span><button disabled={busy} onClick={() => testConnect("student")}>Use a test student bank</button><button disabled={busy} onClick={() => testConnect("investments")}>{busy ? "Connecting…" : "Test portfolio"}</button></div>}
+    </>}
+    {error && <p className="connection-error" role="alert">{error}</p>}
+    <p className="connection-note">{sandbox ? "Sandbox uses made-up accounts and holdings. It cannot connect your real portfolio." : "You choose which accounts to share through Plaid. Investment values refresh periodically; they are not real-time market quotes."} Connecting an account does not enable trading.</p>
+  </section>;
 }

@@ -273,7 +273,6 @@ app.post("/api/financial-chat", async (req, res) => {
     }
   }
 });
-
 app.post("/api/scan", async (req, res) => {
   const image: unknown = req.body?.image;
   const match = typeof image === "string" ? image.match(/^data:(image\/[a-z]+);base64,(.+)$/) : null;
