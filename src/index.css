@@ -411,11 +411,19 @@ body { background: #edf4ed; color: #24392c; }
 .northstar-summary { display: grid; grid-template-columns: 210px 1fr; align-items: center; gap: 26px; padding: 24px 28px; border: 1px solid #d9e0ec; border-radius: 13px; background: #f5f7fb; }
 .northstar-art { text-align: center; color: #4b5c7a; font-size: 13px; font-weight: 600; }
 .northstar-visual { display: block; width: 100%; max-width: 220px; margin: auto auto 8px; padding: 7px; border-radius: 12px; background: #14213b; }
-.northstar-orbit { fill: none; stroke: #8391ac; stroke-opacity: .55; stroke-width: 1; }
-.northstar-planet { fill: #73809a; stroke: #c4cce0; stroke-width: 1; }
-.northstar-planet.active { fill: #f3c768; stroke: #fff0c2; }
-.northstar-star { fill: #ffda7c; }
-.northstar-star-core { fill: #fff7da; }
+/* Constellation: dim until reached, then lit. Lines fill in as you approach the next star. */
+.northstar-dust { fill: #c9d4ea; opacity: .35; }
+.northstar-link { stroke: #8391ac; stroke-opacity: .35; stroke-width: 1; stroke-dasharray: 3 4; stroke-linecap: round; }
+.northstar-link.lit { stroke: #ffe6a3; stroke-opacity: .95; stroke-width: 1.6; stroke-dasharray: 1 1; transition: stroke-dashoffset .6s ease; }
+.northstar-node { fill: #5d6a85; stroke: #9aa6c0; stroke-width: 1; transition: fill .4s ease, stroke .4s ease; }
+.northstar-node.lit { fill: #fff3cf; stroke: #ffd977; filter: drop-shadow(0 0 3px #ffd977); }
+.northstar-polaris .northstar-halo { fill: #ffd977; opacity: 0; transition: opacity .6s ease; }
+.northstar-polaris .northstar-star { fill: #6d7b98; transition: fill .6s ease; }
+.northstar-polaris .northstar-star-core { fill: #a9b4cc; }
+.northstar-polaris.lit .northstar-halo { opacity: .22; animation: northstar-twinkle 3s ease-in-out infinite; }
+.northstar-polaris.lit .northstar-star { fill: #ffda7c; filter: drop-shadow(0 0 5px #ffd977); }
+.northstar-polaris.lit .northstar-star-core { fill: #fffaf0; }
+@keyframes northstar-twinkle { 0%, 100% { opacity: .16; } 50% { opacity: .34; } }
 .northstar-copy h2 { margin: 8px 0; font-size: 22px; }
 .northstar-copy > p { max-width: 540px; color: #596984; font-size: 14px; line-height: 1.7; }
 .northstar-kicker { display: inline-flex; align-items: center; gap: 6px; color: #52678d; font-size: 11px; letter-spacing: 1px; font-weight: 700; }
@@ -523,15 +531,13 @@ body {
 .northstar-summary { border-color: #d8e1ef; background: linear-gradient(115deg, #f3f8fa, #f8f6fc); }
 .northstar-art { color: #536681; }
 .northstar-visual { background: radial-gradient(ellipse at 48% 50%, #202e54, #14243a 76%); }
-.northstar-orbit { stroke: #9eaccb; stroke-opacity: .45; }
-.northstar-planet { fill: #64728e; stroke: #a8b6d2; }
-.northstar-planet.planet-1.active { fill: #5edfe2; stroke: #d7fcff; }
-.northstar-planet.planet-2.active { fill: #64d9e8; stroke: #d7fbff; }
-.northstar-planet.planet-3.active { fill: #85a4ff; stroke: #e1e9ff; }
-.northstar-planet.planet-4.active { fill: #bd91ff; stroke: #f0e2ff; }
-.northstar-planet.planet-5.active { fill: #f08ed0; stroke: #ffe2f5; }
-.northstar-star { fill: #8cdaff; }
-.northstar-star-core { fill: #f2fbff; }
+.northstar-link { stroke: #9eaccb; }
+.northstar-link.lit { stroke: #a9e6ff; }
+.northstar-node { fill: #56647f; stroke: #8f9dba; }
+.northstar-node.lit { fill: #e9f8ff; stroke: #8cdaff; filter: drop-shadow(0 0 3px #8cdaff); }
+.northstar-polaris .northstar-halo { fill: #8cdaff; }
+.northstar-polaris.lit .northstar-star { fill: #8cdaff; filter: drop-shadow(0 0 6px #8cdaff); }
+.northstar-polaris.lit .northstar-star-core { fill: #f2fbff; }
 .northstar-progress { background: #e2e8f2; }
 .northstar-progress-label strong { color: #325d91; }
 
