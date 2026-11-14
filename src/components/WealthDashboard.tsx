@@ -1,12 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowDownLeft, ArrowRight, ArrowUpRight, Check, ChevronRight, CircleDollarSign, Landmark, Plus, ShieldCheck, SlidersHorizontal, Sparkles, Target, Trash2, Wallet, X } from "lucide-react";
 import type { Bank } from "../lib/useBank";
 import type { MoneyGoal } from "../lib/types";
 import { isLiability } from "../lib/money";
 import { formatMoney } from "../lib/finance";
-import { opportunityCost, retirementProjection, type RetirementPoint, type SpendingFrequency } from "../lib/planning";
-import { GardenSummary, MoneyGarden, useMoneyGarden } from "./MoneyGarden";
-import { PortfolioHoldings } from "./PortfolioHoldings";
+import { budgetBalanceProgress, opportunityCost, retirementProjection, type RetirementPoint, type SpendingFrequency } from "../lib/planning";
+import { BudgetNorthStar, NorthStar } from "./NorthStar";
+import { MoneyAssistant } from "./MoneyAssistant";
+import type { MoneyAssistantContext } from "../lib/moneyAssistant";
 import { ConnectCard, MoneyDashboard } from "./MoneyDashboard";
 
 const usd = (value: number) => formatMoney(value, true);
@@ -23,12 +24,17 @@ const months = (n: number) => !Number.isFinite(n) ? "Not funded" : n === 0 ? "Fu
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="wealth-field"><span>{label}</span>{children}</label>; }
 function Amount({ label, value, onChange }: { label: string; value: number; onChange: (n: number) => void }) { return <Field label={label}><div className="wealth-currency"><span>$</span><input type="number" min="0" max="1000000000000" step="0.01" required value={value || ""} placeholder="0" onChange={e => onChange(Math.max(0, Number(e.target.value)))} /></div></Field>; }
+function holdingMoney(value: number, currency: string | null) {
+  if (!currency) return `${value.toLocaleString(undefined, { maximumFractionDigits: 2 })} (currency unavailable)`;
+  try { return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(value); }
+  catch { return `${value.toLocaleString()} ${currency}`; }
+}
 
 export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; onUpdateGoal: (g: MoneyGoal) => void; onOpenGoal: (id: string) => void; onNewGoal: () => void }) {
   const { bank, goals, onNewGoal, onOpenGoal } = props;
   const [plan, setPlan] = useState<Plan>(readPlan);
-  const garden = useMoneyGarden();
   const [tab, setTab] = useState("Overview");
+  const [northStarPreview, setNorthStarPreview] = useState<number | null>(null);
   const [assetForm, setAssetForm] = useState<Asset | null>(null);
   const modalRef = useRef<HTMLElement>(null);
   const modalOpen = !!assetForm;
@@ -107,7 +113,12 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; onUpdat
     ? []
     : retirementProjection(retirementBalance, retirementMonthly, retirementReturn, retirementYears);
   const monthlyGoals = goals.reduce((s, g) => s + g.weekly * 52 / 12, 0);
+  const totalGoalTarget = goals.reduce((s, g) => s + g.target, 0);
+  const savedTowardGoals = goals.reduce((s, g) => s + Math.min(g.target, Math.max(0, g.saved)), 0);
+  const goalProgress = totalGoalTarget > 0 ? Math.min(100, savedTowardGoals / totalGoalTarget * 100) : 0;
+  const updateNorthStarPreview = useCallback((progress: number | null) => setNorthStarPreview(progress), []);
   const available = plan.income - plan.essentials - plan.lifestyle - monthlyGoals;
+  const budgetProgress = budgetBalanceProgress(plan.income, available);
   function sample() {
     update({ assets: [...plan.assets, ...[
       { name: "Everyday checking", institution: "Chase", kind: "Checking", balance: 3250 },
@@ -118,15 +129,34 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; onUpdat
   }
   const addAsset = () => setAssetForm({ id: crypto.randomUUID(), name: "", institution: "", kind: "Checking", balance: 0 });
   const accountList = <section className="wealth-card"><div className="wealth-section-head"><div><h2>Your accounts</h2><p>Every account. One clear picture.</p></div><button className="wealth-text-button" onClick={addAsset}><Plus size={16} /> Add account</button></div>
-    {!assets.length ? <div className="wealth-empty"><Landmark size={30} /><h3>Bring your money together</h3><p>Add balances manually, or connect your bank to get started.</p><button className="wealth-primary" onClick={addAsset}>Add your first account <Plus size={16} /></button></div> : <div className="wealth-accounts">{assets.map(a => <div className="wealth-account" key={a.id}><span className={`wealth-account-icon ${investment(a.kind) ? "invest" : ""}`}>{investment(a.kind) ? <ArrowUpRight size={20} /> : <Landmark size={20} />}</span><div className="wealth-account-name"><strong>{a.name}</strong><span>{a.institution || "Personal account"} · {a.kind}{a.sample ? " · Sample" : linked.some(l => l.id === a.id) ? " · Connected" : " · Manual"}</span></div><strong className="wealth-balance">{debt(a.kind) ? "−" : ""}{usd(a.balance)}</strong>{plan.assets.some(m => m.id === a.id) && <button className="wealth-icon-button" aria-label={`Edit ${a.name}`} onClick={() => setAssetForm(a)}><SlidersHorizontal size={15} /></button>}</div>)}</div>}
+    {!assets.length ? <div className="wealth-empty"><Landmark size={30} /><h3>Bring your money together</h3><p>Add balances manually, or connect your bank to get started.</p><button className="wealth-primary" onClick={addAsset}>Add your first account <Plus size={16} /></button></div> : <div className="wealth-accounts">{assets.map(a => {
+      const holdings = linked.some(account => account.id === a.id) ? bank.data?.holdings?.filter(holding => holding.accountId === a.id) ?? [] : [];
+      return <div className="wealth-account-block" key={a.id}>
+        <div className="wealth-account"><span className={`wealth-account-icon ${investment(a.kind) ? "invest" : ""}`}>{investment(a.kind) ? <ArrowUpRight size={20} /> : <Landmark size={20} />}</span><div className="wealth-account-name"><strong>{a.name}</strong><span>{a.institution || "Personal account"} · {a.kind}{a.sample ? " · Sample" : linked.some(l => l.id === a.id) ? " · Connected" : " · Manual"}</span></div><strong className="wealth-balance">{debt(a.kind) ? "−" : ""}{usd(a.balance)}</strong>{plan.assets.some(m => m.id === a.id) && <button className="wealth-icon-button" aria-label={`Edit ${a.name}`} onClick={() => setAssetForm(a)}><SlidersHorizontal size={15} /></button>}</div>
+        {holdings.length > 0 && <details className="wealth-account-holdings"><summary>{holdings.length} investment holding{holdings.length === 1 ? "" : "s"}</summary><ul>{holdings.map(holding => <li key={holding.id}><span><strong>{holding.ticker || holding.name}</strong><small>{holding.quantity.toLocaleString(undefined, { maximumFractionDigits: 6 })} shares</small></span><strong>{holdingMoney(holding.value, holding.currency)}</strong></li>)}</ul></details>}
+      </div>;
+    })}</div>}
     <div className="wealth-card-foot"><ShieldCheck size={14} /><span>{linked.length ? `${linked.length} connected accounts · ${bank.data?.env === "sandbox" ? "Sandbox balances" : "Bank balances"}` : "Manual balances stay in this browser"}</span><button onClick={() => setConnect(!connect)}>Connect accounts <ArrowRight size={14} /></button></div>
   </section>;
   const goalList = <section className="wealth-card"><div className="wealth-section-head"><div><h2>Your savings goals</h2><p>Choose a goal and an amount to save each week.</p></div><button className="wealth-text-button" onClick={onNewGoal}><Plus size={16} /> New goal</button></div>
     {goals.length ? <div className="wealth-goal-grid">{goals.map(g => <button key={g.id} className="wealth-goal" onClick={() => onOpenGoal(g.id)}><span className="wealth-goal-top"><span className="wealth-account-icon"><Target size={19} /></span><ChevronRight size={17} /></span><h3>{g.name}</h3><p><strong>{usd(g.saved)}</strong> <span>of {usd(g.target)}</span></p><div className="wealth-progress" role="progressbar" aria-label={`${g.name} funded`} aria-valuenow={Math.min(100, Math.round(g.saved / g.target * 100))} aria-valuemin={0} aria-valuemax={100}><i style={{ width: `${Math.min(100, g.saved / g.target * 100)}%` }} /></div><span className="wealth-goal-detail">{usd(g.weekly)}/week <span>{months(g.weekly > 0 ? Math.max(0, g.target - g.saved) / (g.weekly * 52 / 12) : Infinity)} to go</span></span>{g.deadline && <span className="wealth-goal-deadline">Target date · {g.deadline}</span>}</button>)}</div> : <div className="wealth-goal-placeholder"><Target size={25} /><div><h3>What does your money make possible?</h3><p>An emergency fund, a home, a trip. Give your savings a purpose.</p></div><button className="wealth-secondary" onClick={onNewGoal}>Create a goal <ArrowRight size={15} /></button></div>}
   </section>;
+  const assistantContext: MoneyAssistantContext = {
+    accounts: assets.map(account => ({ name: account.name, kind: account.kind, balance: account.balance, isDebt: debt(account.kind) })),
+    assets: total,
+    debt: debts,
+    netWorth: total - debts,
+    goals: goals.map(goal => ({ name: goal.name, target: goal.target, saved: goal.saved, weekly: goal.weekly })),
+    monthlyIncome: plan.income,
+    monthlyExpenses: plan.essentials + plan.lifestyle,
+    monthlyGoalContributions: monthlyGoals,
+    retirementBalance,
+    retirementEstimate: retirementPoints.at(-1)?.balance ?? null,
+    retirementAge: retirementPoints.length ? retirementAge : null,
+  };
   return <main id="main" className="wealth-dashboard">
-    <div className="wealth-page-head"><div><h1>Your money, made simple.</h1><p>See what you have. Plan what comes next. Learn as you go.</p></div><button className="wealth-primary" onClick={addAsset}><Plus size={17} /> Add account</button></div>
-    <div className="wealth-tabs" aria-label="Dashboard sections">{["Overview", "Accounts", "Goals", "Retirement", "Budget", "Learn"].map(t => <button key={t} aria-pressed={tab === t || (t === "Accounts" && tab === "Activity")} onClick={() => setTab(t)} className={tab === t || (t === "Accounts" && tab === "Activity") ? "active" : ""}>{t}</button>)}<span><span className="wealth-dot" /> {saved}</span></div>
+    <div className="wealth-page-head"><div><h1>Your money, made simple.</h1><p>See your whole picture, plan ahead, and grow your savings.</p></div><button className="wealth-primary" onClick={addAsset}><Plus size={17} /> Add account</button></div>
+    <div className="wealth-tabs" aria-label="Dashboard sections">{["Overview", "Accounts", "Goals", "Retirement", "Budget"].map(t => <button key={t} aria-pressed={tab === t || (t === "Accounts" && tab === "Activity")} onClick={() => setTab(t)} className={tab === t || (t === "Accounts" && tab === "Activity") ? "active" : ""}>{t}</button>)}<span><span className="wealth-dot" /> {saved}</span></div>
     {tab === "Overview" && <>
       <section className="wealth-net-worth simple-money-summary"><div><div className="wealth-summary-label">NET WORTH <Wallet size={19} /></div><h2>{usd(total - debts)}</h2><p>What you own, minus what you owe.</p></div><div className="simple-money-breakdown"><span>Cash & savings<strong>{usd(cash)}</strong></span><span>Investments<strong>{usd(invested)}</strong></span><span>Other assets<strong>{usd(total - cash - invested)}</strong></span><span>Money owed<strong>{usd(debts)}</strong></span></div><button className="wealth-text-button" onClick={() => setTab("Accounts")}>View your accounts <ArrowRight size={16} /></button><button className="wealth-secondary" onClick={() => { setTab("Accounts"); setConnect(true); }}>Connect portfolio <Plus size={15} /></button></section>
       <section className="wealth-card wealth-breakdown">
@@ -139,14 +169,22 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; onUpdat
       </section>
       {!assets.length && <div className="wealth-sample"><Sparkles size={18} /><span>Start with your own numbers, or explore with clearly labeled sample accounts.</span><button onClick={sample}>Try sample accounts <ArrowRight size={15} /></button></div>}
       {assets.some(a => a.sample) && <div className="wealth-sample"><Sparkles size={17} /><span>Sample accounts are included in these totals.</span><button onClick={() => update({ assets: plan.assets.filter(a => !a.sample) })}>Remove sample accounts <X size={14} /></button></div>}
-      <GardenSummary garden={garden} onLearn={() => setTab("Learn")} />
+      <NorthStar progress={goalProgress} previewProgress={northStarPreview} hasGoals={goals.length > 0} onNewGoal={onNewGoal} />
       {goalList}
-      <button className="simple-calculator-link" onClick={() => setTab("Budget")}><span><strong>Opportunity cost calculator</strong><span>Compare a purchase with your savings timeline.</span></span><ArrowRight size={20} /></button>
+      <OpportunityCalculator goals={goals} totalGoalTarget={totalGoalTarget} savedTowardGoals={savedTowardGoals} onNewGoal={onNewGoal} onPreviewProgress={updateNorthStarPreview} />
     </>}
     {connect && <section className="wealth-connect"><button className="wealth-text-button" onClick={() => setConnect(false)}><X size={16} /> Close bank connection</button><ConnectCard sandbox={bank.status?.env !== "production"} configured={bank.status?.configured !== false && !!bank.status} onConnected={bank.reload} /></section>}
-    {tab === "Accounts" && <div className="wealth-stack">{accountList}<PortfolioHoldings bank={bank} onConnect={() => setConnect(true)} /><button className="wealth-secondary simple-activity-button" onClick={() => setTab("Activity")}>View connected bank activity <ArrowRight size={16} /></button><p className="wealth-note">Add each account once. Do not manually duplicate an account already connected through your bank. Edit manual accounts to update their balances.</p></div>}
+    {tab === "Accounts" && <div className="wealth-stack">{accountList}<button className="wealth-secondary simple-activity-button" onClick={() => setTab("Activity")}>View connected bank activity <ArrowRight size={16} /></button><p className="wealth-note">Connected investment holdings appear inside their account. Add each account only once; manual balances stay on this device.</p></div>}
 
-    {tab === "Goals" && <div className="wealth-stack">{goalList}<section className="wealth-card"><div className="wealth-section-head"><div><h2>Your preferences</h2><p>Tell us what matters to you. You can change this anytime.</p></div><span className="wealth-tag"><Check size={14} /> Autosaved</span></div><div className="wealth-profile-grid"><div><h3>How do you feel about investment ups and downs?</h3><p className="wealth-note">This is your risk tolerance: how comfortable you feel when investments change in value.</p><div className="wealth-risk-options">{[["Conservative", "I value stability and smaller swings."], ["Moderate", "I’m comfortable with some ups and downs."], ["Aggressive", "I can tolerate substantial fluctuations."]].map(([name, desc]) => <button key={name} aria-pressed={plan.risk === name} onClick={() => update({ risk: plan.risk === name ? "" : name })} className={plan.risk === name ? "selected" : ""}><span><strong>{name}</strong>{plan.risk === name && <Check size={17} />}</span><small>{desc}</small></button>)}</div></div><div className="wealth-stack"><Field label="When do you expect to use your invested money?"><select value={plan.horizon} onChange={e => update({ horizon: e.target.value })}><option value="">Select a time horizon</option>{["Under 3 years", "3–5 years", "5–10 years", "10+ years"].map(t => <option key={t}>{t}</option>)}</select></Field><Field label="Future goals & priorities"><textarea rows={5} value={plan.future} onChange={e => update({ future: e.target.value })} placeholder="Buy a home in five years, build an emergency fund, retire earlier…" /></Field><p className="wealth-note">These preferences are a personal planning record. They do not change account investments or generate investment recommendations.</p></div></div></section></div>}
+    {tab === "Goals" && <div className="wealth-stack">{goalList}
+      <details className="wealth-card wealth-preferences">
+        <summary><span>Optional planning preferences</span><small>Risk comfort, timeline, and future priorities</small></summary>
+        <div className="wealth-profile-grid">
+          <div><h3>How do you feel about investment ups and downs?</h3><p className="wealth-note">This is your risk tolerance: how comfortable you feel when investments change in value.</p><div className="wealth-risk-options">{[["Conservative", "I value stability and smaller swings."], ["Moderate", "I’m comfortable with some ups and downs."], ["Aggressive", "I can tolerate substantial fluctuations."]].map(([name, desc]) => <button key={name} aria-pressed={plan.risk === name} onClick={() => update({ risk: plan.risk === name ? "" : name })} className={plan.risk === name ? "selected" : ""}><span><strong>{name}</strong>{plan.risk === name && <Check size={17} />}</span><small>{desc}</small></button>)}</div></div>
+          <div className="wealth-stack"><Field label="When do you expect to use your invested money?"><select value={plan.horizon} onChange={e => update({ horizon: e.target.value })}><option value="">Select a time horizon</option>{["Under 3 years", "3–5 years", "5–10 years", "10+ years"].map(t => <option key={t}>{t}</option>)}</select></Field><Field label="Future goals & priorities"><textarea rows={4} value={plan.future} onChange={e => update({ future: e.target.value })} placeholder="Buy a home, build an emergency fund, retire…" /></Field><p className="wealth-note">These preferences are saved on this device. They don’t change your investments.</p></div>
+        </div>
+      </details>
+    </div>}
     {tab === "Retirement" && <section className="wealth-card wealth-retirement">
       <div className="wealth-section-head"><div><h2>Plan for retirement</h2><p>Explore how your savings could grow over time.</p></div><span className="wealth-account-icon"><Target size={20} /></span></div>
       <div className="wealth-retirement-balance"><span>Retirement accounts you’ve added</span><strong>{usd(retirementBalance)}</strong></div>
@@ -168,22 +206,40 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; onUpdat
         </div>}
       <p className="wealth-note">This is an illustration, not a guarantee or investment advice. It assumes monthly contributions and a steady return, and excludes taxes, fees, inflation, and changes in investment value.</p>
     </section>}
-    {tab === "Budget" && <div className="wealth-budget-layout"><section className="wealth-card"><div className="wealth-section-head"><div><h2>Your monthly budget</h2><p>Plan for your spending and savings.</p></div><CircleDollarSign size={22} /></div><div className="wealth-stack"><Amount label="Monthly income (after tax)" value={plan.income} onChange={income => update({ income })} /><Amount label="Monthly essentials · rent, groceries, bills" value={plan.essentials} onChange={essentials => update({ essentials })} /><Amount label="Monthly lifestyle · shopping, dining, fun" value={plan.lifestyle} onChange={lifestyle => update({ lifestyle })} /><div className="wealth-budget-line"><span>Savings goal contributions</span><strong>{usd(monthlyGoals)} / mo</strong></div><p className="wealth-note">Weekly contributions × 52 ÷ 12. Edit contributions in your goals.</p><div className={`wealth-budget-remainder ${available < 0 ? "over" : ""}`}><span>{available < 0 ? "Over budget" : "Left to plan"}</span><strong>{usd(Math.abs(available))}</strong></div>{available < 0 && <p className="wealth-note">Your spending and goal contributions exceed your income. Adjust your plan to close the gap.</p>}</div></section><OpportunityCalculator goals={goals} onNewGoal={onNewGoal} /></div>}
-    {tab === "Learn" && <MoneyGarden garden={garden} onNavigate={setTab} />}
+    {tab === "Budget" && <div className="wealth-stack">
+      <BudgetNorthStar progress={budgetProgress} hasIncome={plan.income > 0} remainder={available} />
+      <section className="wealth-card"><div className="wealth-section-head"><div><h2>Your monthly budget</h2><p>Plan for your spending and savings.</p></div><CircleDollarSign size={22} /></div><div className="wealth-stack"><Amount label="Monthly income (after tax)" value={plan.income} onChange={income => update({ income })} /><Amount label="Monthly essentials · rent, groceries, bills" value={plan.essentials} onChange={essentials => update({ essentials })} /><Amount label="Monthly lifestyle · shopping, dining, fun" value={plan.lifestyle} onChange={lifestyle => update({ lifestyle })} /><div className="wealth-budget-line"><span>Savings goal contributions</span><strong>{usd(monthlyGoals)} / mo</strong></div><p className="wealth-note">Weekly contributions × 52 ÷ 12. Edit contributions in your goals.</p><div className={`wealth-budget-remainder ${available < 0 ? "over" : ""}`}><span>{available < 0 ? "Over budget" : "Left to plan"}</span><strong>{usd(Math.abs(available))}</strong></div>{available < 0 && <p className="wealth-note">Your spending and goal contributions exceed your income. Adjust your plan to close the gap.</p>}</div></section>
+    </div>}
     {tab === "Activity" && <div className="wealth-stack"><button className="wealth-text-button" onClick={() => setTab("Accounts")}>← Back to your accounts</button><MoneyDashboard {...props} /></div>}
-    <footer className="wealth-footer"><span>TradeOff <span> / </span> Make room for what matters.</span><span>Planning estimates · Balances in USD</span></footer>
+    <footer className="wealth-footer"><span>NorthStar <span> / </span> Keep your goals in sight.</span><span>Planning estimates · Balances in USD</span></footer>
+    <MoneyAssistant context={assistantContext} />
     {assetForm && <div className="wealth-modal-backdrop"><section ref={modalRef} className="wealth-modal" role="dialog" aria-modal="true" aria-labelledby="asset-title"><div className="wealth-section-head"><h2 id="asset-title">{plan.assets.some(a => a.id === assetForm.id) ? "Edit account" : "Add an account"}</h2><button className="wealth-icon-button" aria-label="Close account form" onClick={() => setAssetForm(null)}><X size={20} /></button></div><p className="wealth-note">Enter a current balance. Manual accounts are saved on this device.</p><form className="wealth-stack" onSubmit={e => { e.preventDefault(); update({ assets: [...plan.assets.filter(a => a.id !== assetForm.id), { ...assetForm, name: assetForm.name.trim(), institution: assetForm.institution.trim() }] }); setAssetForm(null); }}><Field label="Account name"><input autoFocus required maxLength={80} value={assetForm.name} onChange={e => setAssetForm({ ...assetForm, name: e.target.value })} placeholder="My Roth IRA" pattern=".*\S.*" /></Field><Field label="Institution (optional)"><input maxLength={80} value={assetForm.institution} onChange={e => setAssetForm({ ...assetForm, institution: e.target.value })} placeholder="Fidelity" /></Field><Field label="Account type"><select value={assetForm.kind} onChange={e => setAssetForm({ ...assetForm, kind: e.target.value })}>{kinds.map(k => <option key={k}>{k}</option>)}</select></Field><Amount label={debt(assetForm.kind) ? "Amount owed" : "Current balance"} value={assetForm.balance} onChange={balance => setAssetForm({ ...assetForm, balance })} /><div className="wealth-modal-actions">{plan.assets.some(a => a.id === assetForm.id) && <button type="button" className="wealth-delete" onClick={() => { update({ assets: plan.assets.filter(a => a.id !== assetForm.id) }); setAssetForm(null); }}><Trash2 size={16} /> Remove</button>}<button type="button" className="wealth-secondary" onClick={() => setAssetForm(null)}>Cancel</button><button className="wealth-primary" type="submit">Save account <Check size={16} /></button></div></form></section></div>}
   </main>;
 }
 
-function OpportunityCalculator({ goals, onNewGoal }: { goals: MoneyGoal[]; onNewGoal: () => void }) {
+function OpportunityCalculator({ goals, totalGoalTarget, savedTowardGoals, onNewGoal, onPreviewProgress }: {
+  goals: MoneyGoal[];
+  totalGoalTarget: number;
+  savedTowardGoals: number;
+  onNewGoal: () => void;
+  onPreviewProgress: (progress: number | null) => void;
+}) {
   const [cost, setCost] = useState(100);
   const [frequency, setFrequency] = useState<SpendingFrequency>("once");
   const [goalId, setGoalId] = useState(goals[0]?.id || "");
   const [label, setLabel] = useState("");
+  const [previewReady, setPreviewReady] = useState(false);
   const goal = goals.find(g => g.id === goalId) ?? goals[0];
   const result = goal ? opportunityCost(cost, frequency, goal.target, goal.saved, goal.weekly) : null;
-  return <section className="wealth-card wealth-opportunity"><div className="wealth-section-head"><div><h2>Spend or save?</h2><p>See what a purchase means for a savings goal. This trade-off is called opportunity cost.</p></div><span className="wealth-account-icon"><ArrowDownLeft size={22} /></span></div><div className="wealth-stack"><Field label="What are you considering?"><input value={label} onChange={e => setLabel(e.target.value)} placeholder="Dinner out, a new phone, a subscription…" /></Field><div className="wealth-two-fields"><Amount label="Cost" value={cost} onChange={setCost} /><Field label="How often?"><select value={frequency} onChange={e => setFrequency(e.target.value as SpendingFrequency)}><option value="once">One-time</option><option value="weekly">Every week</option><option value="monthly">Every month</option></select></Field></div>{goal ? <Field label="Compare with this savings goal"><select value={goal.id} onChange={e => setGoalId(e.target.value)}>{goals.map(g => <option key={g.id} value={g.id}>{g.name} · {usd(g.weekly)}/week</option>)}</select></Field> : <div className="wealth-sample"><span>Add a savings goal to calculate the effect on your timeline.</span><button onClick={onNewGoal}>Create goal <Plus size={15} /></button></div>}
+  const previewProgress = previewReady && goal && totalGoalTarget > 0
+    ? (savedTowardGoals - Math.min(goal.target, Math.max(0, goal.saved)) + Math.max(0, Math.min(goal.target, goal.saved) - (frequency === "once" ? cost : 0))) / totalGoalTarget * 100
+    : null;
+  useEffect(() => {
+    onPreviewProgress(previewProgress);
+    return () => onPreviewProgress(null);
+  }, [onPreviewProgress, previewProgress]);
+
+  return <section className="wealth-card wealth-opportunity"><div className="wealth-section-head"><div><h2>Spend or save?</h2><p>See what a purchase means for a savings goal. This trade-off is called opportunity cost.</p></div><span className="wealth-account-icon"><ArrowDownLeft size={22} /></span></div><div className="wealth-stack"><Field label="What are you considering?"><input value={label} onChange={e => setLabel(e.target.value)} placeholder="Dinner out, a new phone, a subscription…" /></Field><div className="wealth-two-fields"><Amount label="Cost" value={cost} onChange={value => { setCost(value); setPreviewReady(true); }} /><Field label="How often?"><select value={frequency} onChange={e => { setFrequency(e.target.value as SpendingFrequency); setPreviewReady(true); }}><option value="once">One-time</option><option value="weekly">Every week</option><option value="monthly">Every month</option></select></Field></div>{goal ? <Field label="Compare with this savings goal"><select value={goal.id} onChange={e => { setGoalId(e.target.value); setPreviewReady(true); }}>{goals.map(g => <option key={g.id} value={g.id}>{g.name} · {usd(g.weekly)}/week</option>)}</select></Field> : <div className="wealth-sample"><span>Add a savings goal to calculate the effect on your timeline.</span><button onClick={onNewGoal}>Create goal <Plus size={15} /></button></div>}
     <div className="wealth-opportunity-result" aria-live="polite"><span className="wealth-tag">{frequency === "once" ? "ONE PURCHASE, A REAL TRADE-OFF" : "SMALL AMOUNTS ADD UP"}</span><strong>{usd(frequency === "once" ? cost : cost * (frequency === "weekly" ? 52 : 12))}</strong><p>{frequency === "once" ? `that could go toward ${goal?.name || "your future"}` : `per year spent on ${label || "this choice"}`}</p>{result && goal && <><div className="wealth-timeline-compare"><div><span>Keep your savings plan</span><strong>{months(result.baselineMonths)}</strong></div><ArrowRight size={18} /><div><span>{label ? `With ${label}` : "With this spending"}</span><strong>{months(result.afterMonths)}</strong></div></div><p className="wealth-delay">{goal.saved >= goal.target ? "This goal is already funded. Choose an unfinished goal to compare." : goal.weekly <= 0 ? "Set a weekly savings contribution to calculate a timeline." : !Number.isFinite(result.delayDays) ? "This recurring cost uses all of this goal’s contribution. The goal will not be reached on this plan." : `${Math.round(result.delayDays * 10) / 10} days later for ${goal.name}.`}</p></>}</div><p className="wealth-note">Assumes this spending comes entirely from the selected goal’s savings{frequency !== "once" ? " and continues until the goal is reached" : ""}. Uses 52 weeks per year. No interest, investment growth, taxes, or inflation. Calculator scenarios do not change your budget or balances.</p></div></section>;
 }
 

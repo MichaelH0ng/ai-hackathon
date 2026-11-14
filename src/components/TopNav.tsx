@@ -2,12 +2,25 @@ import { Camera, House, LayoutGrid, Settings } from "lucide-react";
 
 export function Logo({ onClick }: { onClick: () => void }) {
   return (
-    <button onClick={onClick} className="flex min-h-11 items-center gap-2" aria-label="TradeOff home">
-      <svg viewBox="0 0 32 32" className="h-9 w-9" aria-hidden="true">
-        <rect width="32" height="32" rx="10" fill="#35634b" />
-        <path d="M9 12h11l-3-3M23 20H12l3 3" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+    <button onClick={onClick} className="flex min-h-11 items-center gap-2" aria-label="NorthStar home">
+      <svg viewBox="0 0 40 40" className="h-9 w-9" aria-hidden="true">
+        <defs>
+          <linearGradient id="compass-north" x1="16" y1="8" x2="24" y2="20" gradientUnits="userSpaceOnUse">
+            <stop stopColor="#54e2c2" />
+            <stop offset=".52" stopColor="#74b9ff" />
+            <stop offset="1" stopColor="#c294ff" />
+          </linearGradient>
+        </defs>
+        <rect width="40" height="40" rx="12" fill="#15243c" />
+        <circle cx="20" cy="20" r="12.5" fill="none" stroke="#8696b2" strokeWidth="1.1" />
+        <path d="M20 4.5v3.2M35.5 20h-3.2M20 35.5v-3.2M4.5 20h3.2" stroke="#8696b2" strokeWidth="1.4" strokeLinecap="round" />
+        <path d="M20 8 24 18 20 20 16 18z" fill="url(#compass-north)" />
+        <path d="M20 32 16 22 20 20 24 22z" fill="#8290b2" />
+        <path d="M8 20 18 16 20 20 18 24z" fill="#69cce0" />
+        <path d="M32 20 22 24 20 20 22 16z" fill="#987de0" />
+        <circle cx="20" cy="20" r="1.7" fill="#f3fbff" />
       </svg>
-      <span className="font-display text-xl font-bold tracking-tight text-ink max-[420px]:sr-only">TradeOff</span>
+      <span className="font-display text-xl font-bold tracking-tight text-ink max-[420px]:sr-only">NorthStar</span>
     </button>
   );
 }

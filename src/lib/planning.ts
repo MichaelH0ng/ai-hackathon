@@ -6,6 +6,11 @@ export interface RetirementPoint {
   contributions: number;
 }
 
+export function budgetBalanceProgress(income: number, remainder: number): number {
+  if (!Number.isFinite(income) || !Number.isFinite(remainder) || income <= 0) return 0;
+  return Math.max(0, Math.min(100, (1 - Math.abs(remainder) / income) * 100));
+}
+
 /** Project a retirement balance with monthly contributions deposited at month end. */
 export function retirementProjection(
   currentBalance: number,

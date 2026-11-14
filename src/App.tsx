@@ -7,6 +7,7 @@ import type { LogDecision } from "./components/MoneyWhatIf";
 import { PathCards, type PathKind } from "./components/PathCards";
 import { PriceCheck } from "./components/PriceCheck";
 import { Settings } from "./components/Settings";
+import SoftAurora from "./components/SoftAurora";
 import { StudyGoalForm } from "./components/StudyGoalForm";
 import { StudyGoalView } from "./components/StudyGoalView";
 import { TopNav } from "./components/TopNav";
@@ -153,7 +154,7 @@ export default function App() {
           onProfile={(p) => setState((s) => ({ ...s, profile: p }))}
           onDemo={loadDemo}
           onReset={() => {
-            try { localStorage.removeItem("tradeoff:wealth:v1"); localStorage.removeItem("tradeoff:learning:v1"); } catch { /* Storage can be blocked. */ }
+            try { localStorage.removeItem("tradeoff:wealth:v1"); } catch { /* Storage can be blocked. */ }
             setState(EMPTY_STATE);
             setScreen({ name: "home" });
           }}
@@ -167,7 +168,29 @@ export default function App() {
 
   const isLanding = screen.name === "home" || screen.name === "money"; // these render their own full-width layout
   return (
-    <div className="min-h-dvh">
+    <div className="relative min-h-dvh isolate">
+      <SoftAurora
+        speed={0.6}
+        scale={1.5}
+        brightness={1}
+        color1="#54e2c2"
+        color2="#c294ff"
+        bandHeight={0.5}
+        bandSpread={1}
+        enableMouseInteraction
+        mouseInfluence={0.25}
+        spectrum={0.35}
+        colorSpeed={1}
+        noiseFrequency={2.5}
+        noiseAmplitude={1}
+        tilt={0}
+        octaveDecay={0.1}
+        layerOffset={0}
+        clickPulse
+        intro
+        lightMode={false}
+        className="soft-aurora-background"
+      />
       <TopNav
         onHome={goHome}
         onGoals={goGoals}

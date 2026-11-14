@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { opportunityCost, retirementProjection } from "./planning";
+import { budgetBalanceProgress, opportunityCost, retirementProjection } from "./planning";
 describe("budget opportunity cost", () => {
   it("translates a one-time purchase to savings days", () => {
     expect(opportunityCost(100, "once", 1000, 0, 100).delayDays).toBeCloseTo(7);
@@ -16,6 +16,18 @@ describe("budget opportunity cost", () => {
   it("does not delay an already funded goal or divide by zero", () => {
     expect(opportunityCost(100, "once", 500, 500, 0).delayDays).toBe(0);
     expect(opportunityCost(100, "once", 500, 0, 0).afterMonths).toBe(Infinity);
+  });
+});
+
+describe("budget balance progress", () => {
+  it("rewards plans that approach zero remaining income", () => {
+    expect(budgetBalanceProgress(5000, 1000)).toBe(80);
+    expect(budgetBalanceProgress(5000, 0)).toBe(100);
+  });
+
+  it("handles over-budget plans and missing income", () => {
+    expect(budgetBalanceProgress(5000, -500)).toBe(90);
+    expect(budgetBalanceProgress(0, 0)).toBe(0);
   });
 });
 
