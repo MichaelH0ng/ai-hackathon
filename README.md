@@ -25,7 +25,6 @@ Optional:
 - **On your phone** (same Wi-Fi): `npm run dev:phone` and open the "Network" URL.
 - **Tests**: `npm test`
 
-The floating financial chat uses the server's `/api/chat` endpoint and an Anthropic API key. Questions sent there include a financial summary from connected Plaid accounts and your savings goals. The dashboard's Polaris assistant continues to answer locally on-device.
 
 ## 30-second demo
 
