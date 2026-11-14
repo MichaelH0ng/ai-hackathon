@@ -56,7 +56,7 @@ export function FinancialChat({ goals }: FinancialChatProps) {
     if (!trimmed || loading) return;
 
     const userMessage: ChatMessage = { id: crypto.randomUUID(), role: "user", content: trimmed };
-    const history = messages.slice(-12).map(({ role, content }) => ({ role, content }));
+    const history = messages.slice(-4).map(({ role, content }) => ({ role, content }));
     setMessages((current) => [...current, userMessage]);
     setDraft("");
     setError(null);
@@ -128,7 +128,7 @@ export function FinancialChat({ goals }: FinancialChatProps) {
                 <Send className="h-4 w-4" aria-hidden="true" />
               </button>
             </div>
-            <p className="px-1 pt-2 text-[11px] leading-4 text-stone-500">Your question and connected-account context are sent to Claude to answer it. Informational only—not financial, tax, or investment advice.</p>
+            <p className="px-1 pt-2 text-[11px] leading-4 text-stone-500">Common totals are calculated instantly. Other questions send only the relevant account context to Claude. Informational only—not financial, tax, or investment advice.</p>
           </form>
         </aside>
       )}

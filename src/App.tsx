@@ -12,6 +12,7 @@ import { StudyGoalForm } from "./components/StudyGoalForm";
 import { StudyGoalView } from "./components/StudyGoalView";
 import { TopNav } from "./components/TopNav";
 import { FinancialChat } from "./components/FinancialChat";
+import { AuroraBackground } from "./components/AuroraBackground";
 import { BackButton } from "./components/ui";
 import { todayISO } from "./lib/dates";
 import { EMPTY_STATE, type SavedState, demoState, loadState, saveState } from "./lib/storage";
@@ -170,7 +171,7 @@ export default function App() {
 
   const isLanding = screen.name === "home" || screen.name === "money"; // these render their own full-width layout
   return (
-    <div className="min-h-dvh">
+    <AuroraBackground>
       <TopNav
         onHome={goHome}
         onGoals={goGoals}
@@ -182,6 +183,6 @@ export default function App() {
       />
       {isLanding ? body : <main id="main" className="mx-auto max-w-md px-4 pb-16 pt-6 sm:max-w-2xl">{body}</main>}
       <FinancialChat goals={state.goals} />
-    </div>
+    </AuroraBackground>
   );
 }

@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* TradeOff design tokens — playful "clay" style: study purple + gains green. */
+/* NorthStar design tokens — playful "clay" style: study purple + gains green. */
 @theme {
   --font-display: "Fredoka", ui-rounded, system-ui, sans-serif;
   --font-sans: "Nunito", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
@@ -18,7 +18,7 @@
 }
 
 body {
-  background: #dbeafe;
+  background: #f8fafc;
   color: var(--color-ink);
   font-family: var(--font-sans);
   -webkit-tap-highlight-color: transparent;
@@ -27,12 +27,18 @@ body {
 /* Soft clay surface: outer glow + subtle inner bottom edge */
 .clay {
   border-radius: 1.5rem;
-  background: #fff;
+  background: rgb(255 255 255 / 0.94);
   box-shadow:
     0 18px 40px -22px rgb(76 29 149 / 0.35),
     0 2px 0 0 rgb(76 29 149 / 0.06),
     inset 0 -3px 0 0 rgb(76 29 149 / 0.06);
 }
+
+@keyframes aurora {
+  from { background-position: 50% 50%, 50% 50%; }
+  to { background-position: 350% 50%, 350% 50%; }
+}
+.animate-aurora { animation: aurora 60s linear infinite; }
 
 .clay-press {
   transition: transform 200ms ease-out, box-shadow 200ms ease-out;

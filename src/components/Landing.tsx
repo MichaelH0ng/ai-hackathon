@@ -53,7 +53,7 @@ export function Landing({
 
       {moneyGoals.length > 0 && <SavingsPlanner goals={moneyGoals} onUpdate={onUpdateGoal} onOpen={onOpenGoal} />}
 
-      <section aria-label="More in TradeOff" className="px-4 pb-14">
+      <section aria-label="More in NorthStar" className="px-4 pb-14">
         <div className="mx-auto grid max-w-6xl gap-4 sm:grid-cols-2">
           <MoreCard icon={<PiggyBank className="h-5 w-5" />} tint="bg-emerald-100 text-emerald-700" title="Save for something" line="Set a goal and a weekly amount. Your finish date moves with every choice." cta={moneyGoals.length ? "Add another goal" : "Start a savings goal"} onClick={() => onPick("money")} />
           <MoreCard icon={<GraduationCap className="h-5 w-5" />} tint="bg-amber-100 text-amber-700" title="Study smarter" line="A day-by-day exam plan, hard topics first, and what a movie night really costs." cta="Plan my studying" onClick={() => onPick("study")} />
@@ -61,7 +61,7 @@ export function Landing({
       </section>
 
       <footer className="border-t border-brand-100 px-4 py-6 text-center text-sm text-stone-500">
-        <strong className="font-display text-ink">TradeOff</strong> · Built for the Cal Poly AI Hackathon · A planning tool, not financial advice.
+        <strong className="font-display text-ink">NorthStar</strong> · Built for the Cal Poly AI Hackathon · A planning tool, not financial advice.
       </footer>
     </main>
   );

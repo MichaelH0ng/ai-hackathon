@@ -159,8 +159,8 @@ plaidRouter.get("/api/plaid/status", (_req, res) => {
 plaidRouter.post("/api/plaid/link-token", async (_req, res) => {
   try {
     const r = await plaid.linkTokenCreate({
-      user: { client_user_id: "tradeoff-local-user" },
-      client_name: "TradeOff",
+      user: { client_user_id: "northstar-local-user" },
+      client_name: "NorthStar",
       language: "en",
       country_codes: [CountryCode.Us],
       products: [Products.Transactions],

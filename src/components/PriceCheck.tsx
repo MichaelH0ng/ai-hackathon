@@ -270,7 +270,7 @@ export function PriceCheck({
             <Card className="text-center">
               <PiggyBank className="mx-auto h-10 w-10 text-emerald-600" aria-hidden="true" />
               <h3 className="mt-2 text-xl font-bold text-ink">See how this moves a goal</h3>
-              <p className="mx-auto mt-1 max-w-sm text-sm text-stone-600">Add something you're saving for, and TradeOff will show how many days this purchase pushes it back.</p>
+              <p className="mx-auto mt-1 max-w-sm text-sm text-stone-600">Add something you're saving for, and NorthStar will show how many days this purchase pushes it back.</p>
               <Button className="mt-4" onClick={onNewGoal}>Start a savings goal</Button>
             </Card>
           ) : (

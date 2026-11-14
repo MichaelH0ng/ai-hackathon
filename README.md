@@ -1,6 +1,6 @@
-# TradeOff
+# NorthStar
 
-**See what today's choices cost tomorrow.**
+**Know where your money is going, and where you want it to take you.**
 
 An opportunity cost app for students that does three things:
 

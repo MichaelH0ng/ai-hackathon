@@ -50,7 +50,7 @@ const ChatRequest = z.object({
   question: z.string().trim().min(1).max(1_200),
   history: z
     .array(z.object({ role: z.enum(["user", "assistant"]), content: z.string().trim().min(1).max(2_000) }))
-    .max(12)
+    .max(4)
     .default([]),
   // Goals live in browser storage, so only their answer-relevant fields are sent.
   goals: z
@@ -68,18 +68,42 @@ const ChatRequest = z.object({
     .default([]),
 });
 
-function financialContext(data: Awaited<ReturnType<typeof loadDashboardData>>, goals: z.infer<typeof ChatRequest>["goals"]) {
+type ChatData = Awaited<ReturnType<typeof loadDashboardData>>;
+type DateRange = { label: string; start: string; endExclusive?: string };
+
+const isoDate = (date: Date) => date.toISOString().slice(0, 10);
+
+function transactionRange(question: string, now = new Date()): DateRange {
+  const text = question.toLowerCase();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const day = (offset: number) => isoDate(new Date(today.getFullYear(), today.getMonth(), today.getDate() + offset));
+  if (/\blast week\b/.test(text)) {
+    const thisSunday = new Date(today.getFullYear(), today.getMonth(), today.getDate() - today.getDay());
+    return { label: "last calendar week", start: isoDate(new Date(thisSunday.getFullYear(), thisSunday.getMonth(), thisSunday.getDate() - 7)), endExclusive: isoDate(thisSunday) };
+  }
+  if (/\bthis week\b/.test(text)) return { label: "this week", start: day(-today.getDay()), endExclusive: day(1) };
+  if (/\b(last|past) (7 days|week)\b/.test(text)) return { label: "the last 7 days", start: day(-6), endExclusive: day(1) };
+  if (/\blast month\b/.test(text)) return { label: "last calendar month", start: isoDate(new Date(today.getFullYear(), today.getMonth() - 1, 1)), endExclusive: isoDate(new Date(today.getFullYear(), today.getMonth(), 1)) };
+  if (/\bthis month\b/.test(text)) return { label: "this month", start: isoDate(new Date(today.getFullYear(), today.getMonth(), 1)), endExclusive: day(1) };
+  if (/\b(last|past) (30 days|month)\b/.test(text)) return { label: "the last 30 days", start: day(-29), endExclusive: day(1) };
+  if (/\b(last|past) year\b|\b12 months\b/.test(text)) return { label: "the last 12 months", start: day(-365), endExclusive: day(1) };
+  return { label: "the last 90 days", start: day(-89), endExclusive: day(1) };
+}
+
+function selectedTransactions(data: ChatData, range: DateRange) {
+  return data.transactions.filter((transaction) => transaction.date >= range.start && (!range.endExclusive || transaction.date < range.endExclusive)).slice(0, 500);
+}
+
+function financialContext(data: ChatData, goals: z.infer<typeof ChatRequest>["goals"], range: DateRange) {
   const accounts = data.accounts.map(({ id, ...account }) => ({ id, ...account }));
   const accountNames = new Map(accounts.map((a) => [a.id, `${a.institution} — ${a.name}`]));
-  // Recent, posted transactions are the most useful source for time-based questions.
-  // The cap keeps every request bounded even with a long-lived account connection.
-  const transactions = data.transactions
+  const transactions = selectedTransactions(data, range)
     .filter((t) => !t.pending)
-    .slice(0, 500)
     .map(({ id: _id, accountId, ...transaction }) => ({ ...transaction, account: accountNames.get(accountId) ?? "Unknown account" }));
 
   return JSON.stringify({
     asOf: data.fetchedAt,
+    transactionWindow: range.label,
     conventions: { plaidAmount: "positive means money out; negative means money in" },
     accounts,
     moneyGoals: goals,
@@ -88,7 +112,48 @@ function financialContext(data: Awaited<ReturnType<typeof loadDashboardData>>, g
   });
 }
 
-const FINANCE_SYSTEM_PROMPT = `You are the in-app financial data assistant for TradeOff. Answer the user's question using only the current financial context supplied below. Do not invent transactions, interest, balances, rates, or dates.
+const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
+const transferCategory = (category: string) => category.startsWith("TRANSFER") || category === "LOAN_PAYMENTS";
+
+function instantAnswer(question: string, data: ChatData, goals: z.infer<typeof ChatRequest>["goals"]): string | null {
+  const text = question.toLowerCase();
+  const range = transactionRange(question);
+  const transactions = selectedTransactions(data, range).filter((transaction) => !transaction.pending);
+
+  if (/\b(goal|goals|how close|saving for|savings progress)\b/.test(text) && goals.length) {
+    const progress = goals.map((goal) => {
+      const remaining = Math.max(0, goal.target - goal.saved);
+      const percent = goal.target ? Math.min(100, (goal.saved / goal.target) * 100) : 100;
+      const timing = remaining === 0 ? "You are fully funded." : goal.weekly > 0 ? `At ${money.format(goal.weekly)}/week, about ${Math.ceil(remaining / goal.weekly)} week${Math.ceil(remaining / goal.weekly) === 1 ? "" : "s"} remain.` : "Add a weekly savings amount to estimate a finish date.";
+      return `• ${goal.name}: ${money.format(goal.saved)} of ${money.format(goal.target)} (${percent.toFixed(0)}%), with ${money.format(remaining)} remaining. ${timing}`;
+    });
+    return `Here is your current goal progress:\n${progress.join("\n")}\n\nCalculated from the savings goals in NorthStar. Informational only—not financial advice.`;
+  }
+
+  if (/\b(interest|apy)\b/.test(text)) {
+    const accountNames = new Map(data.accounts.map((account) => [account.id, `${account.institution} — ${account.name}`]));
+    const interest = transactions.filter((transaction) => transaction.amount < 0 && /\binterest\b|\bapy\b/i.test(transaction.name));
+    if (!interest.length) return `I couldn't find any posted transactions explicitly labeled interest or APY during ${range.label}. I don't infer interest from balance changes.\n\nInformational only—not financial advice.`;
+    const byAccount = new Map<string, number>();
+    for (const transaction of interest) {
+      const name = accountNames.get(transaction.accountId) ?? "Unknown account";
+      byAccount.set(name, (byAccount.get(name) ?? 0) + Math.abs(transaction.amount));
+    }
+    const total = [...byAccount.values()].reduce((sum, value) => sum + value, 0);
+    const detail = [...byAccount.entries()].map(([name, amount]) => `• ${name}: ${money.format(amount)}`).join("\n");
+    return `I found ${money.format(total)} in posted interest during ${range.label}:\n${detail}\n\nThis excludes dividends and anything not explicitly labeled interest or APY. Informational only—not financial advice.`;
+  }
+
+  if (/\b(made|earned|income|money came in|money in|inflow|inflows|deposits)\b/.test(text)) {
+    const inflows = transactions.filter((transaction) => transaction.amount < 0 && !transferCategory(transaction.category));
+    const total = inflows.reduce((sum, transaction) => sum + Math.abs(transaction.amount), 0);
+    const largest = [...inflows].sort((a, b) => a.amount - b.amount).slice(0, 3).map((transaction) => `${transaction.name} (${money.format(Math.abs(transaction.amount))})`);
+    return `You had ${money.format(total)} in posted inflows during ${range.label}${largest.length ? `. Largest entries: ${largest.join(", ")}.` : "."}\n\nThis is posted money in, excluding transactions categorized as transfers or loan payments; it is not necessarily wages or investment return. Informational only—not financial advice.`;
+  }
+  return null;
+}
+
+const FINANCE_SYSTEM_PROMPT = `You are the in-app financial data assistant for NorthStar. Answer the user's question using only the current financial context supplied below. Do not invent transactions, interest, balances, rates, or dates.
 
 Be direct and show the calculation or the specific transactions/accounts you used whenever a number matters. Plaid transaction amounts use a positive number for money out and a negative number for money in. Treat transfers, card payments, and pending transactions carefully; do not count them as earnings unless the data clearly supports that. For questions about "money made," explain whether you are reporting posted inflows, net cash flow, or something else. For interest, report only transactions whose description clearly identifies interest; do not infer it from a balance change. Explain when the available data cannot answer the question.
 
@@ -112,11 +177,17 @@ app.post("/api/financial-chat", async (req, res) => {
       res.status(422).json({ error: "No connected account data is available yet. Connect a bank, then try again." });
       return;
     }
+    const computed = instantAnswer(parsed.data.question, dashboard, parsed.data.goals);
+    if (computed) {
+      res.json({ answer: computed, fetchedAt: dashboard.fetchedAt, source: "calculation" });
+      return;
+    }
+    const range = transactionRange(parsed.data.question);
     const response = await getClient().messages.create({
-      model: "claude-opus-5-5",
-      max_tokens: 1_000,
-      system: `${FINANCE_SYSTEM_PROMPT}\n\nCURRENT FINANCIAL CONTEXT:\n${financialContext(dashboard, parsed.data.goals)}`,
-      messages: [...parsed.data.history, { role: "user", content: parsed.data.question }],
+      model: "claude-sonnet-5-5",
+      max_tokens: 500,
+      system: `${FINANCE_SYSTEM_PROMPT}\n\nCURRENT FINANCIAL CONTEXT:\n${financialContext(dashboard, parsed.data.goals, range)}`,
+      messages: [...parsed.data.history.slice(-4), { role: "user", content: parsed.data.question }],
     });
     const answer = response.content
       .filter((block) => block.type === "text")

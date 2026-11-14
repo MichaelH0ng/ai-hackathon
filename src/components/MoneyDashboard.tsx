@@ -412,7 +412,7 @@ export function ConnectCard({ sandbox, onConnected }: { sandbox: boolean; onConn
       <span className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-100 text-brand-700"><Landmark className="h-7 w-7" aria-hidden="true" /></span>
       <h2 className="mt-3 text-2xl font-bold text-ink">Connect your bank</h2>
       <p className="mx-auto mt-1 max-w-md text-stone-600">
-        See your balances, cash flow, top spending and upcoming bills, and what your spending costs your goals in days. Uses Plaid; your login never touches TradeOff.
+        See your balances, cash flow, top spending and upcoming bills, and what your spending costs your goals in days. Uses Plaid; your login never touches NorthStar.
       </p>
       <div className="mt-5 flex flex-wrap justify-center gap-3">
         <ConnectButton label="Connect a bank" onConnected={onConnected} />

@@ -2,7 +2,7 @@
 
 import { addDays, daysBetween, todayISO } from "./dates";
 
-// ---------- Weekly savings plan (the core TradeOff flow) ----------
+// ---------- Weekly savings plan (the core NorthStar flow) ----------
 
 /** Weeks until the goal is funded at this weekly rate. 0 if done, Infinity if no savings. */
 export function weeksToGoal(target: number, saved: number, weekly: number): number {

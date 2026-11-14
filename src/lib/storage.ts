@@ -2,7 +2,8 @@ import { addDays, todayISO } from "./dates";
 import { replan } from "./study";
 import type { BankSnapshot, Decision, Goal, Profile, StudyGoal } from "./types";
 
-const KEY = "tradeoff:v1";
+const KEY = "northstar:v1";
+const LEGACY_KEY = "tradeoff:v1";
 
 export interface SavedState {
   profile: Profile;
@@ -15,7 +16,7 @@ export const EMPTY_STATE: SavedState = { profile: { hourlyWage: null }, goals: [
 
 export function loadState(): SavedState {
   try {
-    const raw = localStorage.getItem(KEY);
+    const raw = localStorage.getItem(KEY) ?? localStorage.getItem(LEGACY_KEY);
     if (!raw) return EMPTY_STATE;
     const saved = { ...EMPTY_STATE, ...JSON.parse(raw) } as SavedState;
     // Older versions had a food-budget goal type; drop it so the app doesn't trip over it.
