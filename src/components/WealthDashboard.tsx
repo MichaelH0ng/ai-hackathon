@@ -1,15 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowDownLeft, ArrowRight, ArrowUpRight, Check, ChevronRight, CircleDollarSign, Landmark, Plus, ShieldCheck, SlidersHorizontal, Sparkles, Target, Trash2, Wallet, X } from "lucide-react";
 import type { Bank } from "../lib/useBank";
 import type { MoneyGoal } from "../lib/types";
-import { isLiability, netWorthSeries } from "../lib/money";
+import { isLiability } from "../lib/money";
 import { formatMoney } from "../lib/finance";
 import { budgetBalanceProgress, opportunityCost, retirementProjection, type RetirementPoint, type SpendingFrequency } from "../lib/planning";
 import { BudgetNorthStar, NorthStar } from "./NorthStar";
 import { MoneyAssistant } from "./MoneyAssistant";
 import type { MoneyAssistantContext } from "../lib/moneyAssistant";
 import { ConnectCard, MoneyDashboard } from "./MoneyDashboard";
-import { NetWorthChart } from "./NetWorthChart";
 
 const usd = (value: number) => formatMoney(value, true);
 const kinds = ["Checking", "Savings", "Roth IRA", "Traditional IRA", "401(k)", "Brokerage", "Property", "Other asset", "Credit card", "Loan"];
@@ -113,10 +112,6 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; onUpdat
   const retirementPoints = retirementYears === null
     ? []
     : retirementProjection(retirementBalance, retirementMonthly, retirementReturn, retirementYears);
-  const connectedNetWorthSeries = useMemo(
-    () => bank.data ? netWorthSeries(bank.data.accounts, bank.data.transactions, 90) : [],
-    [bank.data],
-  );
   const monthlyGoals = goals.reduce((s, g) => s + g.weekly * 52 / 12, 0);
   const totalGoalTarget = goals.reduce((s, g) => s + g.target, 0);
   const savedTowardGoals = goals.reduce((s, g) => s + Math.min(g.target, Math.max(0, g.saved)), 0);
@@ -164,10 +159,6 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; onUpdat
     <div className="wealth-tabs" aria-label="Dashboard sections">{["Overview", "Accounts", "Goals", "Retirement", "Budget"].map(t => <button key={t} aria-pressed={tab === t || (t === "Accounts" && tab === "Activity")} onClick={() => setTab(t)} className={tab === t || (t === "Accounts" && tab === "Activity") ? "active" : ""}>{t}</button>)}<span><span className="wealth-dot" /> {saved}</span></div>
     {tab === "Overview" && <>
       <section className="wealth-net-worth simple-money-summary"><div><div className="wealth-summary-label">NET WORTH <Wallet size={19} /></div><h2>{usd(total - debts)}</h2><p>What you own, minus what you owe.</p></div><div className="simple-money-breakdown"><span>Cash & savings<strong>{usd(cash)}</strong></span><span>Investments<strong>{usd(invested)}</strong></span><span>Other assets<strong>{usd(total - cash - invested)}</strong></span><span>Money owed<strong>{usd(debts)}</strong></span></div><button className="wealth-text-button" onClick={() => setTab("Accounts")}>View your accounts <ArrowRight size={16} /></button><button className="wealth-secondary" onClick={() => { setTab("Accounts"); setConnect(true); }}>Connect portfolio <Plus size={15} /></button></section>
-      {connectedNetWorthSeries.length > 1 && <section className="wealth-card">
-        <NetWorthChart series={connectedNetWorthSeries} note={bank.data?.env === "sandbox" ? "Sandbox test data" : "Connected accounts only"} />
-        <p className="wealth-note">This history is estimated from connected account balances and transactions. Manually added accounts are included in the summary above, not this graph.</p>
-      </section>}
       <section className="wealth-card wealth-breakdown">
         <div className="wealth-section-head"><div><h2>Your money at a glance</h2><p>See how your accounts and debt compare.</p></div></div>
         {assets.length ? <ul className="wealth-breakdown-list">{breakdown.map(category => <li key={category.name}>
