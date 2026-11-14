@@ -13,8 +13,8 @@ const PERIODS = [
 ] as const;
 type Period = (typeof PERIODS)[number]["key"];
 
-const UP = "#059669";
-const DOWN = "#ea580c";
+const UP = "#54e2c2";
+const DOWN = "#ffb47a";
 const money = (n: number) => formatMoney(n, true);
 
 /**
@@ -112,7 +112,7 @@ export function NetWorthChart({ series, note }: { series: NetWorthPoint[]; note?
             aria-selected={period === x.key}
             onClick={() => setPeriod(x.key)}
             className="min-h-10 min-w-12 rounded-lg px-3 text-sm font-bold transition-colors duration-200"
-            style={period === x.key ? { color, background: `${color}1a` } : { color: "#78716c" }}
+            style={period === x.key ? { color, background: `${color}1a` } : { color: "#a8b9cf" }}
           >
             {x.key}
           </button>

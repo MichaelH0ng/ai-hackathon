@@ -94,16 +94,16 @@ export function HomeOverview({ data, onMoney }: { data: import("../lib/money").B
         <aside className="space-y-4">
 
           <div className="clay divide-y divide-stone-100 px-5 py-2">
-            <Stat icon={<Wallet className="h-4 w-4 text-sky-600" />} label="Spendable cash" value={formatMoney(view.cash)} />
+            <Stat icon={<Wallet className="h-4 w-4 text-sky-300" />} label="Spendable cash" value={formatMoney(view.cash)} />
             <Stat
-              icon={<ShoppingBag className="h-4 w-4 text-amber-600" />}
+              icon={<ShoppingBag className="h-4 w-4 text-amber-300" />}
               label="Spent this month"
               value={data.transactions.length ? formatMoney(spent) : "No activity yet"}
               sub={lastSpent ? `${formatMoney(lastSpent)} last month` : undefined}
             />
             {view.bill && (
               <Stat
-                icon={<CalendarClock className="h-4 w-4 text-brand-600" />}
+                icon={<CalendarClock className="h-4 w-4 text-brand-500" />}
                 label={`Next bill: ${view.bill.name}`}
                 value={formatMoney(view.bill.amount, true)}
                 sub={view.bill.daysUntil === 0 ? "due today" : `in ${view.bill.daysUntil} days`}
@@ -111,7 +111,7 @@ export function HomeOverview({ data, onMoney }: { data: import("../lib/money").B
             )}
           </div>
 
-          <button onClick={onMoney} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-ink px-4 font-bold text-white transition-colors duration-200 hover:bg-brand-700">
+          <button onClick={onMoney} className="wealth-secondary w-full">
             View accounts and activity <ArrowRight className="h-4 w-4" aria-hidden="true" />
           </button>
         </aside>
