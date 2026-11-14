@@ -477,6 +477,10 @@ body { background: #edf4ed; color: #24392c; }
   --aurora-blue: #405ab0;
   --aurora-violet: #704caf;
   --aurora-slate: #25354b;
+  /* Light-mode values for the shared text/border tokens; dark mode overrides them below. */
+  --night-text: #25354b;
+  --night-muted: #5d6b80;
+  --night-border: #dce3ee;
 }
 
 body {
@@ -563,9 +567,12 @@ body {
 /* Each navigation destination owns its content instead of nesting dashboard tabs. */
 .wealth-page-head { margin-bottom: 26px; }
 
-/* NorthStar night-sky theme. Keep this final layer together so new screens inherit
-   the same dark canvas and aurora accents instead of creating one-off palettes. */
-:root {
+/* NorthStar night-sky theme (dark mode). Applies when <html data-theme="dark">; the
+   Light/Dark switch lives in Settings. Keep this final layer together so new screens inherit
+   the same dark canvas and aurora accents instead of creating one-off palettes.
+   :where() adds no specificity, so these rules behave exactly as they did unscoped. */
+:root[data-theme="dark"] {
+  color-scheme: dark;
   --night-950: #050b16;
   --night-900: #091426;
   --night-850: #0d1d35;
@@ -589,147 +596,150 @@ body {
   --color-cost: #ffb47a;
 }
 
-body {
-  min-height: 100dvh;
-  background:
-    radial-gradient(ellipse at 12% 8%, rgb(84 226 194 / 16%), transparent 31%),
-    radial-gradient(ellipse at 86% 16%, rgb(194 148 255 / 17%), transparent 34%),
-    radial-gradient(ellipse at 58% 80%, rgb(116 185 255 / 11%), transparent 39%),
-    var(--night-950);
-  color: var(--night-text);
-}
+:where(:root[data-theme="dark"]) {
+  body {
+    min-height: 100dvh;
+    background:
+      radial-gradient(ellipse at 12% 8%, rgb(84 226 194 / 16%), transparent 31%),
+      radial-gradient(ellipse at 86% 16%, rgb(194 148 255 / 17%), transparent 34%),
+      radial-gradient(ellipse at 58% 80%, rgb(116 185 255 / 11%), transparent 39%),
+      var(--night-950);
+    color: var(--night-text);
+  }
 
-.soft-aurora-background {
-  background:
-    radial-gradient(ellipse at 16% 20%, rgb(84 226 194 / 19%), transparent 46%),
-    radial-gradient(ellipse at 83% 14%, rgb(194 148 255 / 18%), transparent 43%),
-    linear-gradient(145deg, #050b16, #091a31 55%, #11102a);
-  opacity: .96;
-}
+  .soft-aurora-background {
+    background:
+      radial-gradient(ellipse at 16% 20%, rgb(84 226 194 / 19%), transparent 46%),
+      radial-gradient(ellipse at 83% 14%, rgb(194 148 255 / 18%), transparent 43%),
+      linear-gradient(145deg, #050b16, #091a31 55%, #11102a);
+    opacity: .96;
+  }
 
-header.sticky.top-0.z-40 {
-  border-color: rgb(148 192 243 / 18%);
-  background: rgb(5 11 22 / 82%);
-  box-shadow: 0 10px 30px rgb(0 0 0 / 18%);
-}
+  header.sticky.top-0.z-40 {
+    border-color: rgb(148 192 243 / 18%);
+    background: rgb(5 11 22 / 82%);
+    box-shadow: 0 10px 30px rgb(0 0 0 / 18%);
+  }
 
-.clay,
-.wealth-card,
-.northstar-summary,
-.connection-card,
-.money-assistant-panel,
-.wealth-modal {
-  border-color: var(--night-border);
-  background: linear-gradient(145deg, rgb(18 39 71 / 92%), rgb(9 20 38 / 94%));
-  box-shadow: 0 20px 55px rgb(0 0 0 / 28%), inset 0 1px 0 rgb(235 248 255 / 5%);
-}
+  .clay,
+  .wealth-card,
+  .northstar-summary,
+  .connection-card,
+  .money-assistant-panel,
+  .wealth-modal {
+    border-color: var(--night-border);
+    background: linear-gradient(145deg, rgb(18 39 71 / 92%), rgb(9 20 38 / 94%));
+    box-shadow: 0 20px 55px rgb(0 0 0 / 28%), inset 0 1px 0 rgb(235 248 255 / 5%);
+  }
 
-.wealth-dashboard,
-.wealth-dashboard h1,
-.wealth-dashboard h2,
-.wealth-dashboard h3,
-.wealth-account-name strong,
-.wealth-balance,
-.simple-money-breakdown strong,
-.wealth-breakdown-label strong,
-.money-assistant-header h2,
-.money-assistant-message,
-.northstar-copy h2,
-.northstar-progress-label strong {
-  color: var(--night-text);
-}
+  .wealth-dashboard,
+  .wealth-dashboard h1,
+  .wealth-dashboard h2,
+  .wealth-dashboard h3,
+  .wealth-account-name strong,
+  .wealth-balance,
+  .simple-money-breakdown strong,
+  .wealth-breakdown-label strong,
+  .money-assistant-header h2,
+  .money-assistant-message,
+  .northstar-copy h2,
+  .northstar-progress-label strong {
+    color: var(--night-text);
+  }
 
-.wealth-page-head p,
-.wealth-note,
-.wealth-section-head p,
-.wealth-account-name span,
-.wealth-breakdown-label,
-.wealth-footer,
-.northstar-copy > p,
-.northstar-art,
-.northstar-progress-label,
-.money-assistant-header p,
-.money-assistant-privacy {
-  color: var(--night-muted);
-}
+  .wealth-page-head p,
+  .wealth-note,
+  .wealth-section-head p,
+  .wealth-account-name span,
+  .wealth-breakdown-label,
+  .wealth-footer,
+  .northstar-copy > p,
+  .northstar-art,
+  .northstar-progress-label,
+  .money-assistant-header p,
+  .money-assistant-privacy {
+    color: var(--night-muted);
+  }
 
-.wealth-primary,
-.money-assistant-launch {
-  background: linear-gradient(115deg, #168e90, #4b7fe0 60%, #9e64df);
-  color: #fff;
-  box-shadow: 0 8px 22px rgb(57 116 221 / 27%);
-}
-.wealth-primary:hover,
-.money-assistant-launch:hover { background: linear-gradient(115deg, #1aafaa, #5e96ef 60%, #b77aed); }
-.wealth-secondary {
-  border-color: rgb(148 192 243 / 26%);
-  background: rgb(148 192 243 / 8%);
-  color: #d7ebff;
-}
-.wealth-secondary:hover { background: rgb(148 192 243 / 15%); }
-.wealth-text-button,
-.wealth-card-foot button { color: var(--aurora-teal); }
+  .wealth-primary,
+  .money-assistant-launch {
+    background: linear-gradient(115deg, #168e90, #4b7fe0 60%, #9e64df);
+    color: #fff;
+    box-shadow: 0 8px 22px rgb(57 116 221 / 27%);
+  }
+  .wealth-primary:hover,
+  .money-assistant-launch:hover { background: linear-gradient(115deg, #1aafaa, #5e96ef 60%, #b77aed); }
+  .wealth-secondary {
+    border-color: rgb(148 192 243 / 26%);
+    background: rgb(148 192 243 / 8%);
+    color: #d7ebff;
+  }
+  .wealth-secondary:hover { background: rgb(148 192 243 / 15%); }
+  .wealth-text-button,
+  .wealth-card-foot button { color: var(--aurora-teal); }
 
-.wealth-tabs {
-  border-color: var(--night-border);
-  background: rgb(8 19 36 / 72%);
+  .wealth-tabs {
+    border-color: var(--night-border);
+    background: rgb(8 19 36 / 72%);
+  }
+  .wealth-tabs > button { color: #a9bdd7; }
+  .wealth-tabs > button.active { color: #bffdf1; border-color: var(--aurora-teal); }
+  .wealth-account-icon { background: rgb(92 185 232 / 14%); color: #9fddff; }
+  .wealth-account-icon.invest { background: rgb(194 148 255 / 15%); color: #d7baff; }
+  .wealth-breakdown-track,
+  .wealth-progress,
+  .northstar-progress { background: rgb(167 197 234 / 14%); }
+  .wealth-progress i,
+  .northstar-progress i { background: linear-gradient(90deg, #54e2c2, #74b9ff 62%, #c294ff); }
+  .wealth-sample,
+  .wealth-opportunity-result,
+  .wealth-budget-remainder,
+  .wealth-retirement-balance { border-color: var(--night-border); background: rgb(84 226 194 / 7%); color: #c1d4e7; }
+  .wealth-retirement-result { border-color: var(--night-border); background: rgb(5 11 22 / 36%); }
+  .wealth-retirement-result > div:first-child,
+  .wealth-retirement-result > div:first-child strong,
+  .wealth-retirement-balance strong { color: #e6f3ff; }
+
+  .northstar-summary { background: linear-gradient(135deg, rgb(17 41 72 / 95%), rgb(13 19 48 / 96%)); }
+  .northstar-visual { background: radial-gradient(ellipse at 48% 50%, #233c68, #07101f 76%); }
+  .northstar-link { stroke: #6d83a6; }
+  .northstar-link.lit { stroke: #9af6e3; }
+  .northstar-node { fill: #526987; stroke: #91a8c7; }
+  .northstar-node.lit { fill: #dffeff; stroke: #9dffd9; filter: drop-shadow(0 0 4px #54e2c2); }
+  .northstar-polaris.lit .northstar-star { fill: #c9fff2; filter: drop-shadow(0 0 7px #54e2c2); }
+
+  .money-assistant-header,
+  .money-assistant-form { border-color: var(--night-border); }
+  .money-assistant-message { background: rgb(130 174 217 / 12%); }
+  .money-assistant-message.user { background: rgb(132 107 208 / 20%); }
+  .money-assistant-prompts button,
+  .money-assistant-form input,
+  .wealth-field input,
+  .wealth-field select,
+  .wealth-field textarea {
+    border-color: rgb(148 192 243 / 26%);
+    background: rgb(5 11 22 / 45%);
+    color: var(--night-text);
+  }
+  .money-assistant-prompts button { color: #bffdf1; }
+  .money-assistant-prompts button:hover { background: rgb(84 226 194 / 11%); }
+  .money-assistant-form input::placeholder,
+  .wealth-field input::placeholder,
+  .wealth-field textarea::placeholder { color: #7d91ae; }
+
+  /* Legacy utility colors used by the landing and goal flows. */
+  .text-stone-900, .text-stone-800, .text-stone-700, .text-ink { color: var(--night-text) !important; }
+  .text-stone-600, .text-stone-500, .text-stone-400 { color: var(--night-muted) !important; }
+  .bg-white, .bg-stone-50 { background-color: rgb(13 29 53 / 88%) !important; }
+  .bg-stone-100 { background-color: rgb(146 185 229 / 11%) !important; }
+  .border-stone-100, .border-stone-200, .border-stone-300 { border-color: var(--night-border) !important; }
+
+  .divide-stone-100 > :not(:last-child) { border-color: var(--night-border) !important; }
 }
-.wealth-tabs > button { color: #a9bdd7; }
-.wealth-tabs > button.active { color: #bffdf1; border-color: var(--aurora-teal); }
-.wealth-account-icon { background: rgb(92 185 232 / 14%); color: #9fddff; }
-.wealth-account-icon.invest { background: rgb(194 148 255 / 15%); color: #d7baff; }
-.wealth-breakdown-track,
-.wealth-progress,
-.northstar-progress { background: rgb(167 197 234 / 14%); }
-.wealth-progress i,
-.northstar-progress i { background: linear-gradient(90deg, #54e2c2, #74b9ff 62%, #c294ff); }
-.wealth-sample,
-.wealth-opportunity-result,
-.wealth-budget-remainder,
-.wealth-retirement-balance { border-color: var(--night-border); background: rgb(84 226 194 / 7%); color: #c1d4e7; }
-.wealth-retirement-result { border-color: var(--night-border); background: rgb(5 11 22 / 36%); }
-.wealth-retirement-result > div:first-child,
-.wealth-retirement-result > div:first-child strong,
-.wealth-retirement-balance strong { color: #e6f3ff; }
-
-.northstar-summary { background: linear-gradient(135deg, rgb(17 41 72 / 95%), rgb(13 19 48 / 96%)); }
-.northstar-visual { background: radial-gradient(ellipse at 48% 50%, #233c68, #07101f 76%); }
-.northstar-link { stroke: #6d83a6; }
-.northstar-link.lit { stroke: #9af6e3; }
-.northstar-node { fill: #526987; stroke: #91a8c7; }
-.northstar-node.lit { fill: #dffeff; stroke: #9dffd9; filter: drop-shadow(0 0 4px #54e2c2); }
-.northstar-polaris.lit .northstar-star { fill: #c9fff2; filter: drop-shadow(0 0 7px #54e2c2); }
-
-.money-assistant-header,
-.money-assistant-form { border-color: var(--night-border); }
-.money-assistant-message { background: rgb(130 174 217 / 12%); }
-.money-assistant-message.user { background: rgb(132 107 208 / 20%); }
-.money-assistant-prompts button,
-.money-assistant-form input,
-.wealth-field input,
-.wealth-field select,
-.wealth-field textarea {
-  border-color: rgb(148 192 243 / 26%);
-  background: rgb(5 11 22 / 45%);
-  color: var(--night-text);
-}
-.money-assistant-prompts button { color: #bffdf1; }
-.money-assistant-prompts button:hover { background: rgb(84 226 194 / 11%); }
-.money-assistant-form input::placeholder,
-.wealth-field input::placeholder,
-.wealth-field textarea::placeholder { color: #7d91ae; }
-
-/* Legacy utility colors used by the landing and goal flows. */
-.text-stone-900, .text-stone-800, .text-stone-700, .text-ink { color: var(--night-text) !important; }
-.text-stone-600, .text-stone-500, .text-stone-400 { color: var(--night-muted) !important; }
-.bg-white, .bg-stone-50 { background-color: rgb(13 29 53 / 88%) !important; }
-.bg-stone-100 { background-color: rgb(146 185 229 / 11%) !important; }
-.border-stone-100, .border-stone-200, .border-stone-300 { border-color: var(--night-border) !important; }
 
 @layer base {
-  :focus-visible { outline-color: var(--aurora-teal); }
+  :where(:root[data-theme="dark"]) :focus-visible { outline-color: var(--aurora-teal); }
 }
-.divide-stone-100 > :not(:last-child) { border-color: var(--night-border) !important; }
 
 /* Accounts page: totals strip, grouped list, account status lines, add-account dialog. */
 .accounts-summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 18px 32px; }
