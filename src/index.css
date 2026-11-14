@@ -814,3 +814,8 @@ body {
 .wealth-footer { color: var(--night-muted); }
 /* Leave room so the floating assistant button never covers the footer. */
 .wealth-dashboard { padding-bottom: 96px; }
+/* Percentage bubble above a hovered/focused asset-split segment. */
+.asset-split-tip { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%) scaleY(.84); transform-origin: bottom; z-index: 5; display: inline-flex; gap: 6px; max-width: 240px; padding: 5px 10px; border: 1px solid var(--night-border); border-radius: 8px; background: #050b16; color: var(--night-muted); font-size: 12px; font-weight: 600; white-space: nowrap; box-shadow: 0 6px 18px rgb(0 0 0 / 40%); pointer-events: none; }
+.asset-split-tip strong { color: var(--night-text); font-variant-numeric: tabular-nums; }
+.asset-split-tip.at-start { left: 0; transform: scaleY(.84); }
+.asset-split-tip.at-end { left: auto; right: 0; transform: scaleY(.84); }
