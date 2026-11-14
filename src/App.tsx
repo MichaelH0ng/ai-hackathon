@@ -1,18 +1,16 @@
 import { useEffect, useState } from "react";
 import { Home } from "./components/Home";
-import { Landing } from "./components/Landing";
 import { MoneyGoalForm } from "./components/MoneyGoalForm";
-import { MoneyDashboard } from "./components/MoneyDashboard";
+import { WealthDashboard } from "./components/WealthDashboard";
 import { MoneyGoalView } from "./components/MoneyGoalView";
 import type { LogDecision } from "./components/MoneyWhatIf";
 import { PathCards, type PathKind } from "./components/PathCards";
 import { PriceCheck } from "./components/PriceCheck";
 import { Settings } from "./components/Settings";
+import SoftAurora from "./components/SoftAurora";
 import { StudyGoalForm } from "./components/StudyGoalForm";
 import { StudyGoalView } from "./components/StudyGoalView";
 import { TopNav } from "./components/TopNav";
-import { FinancialChat } from "./components/FinancialChat";
-import { AuroraBackground } from "./components/AuroraBackground";
 import { BackButton } from "./components/ui";
 import { todayISO } from "./lib/dates";
 import { EMPTY_STATE, type SavedState, demoState, loadState, saveState } from "./lib/storage";
@@ -102,11 +100,9 @@ export default function App() {
   let body: React.ReactNode;
   switch (screen.name) {
     case "home":
-      body = <Landing onMoney={() => setScreen({ name: "money" })} goalCount={state.goals.length} onPick={pick} onDemo={loadDemo} onGoals={goGoals} onCheck={() => setScreen({ name: "check" })} moneyGoals={moneyGoals} bank={bank} onOpenGoal={(id) => setScreen({ name: "goal", id })} onUpdateGoal={updateGoal} />;
-      break;
     case "money":
       body = (
-        <MoneyDashboard
+        <WealthDashboard
           bank={bank}
           goals={moneyGoals}
           onUpdateGoal={updateGoal}
@@ -158,6 +154,7 @@ export default function App() {
           onProfile={(p) => setState((s) => ({ ...s, profile: p }))}
           onDemo={loadDemo}
           onReset={() => {
+            try { localStorage.removeItem("tradeoff:wealth:v1"); } catch { /* Storage can be blocked. */ }
             setState(EMPTY_STATE);
             setScreen({ name: "home" });
           }}
@@ -171,7 +168,29 @@ export default function App() {
 
   const isLanding = screen.name === "home" || screen.name === "money"; // these render their own full-width layout
   return (
-    <AuroraBackground>
+    <div className="relative min-h-dvh isolate">
+      <SoftAurora
+        speed={0.6}
+        scale={1.5}
+        brightness={1}
+        color1="#54e2c2"
+        color2="#c294ff"
+        bandHeight={0.5}
+        bandSpread={1}
+        enableMouseInteraction
+        mouseInfluence={0.25}
+        spectrum={0.35}
+        colorSpeed={1}
+        noiseFrequency={2.5}
+        noiseAmplitude={1}
+        tilt={0}
+        octaveDecay={0.1}
+        layerOffset={0}
+        clickPulse
+        intro
+        lightMode={false}
+        className="soft-aurora-background"
+      />
       <TopNav
         onHome={goHome}
         onGoals={goGoals}
@@ -182,7 +201,6 @@ export default function App() {
         active={screen.name === "goals" ? "goals" : screen.name === "settings" ? "settings" : screen.name === "home" ? "home" : screen.name === "check" ? "check" : screen.name === "money" ? "money" : "other"}
       />
       {isLanding ? body : <main id="main" className="mx-auto max-w-md px-4 pb-16 pt-6 sm:max-w-2xl">{body}</main>}
-      <FinancialChat goals={state.goals} />
-    </AuroraBackground>
+    </div>
   );
 }

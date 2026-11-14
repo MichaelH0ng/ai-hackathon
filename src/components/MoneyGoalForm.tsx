@@ -1,21 +1,8 @@
 import { useState } from "react";
-import { addDays, formatDate, todayISO } from "../lib/dates";
+import { formatDate, todayISO } from "../lib/dates";
 import { formatMoney, formatWeeks, goalPhrase, projectedDate, weeklyNeededForDeadline, weeksToGoal } from "../lib/finance";
 import type { MoneyGoal } from "../lib/types";
-import { BackButton, Button, Card, Chip, DateField, NumberField, TextField } from "./ui";
-
-function nextDate(month: number, day: number): string {
-  const t = todayISO();
-  const y = Number(t.slice(0, 4));
-  const iso = (yr: number) => `${yr}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-  return iso(y) > t ? iso(y) : iso(y + 1);
-}
-
-const QUICK_DATES = [
-  { label: "Christmas", date: () => nextDate(12, 25) },
-  { label: "In 1 month", date: () => addDays(todayISO(), 30) },
-  { label: "In 3 months", date: () => addDays(todayISO(), 91) },
-];
+import { BackButton, Button, Card, DateField, NumberField, TextField } from "./ui";
 
 export function MoneyGoalForm({ onCreate, onBack }: { onCreate: (g: MoneyGoal) => void; onBack: () => void }) {
   const [name, setName] = useState("");
@@ -35,30 +22,24 @@ export function MoneyGoalForm({ onCreate, onBack }: { onCreate: (g: MoneyGoal) =
     <div>
       <BackButton onClick={onBack} />
       <Card>
-        <h2 className="text-xl font-bold text-ink">What are you saving for?</h2>
+        <h2 className="text-xl font-bold text-ink">Create a savings goal</h2>
         <div className="mt-4 space-y-4">
-          <TextField label="Goal" value={name} onChange={setName} placeholder="New hoodie" />
+          <TextField label="What are you saving for?" value={name} onChange={setName} placeholder="Emergency fund, a trip…" />
           <div className="grid grid-cols-2 gap-2">
-            <NumberField label="It costs" value={target} onChange={setTarget} />
-            <NumberField label="Saved so far" value={saved} onChange={setSaved} />
+            <NumberField label="Target amount" value={target} onChange={setTarget} />
+            <NumberField label="Already saved" value={saved} onChange={setSaved} />
           </div>
-          <NumberField label="I can save each week" value={weekly} onChange={setWeekly} suffix="/wk" />
-          <div>
+          <NumberField label="Plan to save each week" value={weekly} onChange={setWeekly} suffix="/wk" />
+          <details className="goal-optional">
+            <summary>Add a target date (optional)</summary>
             <DateField label="Want it by (optional)" value={deadline} onChange={setDeadline} min={todayISO()} />
-            <div className="mt-2 flex flex-wrap gap-2">
-              {QUICK_DATES.map((q) => (
-                <Chip key={q.label} active={deadline === q.date()} onClick={() => setDeadline(q.date())}>
-                  {q.label}
-                </Chip>
-              ))}
-            </div>
-          </div>
+          </details>
         </div>
       </Card>
 
       {t > 0 && w > 0 && (
         <Card className="mt-3 bg-emerald-50">
-          <p className="text-sm font-medium text-emerald-900">Your plan</p>
+          <p className="text-sm font-medium text-emerald-900">Your savings timeline</p>
           <p className="mt-1 font-display text-4xl font-bold text-emerald-900">{formatWeeks(weeks)}</p>
           <p className="text-sm text-emerald-900">
             {formatMoney(Math.max(0, t - s))} to go at {formatMoney(w, w % 1 !== 0)}/week for your {goalPhrase(name) || "goal"}

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import type { BankData } from "./money";
 
-export type PlaidStatus = { env: string; items: { itemId: string; institution: string }[] };
+export type PlaidStatus = { env: string; configured?: boolean; missing?: string[]; items: { itemId: string; institution: string; kind?: "bank" | "investments" }[] };
 
 export interface Bank {
   status: PlaidStatus | null;
@@ -35,7 +35,7 @@ export function useBank(): Bank {
     try {
       const s = await api<PlaidStatus>("/api/plaid/status");
       setStatus(s);
-      setData(s.items.length ? await api<BankData>("/api/plaid/dashboard") : null);
+      setData(s.configured !== false && s.items.length ? await api<BankData>("/api/plaid/dashboard") : null);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't load your accounts.");
     } finally {
