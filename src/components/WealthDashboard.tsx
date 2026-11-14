@@ -41,6 +41,35 @@ const months = (n: number) => !Number.isFinite(n) ? "Not funded" : n === 0 ? "Fu
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) { return <label className="wealth-field"><span>{label}</span>{children}</label>; }
 function Amount({ label, value, onChange }: { label: string; value: number; onChange: (n: number) => void }) { return <Field label={label}><div className="wealth-currency"><span>$</span><input type="number" min="0" max="1000000000000" step="0.01" required value={value || ""} placeholder="0" onChange={e => onChange(Math.max(0, Number(e.target.value)))} /></div></Field>; }
+function GrowthRateField({ value, onChange }: { value: number; onChange: (value: number) => void }) {
+  // Keep the draft as text: coercion while typing removes decimal points and
+  // replaces an empty field with zero, moving the caret during digit edits.
+  const [draft, setDraft] = useState(() => String(value));
+  const [error, setError] = useState(false);
+  function commit() {
+    const trimmed = draft.trim();
+    const rate = Number(trimmed);
+    if (!/^(?:\d+(?:\.\d*)?|\.\d+)$/.test(trimmed) || !Number.isFinite(rate) || rate < 0 || rate > 20) {
+      setError(true);
+      return;
+    }
+    setError(false);
+    setDraft(String(rate));
+    onChange(rate);
+  }
+  return <Field label="Estimated annual growth"><div className="wealth-percent"><input
+    type="text"
+    inputMode="decimal"
+    value={draft}
+    aria-invalid={error}
+    aria-describedby="retirement-growth-help"
+    onChange={event => { setDraft(event.target.value); setError(false); }}
+    onBlur={commit}
+    onKeyDown={event => { if (event.key === "Enter") { event.preventDefault(); event.currentTarget.blur(); } }}
+  /><span>%</span></div><small id="retirement-growth-help" className="wealth-note" role={error ? "status" : undefined}>{error
+    ? `Enter a number from 0 to 20. The estimate still uses ${value}%.`
+    : "Enter 0–20%. Applied when you leave the field or press Enter."}</small></Field>;
+}
 function holdingMoney(value: number, currency: string | null) {
   if (!currency) return `${value.toLocaleString(undefined, { maximumFractionDigits: 2 })} (currency unavailable)`;
   try { return new Intl.NumberFormat(undefined, { style: "currency", currency }).format(value); }
@@ -190,7 +219,7 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; onUpdat
     retirementEstimate: retirementPoints.at(-1)?.balance ?? null,
     retirementAge: retirementPoints.length ? retirementAge : null,
   };
-  return <main id="main" className="wealth-dashboard">
+  return <main id="main" className={`wealth-dashboard${tab === "Goals" ? " goals-page" : ""}`}>
     <div className="wealth-page-head"><div><h1>{tab === "Goals" ? "My goals" : tab === "Activity" ? "Account activity" : tab}</h1><p>{tab === "Overview" ? "Your whole financial picture, in one place." : tab === "Accounts" || tab === "Activity" ? "Track your balances and connected accounts." : tab === "Goals" ? "Plan your savings and watch your progress grow." : tab === "Retirement" ? "Explore your long-term savings plan." : "Give your monthly income a plan."}</p></div>{(tab === "Overview" || tab === "Accounts") && <button className="wealth-primary" onClick={addAsset}><Plus size={16} /> Add account</button>}</div>
     {tab === "Overview" && <>
       {bank.loading && !bank.data && !assets.length ? <section className="wealth-card" role="status">Loading your money overview…</section> : <HomeOverview data={{
@@ -233,7 +262,7 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; onUpdat
       </div>
       <div className="wealth-two-fields">
         <Amount label="Monthly retirement savings" value={retirementMonthly} onChange={retirementMonthly => update({ retirementMonthly })} />
-        <Field label="Estimated annual growth"><div className="wealth-percent"><input type="number" min="0" max="20" step="0.1" value={retirementReturn} onChange={e => update({ retirementReturn: Math.min(20, Math.max(0, Number(e.target.value))) })} /><span>%</span></div></Field>
+        <GrowthRateField value={retirementReturn} onChange={retirementReturn => update({ retirementReturn })} />
       </div>
       {currentAge !== null && retirementAge !== null && retirementAge <= currentAge
         ? <p className="wealth-retirement-warning" role="status">Choose a retirement age that is higher than your current age to see an estimate.</p>
@@ -318,8 +347,8 @@ function RetirementChart({ points, currentAge, retirementAge }: { points: Retire
         <text x={left - 8} y={y(value) + 4} textAnchor="end" fill="#657360" fontSize="11">{shortMoney(value)}</text>
       </g>;
     })}
-    <path d={path("contributions")} fill="none" stroke="#a9b69a" strokeWidth="2" strokeDasharray="5 5" />
-    <path d={path("balance")} fill="none" stroke="#426745" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
+    <path className="retirement-contributions-line" d={path("contributions")} fill="none" strokeWidth="2" strokeDasharray="5 5" />
+    <path className="retirement-balance-line" d={path("balance")} fill="none" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
     {labels.map(year => <text key={year} x={x(year)} y={height - 8} textAnchor={year === 0 ? "start" : year === retirementAge - currentAge ? "end" : "middle"} fill="#657360" fontSize="11">{year === 0 ? `Age ${currentAge}` : `Age ${currentAge + year}`}</text>)}
   </svg>;
 }

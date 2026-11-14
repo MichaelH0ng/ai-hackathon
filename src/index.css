@@ -524,8 +524,17 @@ body {
 .wealth-budget-remainder { background: #edf5fb; color: #286d91; }
 .wealth-retirement-balance { background: #f0f3fb; color: #4a5e7c; }
 .wealth-retirement-balance strong, .wealth-retirement-result > div:first-child strong { color: #3e59a2; }
-.wealth-chart-legend i { background: #4989cb; }
-.wealth-chart-legend span + span i { background: #9584c9; }
+.wealth-retirement {
+  --retirement-balance-color: #74b9ff;
+  --retirement-contributions-color: #c294ff;
+}
+.retirement-balance-line { stroke: var(--retirement-balance-color); }
+.retirement-contributions-line { stroke: var(--retirement-contributions-color); }
+.wealth-chart-legend { color: #c4d4e8; }
+.wealth-chart-legend i { width: 25px; background: var(--retirement-balance-color); }
+.wealth-chart-legend span + span i {
+  background: repeating-linear-gradient(to right, var(--retirement-contributions-color) 0 5px, transparent 5px 10px);
+}
 .wealth-footer { color: #657187; }
 .wealth-account-holdings summary { color: #356d96; }
 .wealth-preferences > summary { color: #365772; }
