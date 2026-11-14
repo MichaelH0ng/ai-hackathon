@@ -19,7 +19,7 @@ export function MoneyGoalForm({ onCreate, onBack }: { onCreate: (g: MoneyGoal) =
   const ready = name.trim() && t > 0 && w > 0;
 
   return (
-    <div>
+    <div className="goal-flow">
       <BackButton onClick={onBack} />
       <Card>
         <h2 className="text-xl font-bold text-ink">Create a savings goal</h2>

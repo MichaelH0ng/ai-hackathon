@@ -38,7 +38,7 @@ export function MoneyGoalView({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="goal-flow space-y-3">
       <BackButton onClick={onBack} label="My goals" />
 
       {message && (

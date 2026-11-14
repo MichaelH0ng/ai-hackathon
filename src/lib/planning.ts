@@ -1,4 +1,14 @@
-export type SpendingFrequency = "once" | "weekly" | "monthly";
+export type SpendingFrequency = "once" | "weekly" | "monthly" | "custom";
+export type RepeatUnit = "days" | "weeks" | "months" | "years";
+
+export function annualSpending(cost: number, frequency: SpendingFrequency, interval = 1, unit: RepeatUnit = "weeks") {
+  if (!Number.isFinite(cost) || cost < 0) throw new RangeError("Cost must be a nonnegative number.");
+  if (frequency === "once") return cost;
+  if (frequency === "weekly") return cost * 52;
+  if (frequency === "monthly") return cost * 12;
+  if (!Number.isSafeInteger(interval) || interval < 1) throw new RangeError("Repeat interval must be a positive whole number.");
+  return cost * ({ days: 364, weeks: 52, months: 12, years: 1 }[unit]) / interval;
+}
 
 export interface RetirementPoint {
   year: number;
@@ -47,14 +57,15 @@ export function retirementProjection(
   return points;
 }
 
-export function opportunityCost(cost: number, frequency: SpendingFrequency, target: number, saved: number, weekly: number) {
+export function opportunityCost(cost: number, frequency: SpendingFrequency, target: number, saved: number, weekly: number, interval = 1, unit: RepeatUnit = "weeks") {
   const remaining = Math.max(0, target - saved);
   const monthlySavings = weekly * 52 / 12;
-  const monthlyCost = frequency === "weekly" ? cost * 52 / 12 : frequency === "monthly" ? cost : 0;
+  const annualCost = annualSpending(cost, frequency, interval, unit);
+  const monthlyCost = frequency === "once" ? 0 : annualCost / 12;
   const baselineMonths = remaining === 0 ? 0 : monthlySavings > 0 ? remaining / monthlySavings : Infinity;
   const afterMonths = remaining === 0 ? 0 : frequency === "once"
     ? monthlySavings > 0 ? (remaining + cost) / monthlySavings : Infinity
     : monthlySavings > monthlyCost ? remaining / (monthlySavings - monthlyCost) : Infinity;
-  return { monthlyCost, annualCost: frequency === "once" ? cost : monthlyCost * 12,
+  return { monthlyCost, annualCost,
     baselineMonths, afterMonths, delayDays: Number.isFinite(afterMonths) && Number.isFinite(baselineMonths) ? (afterMonths - baselineMonths) * 52 / 12 * 7 : Infinity };
 }

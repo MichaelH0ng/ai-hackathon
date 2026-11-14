@@ -731,3 +731,119 @@ header.sticky.top-0.z-40 {
   :focus-visible { outline-color: var(--aurora-teal); }
 }
 .divide-stone-100 > :not(:last-child) { border-color: var(--night-border) !important; }
+
+/* Goal surfaces stay opaque so the animated aurora cannot wash out their text. */
+.wealth-goal {
+  background: #0d1d35;
+  border-color: #466180;
+  color: #edf6ff;
+  padding: 20px;
+}
+.wealth-goal:hover { background: #183352; border-color: #94c9ff; }
+.wealth-goal:focus-visible { outline: 3px solid #94c9ff; outline-offset: 3px; }
+.wealth-goal-top,
+.wealth-goal p > span,
+.wealth-goal-detail,
+.wealth-goal-deadline,
+.wealth-goal-placeholder,
+.wealth-goal-placeholder p { color: #c4d4e8; }
+.wealth-goal-placeholder h3 { color: #edf6ff; }
+.wealth-goal-detail, .wealth-goal-deadline { font-size: 14px; }
+.wealth-goal p { line-height: 1.6; }
+.wealth-goal-detail { flex-wrap: wrap; }
+.savings-planner-panel { background: #0d1d35; border: 1px solid #466180; }
+.savings-planner-panel > [aria-hidden="true"] { opacity: .25; }
+.goal-flow { color-scheme: dark; }
+.goal-flow .clay { background: #0d1d35; border: 1px solid #466180; }
+.goal-flow input::placeholder { color: #b1c4dd; opacity: 1; }
+.goal-flow .goal-optional summary { color: #b8dcff; }
+.goal-flow .text-emerald-800 { color: #90f3d0; }
+.goal-flow .text-amber-800 { color: #ffd29b; }
+.goal-flow .text-red-700 { color: #ffb6bd !important; }
+/* Status panels use light backgrounds: keep every nested label dark as well. */
+.goal-flow :is(.bg-emerald-50, .bg-amber-50, .bg-sky-50) { color-scheme: light; }
+.goal-flow :is(.bg-emerald-50, .bg-amber-50, .bg-sky-50) .text-emerald-800 { color: #065f46; }
+.goal-flow :is(.bg-emerald-50, .bg-amber-50, .bg-sky-50) .text-amber-800 { color: #92400e; }
+.goal-flow .clay.bg-emerald-50 { background: #ecfdf5; }
+.goal-flow button.bg-brand-600:hover { background: #305da3; color: white; }
+
+/* Spend-or-save uses the night palette with distinct comparison surfaces. */
+.wealth-preferences { background: #0d1d35; border: 1px solid #466180; }
+.wealth-preferences > summary { color: #edf6ff; font-size: 18px; line-height: 1.5; }
+.wealth-preferences > summary small { color: #c4d4e8; font-size: 14px; margin-left: 0; }
+.wealth-preferences > summary:focus-visible { outline: 3px solid #94c9ff; outline-offset: 6px; }
+.wealth-preferences[open] > summary { border-bottom: 1px solid #466180; padding-bottom: 20px; }
+.wealth-preferences .wealth-note { color: #c4d4e8; line-height: 1.7; }
+.wealth-preferences .wealth-field > span { color: #edf6ff; font-size: 15px; }
+.wealth-preferences .wealth-field :is(select, textarea) {
+  color-scheme: dark;
+  background: #050b16;
+  color: #edf6ff;
+  border-color: #718cab;
+  line-height: 1.6;
+}
+.wealth-preferences .wealth-field textarea::placeholder { color: #b1c4dd; opacity: 1; }
+.wealth-preferences .wealth-field :is(select, textarea):focus-visible,
+.wealth-preferences .wealth-risk-options button:focus-visible { outline: 3px solid #94c9ff; outline-offset: 3px; }
+.wealth-preferences .wealth-risk-options button { background: #091426; border-color: #718cab; padding: 18px; }
+.wealth-preferences .wealth-risk-options button span { color: #edf6ff; font-size: 16px; }
+.wealth-preferences .wealth-risk-options button small { color: #c4d4e8; font-size: 14px; }
+.wealth-preferences .wealth-risk-options button:hover { background: #183352; border-color: #94c9ff; }
+.wealth-preferences .wealth-risk-options button.selected { background: #102f34; border: 2px solid #54e2c2; padding: 17px; }
+.wealth-preferences .wealth-risk-options button.selected span { color: #94f5dc; }
+
+.wealth-opportunity { background: #0d1d35; border: 1px solid #466180; }
+.wealth-opportunity .wealth-field > span { color: #edf6ff; }
+.wealth-opportunity .wealth-field :is(input, select) {
+  background: #050b16;
+  color: #edf6ff;
+  border-color: #718cab;
+  color-scheme: dark;
+}
+.wealth-opportunity .wealth-field input::placeholder { color: #b1c4dd; opacity: 1; }
+.wealth-opportunity .wealth-field :is(input, select):focus-visible { outline: 3px solid #94c9ff; outline-offset: 2px; }
+.wealth-opportunity-result {
+  background: #091426;
+  border: 1px solid #466180;
+  color: #edf6ff;
+  padding: clamp(16px, 3vw, 28px);
+}
+.wealth-opportunity-result .wealth-tag { color: #9bead9; font-size: 12px; }
+.wealth-opportunity-result > strong { color: #edf6ff; font-size: clamp(32px, 5vw, 44px); }
+.wealth-opportunity-result > p { color: #c4d4e8; font-size: 16px; line-height: 1.6; }
+.wealth-opportunity .wealth-timeline-compare {
+  border: 0;
+  padding: 0;
+  align-items: stretch;
+  color: #c4d4e8;
+}
+.wealth-opportunity .wealth-timeline-compare > div {
+  padding: 18px;
+  border-radius: 12px;
+  border: 1px solid #3b7c74;
+  border-top: 4px solid #54e2c2;
+  background: #102f34;
+}
+.wealth-opportunity .wealth-timeline-compare > div:last-child {
+  border-color: #756092;
+  border-top-color: #c294ff;
+  background: #29203e;
+}
+.wealth-opportunity .wealth-timeline-compare > svg { align-self: center; flex-shrink: 0; }
+.wealth-opportunity .wealth-timeline-compare span { color: #d3f3ec; font-size: 14px; font-weight: 650; }
+.wealth-opportunity .wealth-timeline-compare strong { color: #94f5dc; font-size: 24px; line-height: 1.3; }
+.wealth-opportunity .wealth-timeline-compare > div:last-child span { color: #ece0ff; }
+.wealth-opportunity .wealth-timeline-compare > div:last-child strong { color: #dfc6ff; }
+.wealth-opportunity-result .wealth-delay {
+  background: #122747;
+  color: #edf6ff;
+  border-left: 3px solid #74b9ff;
+  border-radius: 10px;
+  padding: 14px 18px;
+  font-size: 16px;
+  line-height: 1.6;
+}
+@media (max-width: 520px) {
+  .wealth-opportunity .wealth-timeline-compare { flex-direction: column; }
+  .wealth-opportunity .wealth-timeline-compare > svg { transform: rotate(90deg); }
+}
