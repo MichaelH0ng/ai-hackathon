@@ -19,6 +19,10 @@ export interface BankSnapshot {
 
 export interface Profile {
   hourlyWage: number | null; // optional: lets us say "that's 48 minutes of work"
+  // Optional profile details, shown on the Profile page. Older saved data won't have them.
+  name?: string;
+  email?: string;
+  phone?: string;
 }
 
 /** A choice the user made in a What-If — powers "Your choices" insights. */

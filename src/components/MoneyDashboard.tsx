@@ -22,10 +22,8 @@ import { type Bank, api, post } from "../lib/useBank";
 import { Button, Card, Notice } from "./ui";
 
 const money = (n: number) => formatMoney(n, Math.abs(n) < 1000 && n % 1 !== 0);
-const days = (amount: number, g: MoneyGoal) => (g.weekly > 0 ? (amount / g.weekly) * 7 : Infinity);
-const daysLabel = (d: number) => (!isFinite(d) ? "" : d < 1 ? "<1 day" : `${Math.round(d)} day${Math.round(d) === 1 ? "" : "s"}`);
 
-/** Money dashboard: your real balances and spending from Plaid, shown in days of your goals. */
+/** Money dashboard: your real balances and spending from Plaid. */
 export function MoneyDashboard({
   bank,
   goals,
@@ -41,7 +39,6 @@ export function MoneyDashboard({
 }) {
   const { status, data, loading, error, reload: load } = bank;
   const [flow, setFlow] = useState<FlowPeriod>("month");
-  const [focusId, setFocusId] = useState(goals[0]?.id ?? "");
   const retries = useRef(0);
 
   // A just-connected sandbox bank needs a few seconds before transactions are ready.
@@ -56,7 +53,6 @@ export function MoneyDashboard({
   }, [waiting, load]);
 
   const transferIds = useMemo(() => detectTransferIds(data?.transactions ?? []), [data]);
-  const focus = goals.find((g) => g.id === focusId) ?? goals[0];
 
   if (loading && !data) {
     return (
@@ -106,27 +102,6 @@ export function MoneyDashboard({
       {problems.length > 0 && <Notice tone="warn">Couldn't fully refresh {problems.map((p) => p.institution).join(", ")} ({problems[0].problem}).</Notice>}
       {waiting && <Notice tone="info">Your bank is still sending transactions. This page refreshes on its own in a few seconds.</Notice>}
 
-      {/* goal lens */}
-      {goals.length > 0 ? (
-        <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="font-semibold text-stone-600">Show spending in days of:</span>
-          {goals.map((g) => (
-            <button
-              key={g.id}
-              onClick={() => setFocusId(g.id)}
-              aria-pressed={g.id === focus?.id}
-              className={`min-h-9 rounded-full px-3 font-bold transition-colors duration-200 ${g.id === focus?.id ? "bg-brand-600 text-white" : "bg-white text-stone-700 ring-1 ring-stone-300 hover:bg-brand-50"}`}
-            >
-              {g.name}
-            </button>
-          ))}
-        </div>
-      ) : (
-        <Notice tone="info">
-          <button onClick={onNewGoal} className="font-bold underline">Add a savings goal</button> to see what your spending costs it, in days.
-        </Notice>
-      )}
-
       <div className="grid gap-4 lg:grid-cols-3 [&>*]:min-w-0">
         {/* Net worth */}
         <Card className="lg:col-span-2">
@@ -173,7 +148,6 @@ export function MoneyDashboard({
                     <span className="font-semibold text-stone-800"><span aria-hidden="true">{c.emoji}</span> {c.label}</span>
                     <span className="shrink-0">
                       <strong className="text-ink">{money(c.value)}</strong>
-                      {focus && isFinite(days(c.value, focus)) && <span className="ml-2 text-xs font-bold text-amber-700">= {daysLabel(days(c.value, focus))} of {focus.name}</span>}
                     </span>
                   </div>
                   <div className="mt-1 h-2 rounded-full bg-stone-100">
@@ -212,7 +186,6 @@ export function MoneyDashboard({
             {recent.map((t) => {
               const out = t.amount > 0;
               const transfer = isTransfer(t, transferIds);
-              const d = focus && out && !transfer ? days(t.amount, focus) : null;
               return (
                 <li key={t.id} className="flex items-center gap-3 py-2.5 text-sm">
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-stone-100" aria-hidden="true">{categoryEmoji(t.category)}</span>
@@ -224,13 +197,11 @@ export function MoneyDashboard({
                   </span>
                   <span className="shrink-0 text-right">
                     <span className={`block font-bold ${out ? "text-ink" : "text-emerald-700"}`}>{out ? "−" : "+"}{money(Math.abs(t.amount))}</span>
-                    {d != null && isFinite(d) && <span className="block text-xs font-bold text-amber-700">+{daysLabel(d)}</span>}
                   </span>
                 </li>
               );
             })}
           </ul>
-          {focus && <p className="mt-2 text-xs text-stone-500">"+N days" is how much later {focus.name} would arrive at {formatMoney(focus.weekly)}/week.</p>}
         </Card>
 
         {/* Goals linked to accounts */}

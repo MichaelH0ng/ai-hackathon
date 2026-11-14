@@ -23,7 +23,7 @@ export function Settings({
           <NumberField
             label="Your hourly pay (optional)"
             value={profile.hourlyWage ?? ""}
-            onChange={(v) => onProfile({ hourlyWage: v === "" ? null : v })}
+            onChange={(v) => onProfile({ ...profile, hourlyWage: v === "" ? null : v })}
             suffix="/hr"
             hint={`Check a price will say "that's 2h 10m of work".`}
           />

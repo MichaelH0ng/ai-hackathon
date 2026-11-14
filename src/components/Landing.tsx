@@ -1,4 +1,4 @@
-import { ArrowRight, CalendarClock, Camera, PiggyBank, ShoppingBag, Wallet } from "lucide-react";
+import { ArrowRight, CalendarClock, Camera, PiggyBank, ShoppingBag, Target, Wallet } from "lucide-react";
 import { useMemo } from "react";
 import { formatMoney, goalPhrase, whatIfSpend } from "../lib/finance";
 import { assetsByInstitution, detectTransferIds, netWorthSeries, periodFlow, spendableCash, upcomingBills } from "../lib/money";
@@ -67,7 +67,16 @@ export function Landing({
 
 // ---------- connected: the dashboard ----------
 
-export function HomeOverview({ data, onMoney }: { data: import("../lib/money").BankData; goal?: MoneyGoal; onCheck: () => void; onMoney: () => void }) {
+export function HomeOverview({ data, goal, goals = [], onCheck, onMoney, onGoals, onNewGoal, onOpenGoal }: {
+  data: import("../lib/money").BankData;
+  goal?: MoneyGoal;
+  goals?: MoneyGoal[];
+  onCheck: () => void;
+  onMoney: () => void;
+  onGoals?: () => void;
+  onNewGoal?: () => void;
+  onOpenGoal?: (id: string) => void;
+}) {
   const view = useMemo(() => {
     const transferIds = detectTransferIds(data.transactions);
     return {
@@ -75,9 +84,11 @@ export function HomeOverview({ data, onMoney }: { data: import("../lib/money").B
       slices: assetsByInstitution(data.accounts),
       cash: spendableCash(data.accounts),
       flow: periodFlow(data.transactions, transferIds, "month"),
-      bill: upcomingBills(data.transactions, transferIds)[0],
+      bills: upcomingBills(data.transactions, transferIds).slice(0, 3),
     };
   }, [data]);
+  // Unfinished goals first, so the snapshot shows what still needs saving.
+  const topGoals = [...goals].sort((a, b) => Number(a.saved >= a.target) - Number(b.saved >= b.target)).slice(0, 2);
   const spent = view.flow.current.out;
   const lastSpent = view.flow.previous.out;
 
@@ -101,19 +112,70 @@ export function HomeOverview({ data, onMoney }: { data: import("../lib/money").B
               value={data.transactions.length ? formatMoney(spent) : "No activity yet"}
               sub={lastSpent ? `${formatMoney(lastSpent)} last month` : undefined}
             />
-            {view.bill && (
-              <Stat
-                icon={<CalendarClock className="h-4 w-4 text-brand-500" />}
-                label={`Next bill: ${view.bill.name}`}
-                value={formatMoney(view.bill.amount, true)}
-                sub={view.bill.daysUntil === 0 ? "due today" : `in ${view.bill.daysUntil} days`}
-              />
+          </div>
+
+          <button onClick={onMoney} className="wealth-primary w-full">
+            View accounts and activity <ArrowRight className="h-4 w-4" aria-hidden="true" />
+          </button>
+
+          <div className="clay p-5">
+            <CardHead icon={<Target className="h-4 w-4 text-[#c294ff]" />} title="Savings goals" action={goals.length && onGoals ? { label: "See all", onClick: onGoals } : undefined} />
+            {topGoals.length ? (
+              <ul className="mt-3 space-y-3">
+                {topGoals.map((g) => {
+                  const pct = g.target > 0 ? Math.min(100, (g.saved / g.target) * 100) : 0;
+                  return (
+                    <li key={g.id}>
+                      <button onClick={() => onOpenGoal?.(g.id)} className="block w-full rounded-xl bg-stone-50 px-3 py-2.5 text-left transition-colors duration-200 hover:bg-stone-100">
+                        <span className="flex items-baseline justify-between gap-2">
+                          <span className="truncate text-sm font-bold text-ink">{g.name}</span>
+                          <span className="shrink-0 text-xs font-semibold tabular-nums text-stone-500">{Math.round(pct)}%</span>
+                        </span>
+                        <span className="wealth-progress !my-2 block" role="progressbar" aria-label={`${g.name} funded`} aria-valuenow={Math.round(pct)} aria-valuemin={0} aria-valuemax={100}>
+                          <i style={{ width: `${pct}%` }} />
+                        </span>
+                        <span className="flex justify-between gap-2 text-xs tabular-nums text-stone-500">
+                          <span>{formatMoney(g.saved)} of {formatMoney(g.target)}</span>
+                          <span>{formatMoney(g.weekly)}/week</span>
+                        </span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            ) : (
+              <p className="mt-2 text-sm leading-relaxed text-stone-600">
+                Give your savings a purpose: an emergency fund, a trip, a home.{" "}
+                {onNewGoal && <button onClick={onNewGoal} className="font-bold text-[var(--aurora-teal)] hover:underline">Create a goal</button>}
+              </p>
             )}
           </div>
 
-          <button onClick={onMoney} className="wealth-secondary w-full">
-            View accounts and activity <ArrowRight className="h-4 w-4" aria-hidden="true" />
-          </button>
+          <div className="clay p-5">
+            <CardHead icon={<CalendarClock className="h-4 w-4 text-brand-500" />} title="Upcoming bills" />
+            {view.bills.length ? (
+              <ul className="mt-2 divide-y divide-stone-100">
+                {view.bills.map((b) => (
+                  <li key={b.name} className="flex items-center justify-between gap-3 py-2.5">
+                    <span className="min-w-0">
+                      <span className="block truncate text-sm font-bold text-ink">{b.name}</span>
+                      <span className="block text-xs text-stone-500">{b.cadence}</span>
+                    </span>
+                    <span className="shrink-0 text-right">
+                      <span className="block text-sm font-bold tabular-nums text-ink">{formatMoney(b.amount, true)}</span>
+                      <span className="block text-xs text-stone-500">{b.daysUntil === 0 ? "Due today" : b.daysUntil === 1 ? "Tomorrow" : `In ${b.daysUntil} days`}</span>
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-2 text-sm leading-relaxed text-stone-600">
+                {data.transactions.length ? "No repeating bills spotted yet." : "Connect a bank account and recurring bills will show up here."}
+              </p>
+            )}
+          </div>
+
+          <PriceAddon goal={goal} cash={view.cash} onCheck={onCheck} />
         </aside>
       </div>
     </section>
@@ -135,6 +197,22 @@ function Stat({ icon, label, value, sub }: { icon: React.ReactNode; label: strin
   );
 }
 
+function CardHead({ icon, title, action }: { icon: React.ReactNode; title: string; action?: { label: string; onClick: () => void } }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <h2 className="flex items-center gap-2 text-base font-bold text-ink">
+        <span aria-hidden="true">{icon}</span>
+        {title}
+      </h2>
+      {action && (
+        <button onClick={action.onClick} className="inline-flex min-h-11 items-center gap-1 text-sm font-bold text-[var(--aurora-teal)] hover:underline">
+          {action.label} <ArrowRight className="h-4 w-4" aria-hidden="true" />
+        </button>
+      )}
+    </div>
+  );
+}
+
 /** The photo feature, as an add-on to the dashboard. */
 function PriceAddon({ goal, cash, onCheck }: { goal?: MoneyGoal; cash?: number; onCheck: () => void }) {
   const example = 49.99;
@@ -142,26 +220,26 @@ function PriceAddon({ goal, cash, onCheck }: { goal?: MoneyGoal; cash?: number; 
   return (
     <button
       onClick={onCheck}
-      className="block w-full rounded-3xl bg-brand-600 p-5 text-left text-white shadow-[0_6px_0_0_rgb(59_7_100/0.25)] transition-all duration-200 hover:bg-brand-700 active:translate-y-0.5"
+      className="clay block w-full p-5 text-left transition-transform duration-200 hover:-translate-y-0.5 active:translate-y-0 motion-reduce:transition-none"
     >
       <span className="flex items-center gap-3">
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-white/15"><Camera className="h-5 w-5" aria-hidden="true" /></span>
+        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[rgb(84_226_194/14%)] text-[var(--aurora-teal)]"><Camera className="h-5 w-5" aria-hidden="true" /></span>
         <span>
-          <span className="block font-display text-lg font-bold leading-tight">Thinking about buying something?</span>
-          <span className="block text-sm text-brand-100">Snap the price tag or type the price.</span>
+          <span className="block font-display text-lg font-bold leading-tight text-ink">Thinking about buying something?</span>
+          <span className="block text-sm text-stone-600">Snap the price tag or type the price.</span>
         </span>
       </span>
-      <span className="mt-4 block rounded-2xl bg-white/10 px-4 py-3 text-sm">
+      <span className="mt-4 block rounded-2xl bg-stone-100 px-4 py-3 text-sm text-stone-600">
         {goal && delay != null && isFinite(delay) ? (
           <>
-            A ${example} buy pushes your {goalPhrase(goal.name)} back <strong>{Math.round(delay)} days</strong>
+            A ${example} buy pushes your {goalPhrase(goal.name)} back <strong className="text-ink">{Math.round(delay)} days</strong>
             {cash != null ? <> and leaves {formatMoney(cash - example)} to spend.</> : "."}
           </>
         ) : (
           <>See the hours of work, what it does to your goals and a cheaper idea, before you buy.</>
         )}
       </span>
-      <span className="mt-3 inline-flex items-center gap-1 text-sm font-bold">
+      <span className="mt-3 inline-flex items-center gap-1 text-sm font-bold text-[var(--aurora-teal)]">
         Check a price <ArrowRight className="h-4 w-4" aria-hidden="true" />
       </span>
     </button>

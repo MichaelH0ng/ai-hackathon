@@ -251,7 +251,6 @@ button, a, select, input[type="checkbox"], input[type="range"] { cursor: pointer
 .simple-calculator-link > span { display: grid; gap: 5px; }
 .simple-calculator-link strong { font-size: 16px; color: #35443b; }
 .simple-calculator-link span > span { font-size: 14px; }
-.simple-activity-button { align-self: flex-start; }
 .wealth-risk-options button span { font-size: 15px; }
 .wealth-risk-options button small { font-size: 14px; color: #4c5851; line-height: 1.6; }
 .wealth-budget-line { font-size: 14px; color: #45584d; gap: 12px; flex-wrap: wrap; }
@@ -732,118 +731,45 @@ header.sticky.top-0.z-40 {
 }
 .divide-stone-100 > :not(:last-child) { border-color: var(--night-border) !important; }
 
-/* Goal surfaces stay opaque so the animated aurora cannot wash out their text. */
-.wealth-goal {
-  background: #0d1d35;
-  border-color: #466180;
-  color: #edf6ff;
-  padding: 20px;
-}
-.wealth-goal:hover { background: #183352; border-color: #94c9ff; }
-.wealth-goal:focus-visible { outline: 3px solid #94c9ff; outline-offset: 3px; }
-.wealth-goal-top,
-.wealth-goal p > span,
-.wealth-goal-detail,
-.wealth-goal-deadline,
-.wealth-goal-placeholder,
-.wealth-goal-placeholder p { color: #c4d4e8; }
-.wealth-goal-placeholder h3 { color: #edf6ff; }
-.wealth-goal-detail, .wealth-goal-deadline { font-size: 14px; }
-.wealth-goal p { line-height: 1.6; }
-.wealth-goal-detail { flex-wrap: wrap; }
-.savings-planner-panel { background: #0d1d35; border: 1px solid #466180; }
-.savings-planner-panel > [aria-hidden="true"] { opacity: .25; }
-.goal-flow { color-scheme: dark; }
-.goal-flow .clay { background: #0d1d35; border: 1px solid #466180; }
-.goal-flow input::placeholder { color: #b1c4dd; opacity: 1; }
-.goal-flow .goal-optional summary { color: #b8dcff; }
-.goal-flow .text-emerald-800 { color: #90f3d0; }
-.goal-flow .text-amber-800 { color: #ffd29b; }
-.goal-flow .text-red-700 { color: #ffb6bd !important; }
-/* Status panels use light backgrounds: keep every nested label dark as well. */
-.goal-flow :is(.bg-emerald-50, .bg-amber-50, .bg-sky-50) { color-scheme: light; }
-.goal-flow :is(.bg-emerald-50, .bg-amber-50, .bg-sky-50) .text-emerald-800 { color: #065f46; }
-.goal-flow :is(.bg-emerald-50, .bg-amber-50, .bg-sky-50) .text-amber-800 { color: #92400e; }
-.goal-flow .clay.bg-emerald-50 { background: #ecfdf5; }
-.goal-flow button.bg-brand-600:hover { background: #305da3; color: white; }
-
-/* Spend-or-save uses the night palette with distinct comparison surfaces. */
-.wealth-preferences { background: #0d1d35; border: 1px solid #466180; }
-.wealth-preferences > summary { color: #edf6ff; font-size: 18px; line-height: 1.5; }
-.wealth-preferences > summary small { color: #c4d4e8; font-size: 14px; margin-left: 0; }
-.wealth-preferences > summary:focus-visible { outline: 3px solid #94c9ff; outline-offset: 6px; }
-.wealth-preferences[open] > summary { border-bottom: 1px solid #466180; padding-bottom: 20px; }
-.wealth-preferences .wealth-note { color: #c4d4e8; line-height: 1.7; }
-.wealth-preferences .wealth-field > span { color: #edf6ff; font-size: 15px; }
-.wealth-preferences .wealth-field :is(select, textarea) {
-  color-scheme: dark;
-  background: #050b16;
-  color: #edf6ff;
-  border-color: #718cab;
-  line-height: 1.6;
-}
-.wealth-preferences .wealth-field textarea::placeholder { color: #b1c4dd; opacity: 1; }
-.wealth-preferences .wealth-field :is(select, textarea):focus-visible,
-.wealth-preferences .wealth-risk-options button:focus-visible { outline: 3px solid #94c9ff; outline-offset: 3px; }
-.wealth-preferences .wealth-risk-options button { background: #091426; border-color: #718cab; padding: 18px; }
-.wealth-preferences .wealth-risk-options button span { color: #edf6ff; font-size: 16px; }
-.wealth-preferences .wealth-risk-options button small { color: #c4d4e8; font-size: 14px; }
-.wealth-preferences .wealth-risk-options button:hover { background: #183352; border-color: #94c9ff; }
-.wealth-preferences .wealth-risk-options button.selected { background: #102f34; border: 2px solid #54e2c2; padding: 17px; }
-.wealth-preferences .wealth-risk-options button.selected span { color: #94f5dc; }
-
-.wealth-opportunity { background: #0d1d35; border: 1px solid #466180; }
-.wealth-opportunity .wealth-field > span { color: #edf6ff; }
-.wealth-opportunity .wealth-field :is(input, select) {
-  background: #050b16;
-  color: #edf6ff;
-  border-color: #718cab;
-  color-scheme: dark;
-}
-.wealth-opportunity .wealth-field input::placeholder { color: #b1c4dd; opacity: 1; }
-.wealth-opportunity .wealth-field :is(input, select):focus-visible { outline: 3px solid #94c9ff; outline-offset: 2px; }
-.wealth-opportunity-result {
-  background: #091426;
-  border: 1px solid #466180;
-  color: #edf6ff;
-  padding: clamp(16px, 3vw, 28px);
-}
-.wealth-opportunity-result .wealth-tag { color: #9bead9; font-size: 12px; }
-.wealth-opportunity-result > strong { color: #edf6ff; font-size: clamp(32px, 5vw, 44px); }
-.wealth-opportunity-result > p { color: #c4d4e8; font-size: 16px; line-height: 1.6; }
-.wealth-opportunity .wealth-timeline-compare {
-  border: 0;
-  padding: 0;
-  align-items: stretch;
-  color: #c4d4e8;
-}
-.wealth-opportunity .wealth-timeline-compare > div {
-  padding: 18px;
-  border-radius: 12px;
-  border: 1px solid #3b7c74;
-  border-top: 4px solid #54e2c2;
-  background: #102f34;
-}
-.wealth-opportunity .wealth-timeline-compare > div:last-child {
-  border-color: #756092;
-  border-top-color: #c294ff;
-  background: #29203e;
-}
-.wealth-opportunity .wealth-timeline-compare > svg { align-self: center; flex-shrink: 0; }
-.wealth-opportunity .wealth-timeline-compare span { color: #d3f3ec; font-size: 14px; font-weight: 650; }
-.wealth-opportunity .wealth-timeline-compare strong { color: #94f5dc; font-size: 24px; line-height: 1.3; }
-.wealth-opportunity .wealth-timeline-compare > div:last-child span { color: #ece0ff; }
-.wealth-opportunity .wealth-timeline-compare > div:last-child strong { color: #dfc6ff; }
-.wealth-opportunity-result .wealth-delay {
-  background: #122747;
-  color: #edf6ff;
-  border-left: 3px solid #74b9ff;
-  border-radius: 10px;
-  padding: 14px 18px;
-  font-size: 16px;
-  line-height: 1.6;
-}
-@media (max-width: 520px) {
-  .wealth-opportunity .wealth-timeline-compare { flex-direction: column; }
-  .wealth-opportunity .wealth-timeline-compare > svg { transform: rotate(90deg); }
-}
+/* Accounts page: totals strip, grouped list, account status lines, add-account dialog. */
+.accounts-summary { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 18px 32px; }
+.accounts-summary-main { display: grid; gap: 4px; }
+.accounts-summary-main span { color: var(--night-muted); font-size: 13px; font-weight: 600; }
+.accounts-summary-main strong { color: var(--night-text); font-size: clamp(28px, 4vw, 34px); font-weight: 700; letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.accounts-summary-split { display: flex; flex-wrap: wrap; gap: 14px 28px; }
+.accounts-summary-split > span { display: grid; gap: 3px; }
+.accounts-summary-split small { color: var(--night-muted); font-size: 12px; font-weight: 600; }
+.accounts-summary-split strong { color: var(--night-text); font-size: 17px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.accounts-summary-split strong.is-debt { color: var(--color-cost); }
+.accounts-group + .accounts-group { margin-top: 18px; }
+.accounts-group-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 4px; padding: 12px 16px; border: 1px solid var(--night-border); border-radius: 12px; background: rgb(148 192 243 / 7%); }
+.accounts-group-head > div:first-child { display: grid; gap: 2px; min-width: 0; }
+.accounts-group-head h3 { color: var(--night-text); font-size: 16px; font-weight: 700; }
+.accounts-group-head > div:first-child span { color: var(--night-muted); font-size: 12px; }
+.accounts-group-total { display: grid; justify-items: end; gap: 1px; text-align: right; }
+.accounts-group-total small { color: var(--night-muted); font-size: 11px; font-weight: 600; }
+.accounts-group-total strong { color: var(--night-text); font-size: 19px; font-weight: 700; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+.accounts-group-total.is-debt strong { color: var(--color-cost); }
+.accounts-group-total.is-gain strong { color: var(--color-gain); }
+.accounts-group-head + .wealth-account-block { border-top: 0; }
+.wealth-account-block,
+.wealth-account { border-color: var(--night-border); }
+.wealth-account-name .wealth-account-status { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; color: var(--night-muted); }
+.wealth-account-name .wealth-account-status.stale { color: var(--color-cost); }
+.wealth-inline-link { display: inline-flex; align-items: center; gap: 3px; min-height: 28px; color: var(--aurora-teal); font-weight: 650; }
+.wealth-inline-link:hover { text-decoration: underline; }
+.wealth-icon-button { color: var(--night-muted); }
+.wealth-icon-button:hover { background: rgb(148 192 243 / 12%); color: var(--night-text); }
+.wealth-account-holdings summary { color: var(--aurora-teal); }
+.wealth-account-holdings li { color: var(--night-text); }
+.wealth-account-holdings li small { color: var(--night-muted); }
+.wealth-empty { color: var(--night-muted); }
+.wealth-empty h3 { color: var(--night-text); }
+.wealth-empty p { color: var(--night-muted); }
+.wealth-card-foot { border-color: var(--night-border); color: var(--night-muted); }
+.add-account-connect { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; margin-top: 4px; padding: 16px; border: 1px solid var(--night-border); border-radius: 12px; background: rgb(84 226 194 / 6%); }
+.add-account-connect > div { display: grid; gap: 4px; min-width: 0; flex: 1 1 200px; }
+.add-account-connect strong { color: var(--night-text); font-size: 15px; }
+.add-account-connect span { color: var(--night-muted); font-size: 13px; line-height: 1.5; }
+.add-account-divider { display: flex; align-items: center; gap: 12px; margin: 18px 0 2px; color: var(--night-muted); font-size: 12px; }
+.add-account-divider::before, .add-account-divider::after { content: ""; flex: 1; height: 1px; background: var(--night-border); }
