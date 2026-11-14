@@ -94,7 +94,7 @@ export function HomeOverview({ data, goal, goals = [], onCheck, onMoney, onGoals
 
   return (
     <section className="dashboard-home-overview" aria-label="Money overview">
-      <div className="mx-auto grid max-w-6xl gap-5 lg:grid-cols-[1.75fr_1fr] [&>*]:min-w-0">
+      <div className="grid gap-5 lg:grid-cols-[1.75fr_1fr] [&>*]:min-w-0">
         <div className="clay p-5 sm:p-7">
           <NetWorthChart series={view.series} note={data.env === "sandbox" ? "Includes sandbox test data; manual balances stay fixed in this estimate" : data.transactions.length ? "Estimated from transactions; manual balances stay fixed" : "Current balance snapshot; no transaction history available"} />
           <div className="mt-6">

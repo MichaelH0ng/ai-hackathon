@@ -2,7 +2,7 @@ import { useState } from "react";
 import { formatMoney } from "../lib/finance";
 import type { InstitutionSlice } from "../lib/money";
 
-const COLORS = ["#7c3aed", "#10b981", "#0ea5e9", "#f59e0b", "#ec4899", "#64748b"];
+const COLORS = ["#c294ff", "#54e2c2", "#74b9ff", "#ffb47a", "#ff8fc7", "#9fb0c8"];
 
 /** "Across 3 institutions": one bar split by bank or brokerage, with a legend you can hover. */
 export function AssetSplit({ slices }: { slices: InstitutionSlice[] }) {

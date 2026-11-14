@@ -773,3 +773,34 @@ header.sticky.top-0.z-40 {
 .add-account-connect span { color: var(--night-muted); font-size: 13px; line-height: 1.5; }
 .add-account-divider { display: flex; align-items: center; gap: 12px; margin: 18px 0 2px; color: var(--night-muted); font-size: 12px; }
 .add-account-divider::before, .add-account-divider::after { content: ""; flex: 1; height: 1px; background: var(--night-border); }
+
+/* Readability + width pass: wider canvas, near-opaque cards, brighter secondary text.
+   These tokens override the earlier night-sky values; see BRAND_GUIDELINES.md. */
+:root {
+  --night-muted: #c0cde0;
+  --night-border: rgb(160 198 244 / 26%);
+  --night-surface: linear-gradient(145deg, #13294a, #0c1b33);
+  --night-inset: rgb(148 192 243 / 9%);
+}
+.wealth-dashboard { max-width: 1320px; }
+@media (min-width: 1024px) { .wealth-dashboard { padding-left: 32px; padding-right: 32px; } }
+.clay,
+.wealth-card,
+.northstar-summary,
+.connection-card,
+.wealth-modal {
+  border: 1px solid var(--night-border);
+  background: var(--night-surface);
+  box-shadow: 0 18px 44px rgb(0 0 0 / 38%), inset 0 1px 0 rgb(235 248 255 / 6%);
+}
+.money-assistant-panel { border-color: var(--night-border); background: #0c1b33; }
+/* Quiet the aurora light so it never washes out cards or text. */
+.soft-aurora-background canvas { opacity: .55; }
+/* Inner rows and chips sit one step lighter than their card. */
+.bg-stone-50 { background-color: var(--night-inset) !important; }
+.bg-stone-100 { background-color: rgb(148 192 243 / 15%) !important; }
+.bg-white { background-color: #0f213d !important; }
+.text-stone-400 { color: var(--night-muted) !important; }
+.wealth-footer { color: var(--night-muted); }
+/* Leave room so the floating assistant button never covers the footer. */
+.wealth-dashboard { padding-bottom: 96px; }
