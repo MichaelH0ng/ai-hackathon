@@ -10,7 +10,7 @@ import { budgetBalanceProgress, opportunityCost, retirementProjection, type Reti
 import { BudgetNorthStar, NorthStar } from "./NorthStar";
 import { MoneyAssistant } from "./MoneyAssistant";
 import type { MoneyAssistantContext } from "../lib/moneyAssistant";
-import { ConnectCard, MoneyDashboard } from "./MoneyDashboard";
+import { ConnectButton, MoneyDashboard } from "./MoneyDashboard";
 
 export type DashboardTab = "Overview" | "Accounts" | "Goals" | "Retirement" | "Budget" | "Activity";
 
@@ -60,7 +60,6 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; onUpdat
     document.addEventListener("keydown", handleKey);
     return () => { document.removeEventListener("keydown", handleKey); document.body.style.overflow = oldOverflow; previous?.focus(); };
   }, [modalOpen]);
-  const [connect, setConnect] = useState(false);
   const [saved, setSaved] = useState("");
   useEffect(() => { try { localStorage.setItem(KEY, JSON.stringify(plan)); setSaved("Changes saved on this device"); } catch { setSaved("Storage unavailable. Changes last for this session."); } }, [plan]);
   const update = (patch: Partial<Plan>) => setPlan(p => ({ ...p, ...patch }));
@@ -123,15 +122,15 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; onUpdat
     ].map(a => ({ ...a, id: crypto.randomUUID(), sample: true }))] });
   }
   const addAsset = () => setAssetForm({ id: crypto.randomUUID(), name: "", institution: "", kind: "Checking", balance: 0 });
-  const accountList = <section className="wealth-card"><div className="wealth-section-head"><div><h2>Your accounts</h2><p>Every account. One clear picture.</p></div><button className="wealth-text-button" onClick={addAsset}><Plus size={16} /> Add account</button></div>
-    {!assets.length ? <div className="wealth-empty"><Landmark size={30} /><h3>Bring your money together</h3><p>Add balances manually, or connect your bank to get started.</p><button className="wealth-primary" onClick={addAsset}>Add your first account <Plus size={16} /></button></div> : <div className="wealth-accounts">{assets.map(a => {
+  const accountList = <section className="wealth-card"><div className="wealth-section-head"><div><h2>Your accounts</h2><p>Every account. One clear picture.</p></div><button className="wealth-text-button" onClick={addAsset}><Plus size={16} /> Add manually</button></div>
+    {!assets.length ? <div className="wealth-empty"><Landmark size={30} /><h3>Bring your money together</h3><p>Add balances manually, or connect your bank to get started.</p><button className="wealth-primary" onClick={addAsset}>Add a manual account <Plus size={16} /></button></div> : <div className="wealth-accounts">{assets.map(a => {
       const holdings = linked.some(account => account.id === a.id) ? bank.data?.holdings?.filter(holding => holding.accountId === a.id) ?? [] : [];
       return <div className="wealth-account-block" key={a.id}>
         <div className="wealth-account"><span className={`wealth-account-icon ${investment(a.kind) ? "invest" : ""}`}>{investment(a.kind) ? <ArrowUpRight size={20} /> : <Landmark size={20} />}</span><div className="wealth-account-name"><strong>{a.name}</strong><span>{a.institution || "Personal account"} · {a.kind}{a.sample ? " · Sample" : linked.some(l => l.id === a.id) ? " · Connected" : " · Manual"}</span></div><strong className="wealth-balance">{debt(a.kind) ? "−" : ""}{usd(a.balance)}</strong>{plan.assets.some(m => m.id === a.id) && <button className="wealth-icon-button" aria-label={`Edit ${a.name}`} onClick={() => setAssetForm(a)}><SlidersHorizontal size={15} /></button>}</div>
         {holdings.length > 0 && <details className="wealth-account-holdings"><summary>{holdings.length} investment holding{holdings.length === 1 ? "" : "s"}</summary><ul>{holdings.map(holding => <li key={holding.id}><span><strong>{holding.ticker || holding.name}</strong><small>{holding.quantity.toLocaleString(undefined, { maximumFractionDigits: 6 })} shares</small></span><strong>{holdingMoney(holding.value, holding.currency)}</strong></li>)}</ul></details>}
       </div>;
     })}</div>}
-    <div className="wealth-card-foot"><ShieldCheck size={14} /><span>{linked.length ? `${linked.length} connected accounts · ${bank.data?.env === "sandbox" ? "Sandbox balances" : "Bank balances"}` : "Manual balances stay in this browser"}</span><button onClick={() => setConnect(!connect)}>Connect accounts <ArrowRight size={14} /></button></div>
+    <div className="wealth-card-foot"><ShieldCheck size={14} /><span>{linked.length ? `${linked.length} connected accounts · ${bank.data?.env === "sandbox" ? "Sandbox balances" : "Bank balances"}` : "Manual balances stay in this browser"}</span><ConnectButton label="Connect accounts" variant="secondary" kind="all" onConnected={bank.reload} /></div>
   </section>;
   const goalList = <section className="wealth-card"><div className="wealth-section-head"><div><h2>Your savings goals</h2><p>Choose a goal and an amount to save each week.</p></div><button className="wealth-text-button" onClick={onNewGoal}><Plus size={16} /> New goal</button></div>
     {goals.length ? <div className="wealth-goal-grid">{goals.map(g => <button key={g.id} className="wealth-goal" onClick={() => onOpenGoal(g.id)}><span className="wealth-goal-top"><span className="wealth-account-icon"><Target size={19} /></span><ChevronRight size={17} /></span><h3>{g.name}</h3><p><strong>{usd(g.saved)}</strong> <span>of {usd(g.target)}</span></p><div className="wealth-progress" role="progressbar" aria-label={`${g.name} funded`} aria-valuenow={Math.min(100, Math.round(g.saved / g.target * 100))} aria-valuemin={0} aria-valuemax={100}><i style={{ width: `${Math.min(100, g.saved / g.target * 100)}%` }} /></div><span className="wealth-goal-detail">{usd(g.weekly)}/week <span>{months(g.weekly > 0 ? Math.max(0, g.target - g.saved) / (g.weekly * 52 / 12) : Infinity)} to go</span></span>{g.deadline && <span className="wealth-goal-deadline">Target date · {g.deadline}</span>}</button>)}</div> : <div className="wealth-goal-placeholder"><Target size={25} /><div><h3>What does your money make possible?</h3><p>An emergency fund, a home, a trip. Give your savings a purpose.</p></div><button className="wealth-secondary" onClick={onNewGoal}>Create a goal <ArrowRight size={15} /></button></div>}
@@ -150,7 +149,7 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; onUpdat
     retirementAge: retirementPoints.length ? retirementAge : null,
   };
   return <main id="main" className="wealth-dashboard">
-    <div className="wealth-page-head"><div><h1>{tab === "Goals" ? "My goals" : tab === "Activity" ? "Account activity" : tab}</h1><p>{tab === "Overview" ? "Your whole financial picture, in one place." : tab === "Accounts" || tab === "Activity" ? "Track your balances and connected accounts." : tab === "Goals" ? "Plan your savings and watch your progress grow." : tab === "Retirement" ? "Explore your long-term savings plan." : "Give your monthly income a plan."}</p></div>{(tab === "Overview" || tab === "Accounts") && <button className="wealth-primary" onClick={() => setConnect(true)}><Plus size={17} /> Add account</button>}</div>
+    <div className="wealth-page-head"><div><h1>{tab === "Goals" ? "My goals" : tab === "Activity" ? "Account activity" : tab}</h1><p>{tab === "Overview" ? "Your whole financial picture, in one place." : tab === "Accounts" || tab === "Activity" ? "Track your balances and connected accounts." : tab === "Goals" ? "Plan your savings and watch your progress grow." : tab === "Retirement" ? "Explore your long-term savings plan." : "Give your monthly income a plan."}</p></div>{(tab === "Overview" || tab === "Accounts") && <ConnectButton label="Add account" kind="all" className="wealth-primary" onConnected={bank.reload} />}</div>
     {tab === "Overview" && <>
       {bank.loading && !bank.data && !assets.length ? <section className="wealth-card" role="status">Loading your money overview…</section> : <HomeOverview data={{
         env: bank.data?.env ?? "manual",
@@ -167,7 +166,6 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; onUpdat
       {assets.some(a => a.sample) && <div className="wealth-sample"><Sparkles size={17} /><span>Sample accounts are included in these totals.</span><button onClick={() => update({ assets: plan.assets.filter(a => !a.sample) })}>Remove sample accounts <X size={14} /></button></div>}
 
     </>}
-    {connect && <section className="wealth-connect"><button className="wealth-text-button" onClick={() => setConnect(false)}><X size={16} /> Close bank connection</button><ConnectCard sandbox={bank.status?.env !== "production"} configured={bank.status?.configured !== false && !!bank.status} onConnected={bank.reload} /></section>}
     {tab === "Accounts" && <div className="wealth-stack">{accountList}<button className="wealth-secondary simple-activity-button" onClick={() => setTab("Activity")}>View connected bank activity <ArrowRight size={16} /></button><p className="wealth-note">Connected investment holdings appear inside their account. Add each account only once; manual balances stay on this device.</p></div>}
 
     {tab === "Goals" && <div className="wealth-stack">

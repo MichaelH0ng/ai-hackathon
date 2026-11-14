@@ -75,13 +75,18 @@ plaidRouter.use("/api/plaid", (_req, res, next) => {
 // Step 1 of connecting: a short-lived link token for the Plaid Link popup.
 plaidRouter.post("/api/plaid/link-token", async (req, res) => {
   const investing = req.body?.kind === "investments";
+  const unified = req.body?.kind === "all";
   try {
     const r = await plaid.linkTokenCreate({
       user: { client_user_id: "tradeoff-local-user" },
       client_name: "NorthStar",
       language: "en",
       country_codes: [CountryCode.Us],
+      // A single Link session can cover an everyday bank or a brokerage. Keep
+      // Investments as consented-on-demand for the unified button, so linking a
+      // bank does not automatically add an Investments subscription.
       products: investing ? [Products.Investments] : [Products.Transactions],
+      ...(unified ? { additional_consented_products: [Products.Investments] } : {}),
       ...(investing ? {} : { transactions: { days_requested: 180 } }),
     });
     res.json({ link_token: r.data.link_token });

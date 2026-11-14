@@ -356,7 +356,7 @@ function FlowRow({ icon, label, value, prev }: { icon: React.ReactNode; label: s
 }
 
 /** Opens Plaid Link. The link token is fetched only when you click. */
-function ConnectButton({ label, variant = "primary", kind = "bank", onConnected }: { label: string; variant?: "primary" | "secondary"; kind?: "bank" | "investments"; onConnected: () => void }) {
+export function ConnectButton({ label, variant = "primary", kind = "bank", className, onConnected }: { label: string; variant?: "primary" | "secondary"; kind?: "bank" | "investments" | "all"; className?: string; onConnected: () => void }) {
   const [token, setToken] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -365,7 +365,10 @@ function ConnectButton({ label, variant = "primary", kind = "bank", onConnected 
     onSuccess: async (publicToken, meta) => {
       setBusy(true);
       try {
-        await post("/api/plaid/exchange", { public_token: publicToken, institution: meta.institution?.name, kind });
+        // With the unified connector, persist the product that matches the
+        // selected account type so the server fetches transactions or holdings.
+        const selectedKind = kind === "all" && meta.accounts.some((account) => account.type === "investment") ? "investments" : kind === "all" ? "bank" : kind;
+        await post("/api/plaid/exchange", { public_token: publicToken, institution: meta.institution?.name, kind: selectedKind });
         onConnected();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Couldn't save that connection.");
@@ -384,6 +387,7 @@ function ConnectButton({ label, variant = "primary", kind = "bank", onConnected 
     <span className="inline-flex flex-col">
       <Button
         variant={variant}
+        className={className}
         disabled={busy || !!token}
         onClick={async () => {
           setError(null);
