@@ -1,5 +1,5 @@
 import { Camera, Clock, ImageUp, Lightbulb, PiggyBank, RotateCcw, Tag, Wallet } from "lucide-react";
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatMoney, hoursOfWork, whatIfSpend } from "../lib/finance";
 import type { BankSnapshot, MoneyGoal, Profile } from "../lib/types";
 import { type LogDecision, MoneyWhatIf, type WhatIfItem } from "./MoneyWhatIf";
@@ -51,7 +51,6 @@ export function PriceCheck({
   onNewGoal: () => void;
   onSettings: () => void;
 }) {
-  const cameraRef = useRef<HTMLInputElement>(null);
   const uploadRef = useRef<HTMLInputElement>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -63,6 +62,7 @@ export function PriceCheck({
   const [goalId, setGoalId] = useState(moneyGoals[0]?.id ?? "");
   const [message, setMessage] = useState<string | null>(null);
   const [version, setVersion] = useState(0); // resets the What-If when the item changes
+  const [dragging, setDragging] = useState(false); // a file is being dragged over the drop zone
 
   const goal = moneyGoals.find((g) => g.id === goalId) ?? moneyGoals[0];
 
@@ -113,10 +113,30 @@ export function PriceCheck({
       setError(e instanceof Error ? e.message : "Couldn't read that photo.");
     } finally {
       setLoading(false);
-      if (cameraRef.current) cameraRef.current.value = "";
       if (uploadRef.current) uploadRef.current.value = "";
     }
   }
+
+  function handleDroppedFiles(files: FileList) {
+    const file = files[0];
+    if (!file) return;
+    if (!file.type.startsWith("image/")) {
+      setError("That file isn't a photo. Drop an image like a JPG, PNG or screenshot, or type the price below.");
+      return;
+    }
+    void handleFile(file);
+  }
+
+  // A photo dropped just outside the drop zone would otherwise open in the browser tab and leave the app.
+  useEffect(() => {
+    const block = (e: DragEvent) => { if (e.dataTransfer?.types.includes("Files")) e.preventDefault(); };
+    window.addEventListener("dragover", block);
+    window.addEventListener("drop", block);
+    return () => {
+      window.removeEventListener("dragover", block);
+      window.removeEventListener("drop", block);
+    };
+  }, []);
 
   function toggleLine(i: number) {
     if (!item?.lines) return;
@@ -139,25 +159,36 @@ export function PriceCheck({
 
       {/* 1. Capture */}
       <Card>
-        <button
-          onClick={() => cameraRef.current?.click()}
-          disabled={loading}
-          className="flex w-full items-center gap-4 rounded-2xl bg-brand-600 p-4 text-left text-white shadow-[0_5px_0_0_rgb(59_7_100/0.25)] transition-all duration-200 hover:bg-brand-700 active:translate-y-0.5 disabled:opacity-60"
-        >
-          <span className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-white/15"><Camera className="h-6 w-6" aria-hidden="true" /></span>
-          <span>
-            <span className="block font-display text-lg font-bold">Take a photo of the price tag</span>
-            <span className="block text-sm text-brand-100">Opens your camera. We'll read the item and price.</span>
+        <div className="relative w-full rounded-2xl bg-brand-600 px-18 py-4 text-center text-white shadow-[0_5px_0_0_rgb(59_7_100/0.25)]">
+          {/* Icon sits on the left edge; the text is centred across the whole box, independent of the icon. */}
+          <span className="absolute top-1/2 left-4 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-2xl bg-white/15"><Camera className="h-6 w-6" aria-hidden="true" /></span>
+          <span className="block">
+            <span className="block font-display text-lg font-bold">Snap the price tag</span>
+            <span className="block text-sm text-brand-100">Add a photo below. We'll read the item and price.</span>
           </span>
-        </button>
+        </div>
         <button
           onClick={() => uploadRef.current?.click()}
           disabled={loading}
-          className="mt-3 flex min-h-12 w-full items-center justify-center gap-2 rounded-2xl bg-stone-100 px-4 text-sm font-bold text-stone-800 ring-1 ring-stone-300 transition-colors duration-200 hover:bg-stone-200 disabled:opacity-60"
+          onDragEnter={(e) => { e.preventDefault(); if (!loading) setDragging(true); }}
+          onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = loading ? "none" : "copy"; }}
+          onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false); }}
+          onDrop={(e) => {
+            e.preventDefault();
+            setDragging(false);
+            if (!loading) handleDroppedFiles(e.dataTransfer.files);
+          }}
+          className={`mt-3 flex min-h-12 w-full flex-col items-center justify-center gap-1 rounded-2xl border-2 border-dashed px-4 py-3 text-sm font-bold transition-colors duration-200 disabled:opacity-60 pointer-fine:min-h-28 ${
+            dragging ? "border-brand-500 bg-brand-50 text-brand-700" : "border-stone-300 bg-stone-100 text-stone-800 hover:bg-stone-200"
+          }`}
         >
-          <ImageUp className="h-4 w-4" aria-hidden="true" /> Upload a photo or cart screenshot
+          <span className="flex items-center gap-2">
+            <ImageUp className="h-4 w-4" aria-hidden="true" />
+            <span className="pointer-fine:hidden">Take or upload a photo</span>
+            <span className="hidden pointer-fine:inline">{dragging ? "Drop it here to read the price" : "Drag a photo or cart screenshot here"}</span>
+          </span>
+          <span className="hidden text-xs font-semibold text-stone-500 pointer-fine:block">or click to browse your files</span>
         </button>
-        <input ref={cameraRef} type="file" accept="image/*" capture="environment" hidden onChange={(e) => handleFile(e.target.files?.[0])} />
         <input ref={uploadRef} type="file" accept="image/*" hidden onChange={(e) => handleFile(e.target.files?.[0])} />
 
         {(preview || loading) && (
