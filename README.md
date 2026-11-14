@@ -18,6 +18,18 @@ npm run dev              # app on http://localhost:5173 (+ API on :8787)
 
 On the home page, tap **Try it with sample data** to load the hoodie, stats exam and spring break examples.
 
+## Team setup
+
+The repository includes safe, shareable demo data in `server/sandboxStudent.ts` and a credential-free template in `.env.example`. Teammates can get started with:
+
+```bash
+cp .env.example .env
+npm install
+npm run dev
+```
+
+Commit the fake student-bank data, `.env.example`, and `PLAID_ENV=sandbox`; do **not** commit `.env`, `PLAID_SECRET`, any AI API key, or files in `server/data/` (which can contain Plaid access tokens). The built-in **Use a test student bank** option uses made-up student data that is safe to demo, but it still sends that fixture to Plaid's Sandbox API. Each teammate who wants to use either bank option must add authorized Sandbox credentials to their local `.env`; Plaid's public test login is `user_good` / `pass_good`.
+
 Optional:
 - **Photo reading**: `cp .env.example .env`, add an Anthropic API key, then restart. Typed prices work without a key.
 - **Money dashboard (Plaid)**: add `PLAID_CLIENT_ID`, `PLAID_SECRET` and `PLAID_ENV=sandbox` to `.env`. On the Money page, tap **Use a test student bank** (made-up data you can edit in `server/sandboxStudent.ts`), or **Connect a bank** and sign in with `user_good` / `pass_good` for Plaid's own test data. Bank connections are saved in `server/data/` (git-ignored).
