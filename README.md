@@ -54,3 +54,11 @@ Optional:
 - Weeks to goal = (goal − saved) ÷ weekly savings.
 - Delay = cost ÷ weekly savings × 7. This assumes the cost comes from savings.
 - Suggested study hours grow with the gap between readiness (confidence or latest quiz) and the target grade. It's a rough estimate, not a grade prediction.
+
+## Linked portfolios
+
+In **Accounts**, choose **Connect portfolio** to link a brokerage or retirement account through Plaid Investments. The dashboard shows account balances and individual holdings with their reported price dates. Holdings are included in account balances and are not added to net worth a second time. **Refresh** retrieves the latest data available from Plaid; this is not a live market-price feed.
+
+Set `PLAID_CLIENT_ID`, `PLAID_SECRET`, and `PLAID_ENV=sandbox` in the ignored server `.env` file, then restart the API. A sandbox secret alone is not enough: the matching Client ID is required. **Test portfolio** creates a Plaid sandbox investment connection without real credentials. **Connect a portfolio** opens Plaid Link for supported investment accounts. Sandbox never connects real accounts.
+
+Real portfolios require approved Plaid Production access with Investments, the Production secret, and `PLAID_ENV=production`. Production and sandbox connection files are kept separate. This local app uses a single local-user connection store; user authentication and per-user token storage are required before deploying it as a multi-user service.

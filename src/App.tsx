@@ -1,8 +1,7 @@
 import { useEffect, useState } from "react";
 import { Home } from "./components/Home";
-import { Landing } from "./components/Landing";
 import { MoneyGoalForm } from "./components/MoneyGoalForm";
-import { MoneyDashboard } from "./components/MoneyDashboard";
+import { WealthDashboard } from "./components/WealthDashboard";
 import { MoneyGoalView } from "./components/MoneyGoalView";
 import type { LogDecision } from "./components/MoneyWhatIf";
 import { PathCards, type PathKind } from "./components/PathCards";
@@ -100,11 +99,9 @@ export default function App() {
   let body: React.ReactNode;
   switch (screen.name) {
     case "home":
-      body = <Landing onMoney={() => setScreen({ name: "money" })} goalCount={state.goals.length} onPick={pick} onDemo={loadDemo} onGoals={goGoals} onCheck={() => setScreen({ name: "check" })} moneyGoals={moneyGoals} bank={bank} onOpenGoal={(id) => setScreen({ name: "goal", id })} onUpdateGoal={updateGoal} />;
-      break;
     case "money":
       body = (
-        <MoneyDashboard
+        <WealthDashboard
           bank={bank}
           goals={moneyGoals}
           onUpdateGoal={updateGoal}
@@ -156,6 +153,7 @@ export default function App() {
           onProfile={(p) => setState((s) => ({ ...s, profile: p }))}
           onDemo={loadDemo}
           onReset={() => {
+            try { localStorage.removeItem("tradeoff:wealth:v1"); localStorage.removeItem("tradeoff:learning:v1"); } catch { /* Storage can be blocked. */ }
             setState(EMPTY_STATE);
             setScreen({ name: "home" });
           }}

@@ -22,7 +22,21 @@ export interface BankTransaction {
   pending: boolean;
 }
 
+export interface PortfolioHolding {
+  id: string;
+  accountId: string;
+  name: string;
+  ticker: string | null;
+  quantity: number;
+  price: number;
+  value: number;
+  currency: string | null;
+  priceAsOf: string | null;
+  institution: string;
+}
+
 export interface BankData {
+  holdings?: PortfolioHolding[];
   env: string;
   accounts: BankAccount[];
   transactions: BankTransaction[];
