@@ -5,9 +5,8 @@
 An opportunity cost app for students that does three things:
 
 1. **Check a price.** Snap a price tag (or type the price) and see the hours of work, the days it adds to each savings goal, and a cheaper idea.
-2. **Save for something.** Set a goal and a weekly amount, then watch your finish date and the progress dial move with your choices.
+2. **Save for something.** Set a goal and a weekly amount, then watch your finish date and progress move with your choices.
 3. **See your money.** Connect a bank through Plaid to see net worth, cash flow, top spending, upcoming bills and recent transactions, each measured in days of your goals.
-4. **Study smarter.** Get a day-by-day exam plan with hard topics first, and see what a movie night really costs.
 
 ## Run it
 
@@ -16,7 +15,7 @@ npm install
 npm run dev              # app on http://localhost:5173 (+ API on :8787)
 ```
 
-On the home page, tap **Try it with sample data** to load the hoodie, stats exam and spring break examples.
+On the home page, tap **Try it with sample data** to load the hoodie and spring break examples.
 
 ## Team setup
 
@@ -45,18 +44,16 @@ Optional:
 3. **Hoodie goal**: in "What if I buy something?", enter dinner out for $20 and cook at home for $5.
    - Dinner out adds 9.3 days and cooking adds 2.3 days.
    - Tap **Get cook at home instead**.
-4. **Statistics exam**: a 5-day plan with hard topics first. Turn the quiz dial to 90% and suggested study drops from 7h to 2.5h. Add a 2h movie and the schedule adjusts. The app never promises a grade.
 
 ## Code map
 
 | | |
 |---|---|
 | `src/lib/finance.ts` | Weeks to goal, what-if delay, deadline amount, recommendation text, hours of work |
-| `src/lib/study.ts` | Suggested hours, schedule, topic order, replanning, activity what-if |
 | `src/lib/storage.ts` | Browser storage (localStorage) + sample data |
 | `src/components/Landing.tsx` | Home page: hero, `SavingsPlanner` (weekly-savings `CometDial`), three feature cards |
 | `src/components/PriceCheck.tsx` | Photo or typed price → hours of work, delay per goal, skip / cheaper / buy |
-| `src/components/Money*.tsx`, `Study*.tsx` | Goal forms and goal pages |
+| `src/components/Money*.tsx` | Savings-goal forms and goal pages |
 | `src/lib/money.ts` | Net worth, cash flow, top categories, upcoming bills, transfer detection (ported from money-dashboard) |
 | `src/components/MoneyDashboard.tsx` | Money page: Plaid connect, widgets, goals linked to accounts |
 | `server/plaid.ts` | `/api/plaid/*`: link token, exchange, sandbox test bank, dashboard data, disconnect |
@@ -65,4 +62,3 @@ Optional:
 **Formulas**
 - Weeks to goal = (goal − saved) ÷ weekly savings.
 - Delay = cost ÷ weekly savings × 7. This assumes the cost comes from savings.
-- Suggested study hours grow with the gap between readiness (confidence or latest quiz) and the target grade. It's a rough estimate, not a grade prediction.

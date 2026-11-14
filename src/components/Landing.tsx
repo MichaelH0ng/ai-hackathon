@@ -1,4 +1,4 @@
-import { ArrowRight, CalendarClock, Camera, GraduationCap, PiggyBank, ShoppingBag, Wallet } from "lucide-react";
+import { ArrowRight, CalendarClock, Camera, PiggyBank, ShoppingBag, Wallet } from "lucide-react";
 import { useMemo } from "react";
 import { formatMoney, goalPhrase, whatIfSpend } from "../lib/finance";
 import { assetsByInstitution, detectTransferIds, netWorthSeries, periodFlow, spendableCash, upcomingBills } from "../lib/money";
@@ -7,12 +7,11 @@ import type { Bank } from "../lib/useBank";
 import { AssetSplit } from "./AssetSplit";
 import { ConnectCard } from "./MoneyDashboard";
 import { NetWorthChart } from "./NetWorthChart";
-import type { PathKind } from "./PathCards";
 import { SavingsPlanner } from "./SavingsPlanner";
 
 /**
  * Home page = your money dashboard: net worth over time and where it's held.
- * Check a price (the photo feature) and Study sit alongside as add-ons.
+ * Check a price (the photo feature) sits alongside the savings dashboard.
  */
 export function Landing({
   bank,
@@ -21,7 +20,7 @@ export function Landing({
   onOpenGoal,
   onUpdateGoal,
   onMoney,
-  onPick,
+  onNewGoal,
   onDemo,
   onGoals,
   onCheck,
@@ -32,7 +31,7 @@ export function Landing({
   onOpenGoal: (id: string) => void;
   onUpdateGoal: (g: MoneyGoal) => void;
   onMoney: () => void;
-  onPick: (k: PathKind) => void;
+  onNewGoal: () => void;
   onDemo: () => void;
   onGoals: () => void;
   onCheck: () => void;
@@ -54,9 +53,8 @@ export function Landing({
       {moneyGoals.length > 0 && <SavingsPlanner goals={moneyGoals} onUpdate={onUpdateGoal} onOpen={onOpenGoal} />}
 
       <section aria-label="More in NorthStar" className="px-4 pb-14">
-        <div className="mx-auto grid max-w-6xl gap-4 sm:grid-cols-2">
-          <MoreCard icon={<PiggyBank className="h-5 w-5" />} tint="bg-emerald-100 text-emerald-700" title="Save for something" line="Set a goal and a weekly amount. Your finish date moves with every choice." cta={moneyGoals.length ? "Add another goal" : "Start a savings goal"} onClick={() => onPick("money")} />
-          <MoreCard icon={<GraduationCap className="h-5 w-5" />} tint="bg-amber-100 text-amber-700" title="Study smarter" line="A day-by-day exam plan, hard topics first, and what a movie night really costs." cta="Plan my studying" onClick={() => onPick("study")} />
+        <div className="mx-auto max-w-6xl">
+          <MoreCard icon={<PiggyBank className="h-5 w-5" />} tint="bg-emerald-100 text-emerald-700" title="Save for something" line="Set a goal and a weekly amount. Your finish date moves with every choice." cta={moneyGoals.length ? "Add another goal" : "Start a savings goal"} onClick={onNewGoal} />
         </div>
       </section>
 

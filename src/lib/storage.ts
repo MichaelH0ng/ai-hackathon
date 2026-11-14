@@ -1,6 +1,5 @@
 import { addDays, todayISO } from "./dates";
-import { replan } from "./study";
-import type { BankSnapshot, Decision, Goal, Profile, StudyGoal } from "./types";
+import type { BankSnapshot, Decision, Goal, Profile } from "./types";
 
 const KEY = "northstar:v1";
 const LEGACY_KEY = "tradeoff:v1";
@@ -19,8 +18,8 @@ export function loadState(): SavedState {
     const raw = localStorage.getItem(KEY) ?? localStorage.getItem(LEGACY_KEY);
     if (!raw) return EMPTY_STATE;
     const saved = { ...EMPTY_STATE, ...JSON.parse(raw) } as SavedState;
-    // Older versions had a food-budget goal type; drop it so the app doesn't trip over it.
-    return { ...saved, goals: saved.goals.filter((g) => g.kind === "money" || g.kind === "study") };
+    // Drop retired goal types when opening an older saved state.
+    return { ...saved, goals: saved.goals.filter((g) => g.kind === "money") };
   } catch {
     return EMPTY_STATE;
   }
@@ -41,31 +40,12 @@ function nextDec(day: number): string {
   return thisYear > t ? thisYear : `${year + 1}-12-${String(day).padStart(2, "0")}`;
 }
 
-/** The examples from the brainstorm: hoodie by Christmas, a stats exam, a $500 trip. */
+/** Safe demo goals for the NorthStar savings flow. */
 export function demoState(): SavedState {
-  const stats: StudyGoal = {
-    kind: "study",
-    id: "stats",
-    name: "Statistics exam",
-    examDate: addDays(todayISO(), 5),
-    confidence: 60,
-    targetGrade: "B",
-    hoursAvailable: 8,
-    quizScores: [],
-    activities: [],
-    plan: [],
-    topics: [
-      { name: "Hypothesis tests", difficulty: "hard" },
-      { name: "Probability", difficulty: "medium" },
-      { name: "Descriptive stats", difficulty: "easy" },
-    ],
-  };
-  stats.plan = replan(stats);
   return {
     profile: { hourlyWage: 18 },
     goals: [
       { kind: "money", id: "hoodie", name: "Hoodie", target: 150, saved: 60, weekly: 15, deadline: nextDec(25) },
-      stats,
       { kind: "money", id: "trip", name: "Spring break trip", target: 500, saved: 120, weekly: 25, deadline: addDays(todayISO(), 120) },
     ],
     history: [],

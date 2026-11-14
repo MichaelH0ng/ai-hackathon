@@ -1,8 +1,7 @@
 import { Camera } from "lucide-react";
-import { daysBetween, formatDate, todayISO } from "../lib/dates";
+import { formatDate } from "../lib/dates";
 import { formatMoney, formatWeeks, projectedDate, weeksToGoal } from "../lib/finance";
-import { freeHours, recommendedFor } from "../lib/study";
-import type { Decision, Goal, MoneyGoal, StudyGoal } from "../lib/types";
+import type { Decision, Goal, MoneyGoal } from "../lib/types";
 import { Button, Card, Progress } from "./ui";
 
 /** Home dashboard: every goal side by side, plus insights from the choices you've made. */
@@ -40,7 +39,7 @@ export function Home({
       <div className="grid gap-3 sm:grid-cols-2">
         {goals.map((g) => (
           <button key={g.id} onClick={() => onOpen(g.id)} className="rounded-2xl bg-white p-4 text-left shadow-sm ring-1 ring-stone-200 hover:ring-brand-500">
-            {g.kind === "money" ? <MoneySummary goal={g} /> : <StudySummary goal={g} />}
+            <MoneySummary goal={g} />
             <p className="mt-3 text-sm font-semibold text-brand-700">Open →</p>
           </button>
         ))}
@@ -71,26 +70,6 @@ function MoneySummary({ goal }: { goal: MoneyGoal }) {
   );
 }
 
-function StudySummary({ goal }: { goal: StudyGoal }) {
-  const planned = goal.plan.reduce((s, d) => s + d.hours, 0);
-  const done = goal.plan.filter((d) => d.done).reduce((s, d) => s + d.hours, 0);
-  const days = daysBetween(todayISO(), goal.examDate);
-  const todayPlan = goal.plan.find((d) => d.date === todayISO());
-  const tight = freeHours(goal) < recommendedFor(goal);
-  return (
-    <>
-      <p className="text-xs font-medium uppercase text-stone-500">📚 Studying</p>
-      <p className="text-lg font-bold text-stone-900">{goal.name}</p>
-      <div className="mt-2"><Progress value={planned ? done / planned : 0} /></div>
-      <p className="mt-1 text-sm text-stone-700">{done}h of {planned}h studied</p>
-      <p className={`text-sm ${tight ? "text-amber-800" : "text-stone-600"}`}>
-        {days < 0 ? "Exam passed" : days === 0 ? "Exam today" : `Exam in ${days} day${days === 1 ? "" : "s"}`}
-        {todayPlan && todayPlan.hours > 0 && !todayPlan.done && ` · ${todayPlan.hours}h today${todayPlan.topic ? `: ${todayPlan.topic}` : ""}`}
-      </p>
-    </>
-  );
-}
-
 /** Personalized habit insights from logged decisions. */
 function Insights({ history }: { history: Decision[] }) {
   if (!history.length) {
@@ -101,12 +80,9 @@ function Insights({ history }: { history: Decision[] }) {
       </Card>
     );
   }
-  const money = history.filter((d) => d.kind === "money");
-  const sooner = money.filter((d) => (d.effectDays ?? 0) > 0).reduce((s, d) => s + (d.effectDays ?? 0), 0);
-  const later = money.filter((d) => (d.effectDays ?? 0) < 0).reduce((s, d) => s - (d.effectDays ?? 0), 0);
-  const kept = money.filter((d) => (d.amount ?? 0) > 0).reduce((s, d) => s + (d.amount ?? 0), 0);
-  const studyUsed = history.filter((d) => d.kind === "study" && (d.hours ?? 0) < 0).reduce((s, d) => s - (d.hours ?? 0), 0);
-  const studyAdded = history.filter((d) => d.kind === "study" && (d.hours ?? 0) > 0).reduce((s, d) => s + (d.hours ?? 0), 0);
+  const sooner = history.filter((d) => (d.effectDays ?? 0) > 0).reduce((s, d) => s + (d.effectDays ?? 0), 0);
+  const later = history.filter((d) => (d.effectDays ?? 0) < 0).reduce((s, d) => s - (d.effectDays ?? 0), 0);
+  const kept = history.filter((d) => (d.amount ?? 0) > 0).reduce((s, d) => s + (d.amount ?? 0), 0);
 
   return (
     <Card>
@@ -121,23 +97,19 @@ function Insights({ history }: { history: Decision[] }) {
           <p className="text-xs text-amber-900">spent on things you chose</p>
         </div>
       </div>
-      {(kept > 0 || studyUsed > 0 || studyAdded > 0) && (
+      {kept > 0 && (
         <p className="mt-2 text-sm text-stone-700">
           {kept > 0 && <>You kept {formatMoney(kept)} by choosing alternatives. </>}
-          {studyAdded > 0 && <>You added {studyAdded}h of study. </>}
-          {studyUsed > 0 && <>You chose {studyUsed}h of fun over study, and your schedule adjusted. </>}
         </p>
       )}
       <ul className="mt-3 space-y-1 text-sm">
         {history.slice(-6).reverse().map((d) => (
           <li key={d.id} className="flex justify-between gap-2">
             <span className="text-stone-700">{d.label}</span>
-            <span className={`shrink-0 font-medium ${(d.effectDays ?? d.hours ?? 0) >= 0 ? "text-emerald-800" : "text-amber-800"}`}>
+            <span className={`shrink-0 font-medium ${(d.effectDays ?? 0) >= 0 ? "text-emerald-800" : "text-amber-800"}`}>
               {d.effectDays != null && d.effectDays !== 0
                 ? `${d.effectDays > 0 ? "−" : "+"}${Math.abs(Math.round(d.effectDays))}d`
-                : d.hours != null
-                  ? `${d.hours > 0 ? "+" : "−"}${Math.abs(d.hours)}h`
-                  : "on track"}
+                : "on track"}
             </span>
           </li>
         ))}

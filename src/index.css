@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* NorthStar design tokens — playful "clay" style: study purple + gains green. */
+/* NorthStar design tokens — playful "clay" style: bold purple + gains green. */
 @theme {
   --font-display: "Fredoka", ui-rounded, system-ui, sans-serif;
   --font-sans: "Nunito", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;

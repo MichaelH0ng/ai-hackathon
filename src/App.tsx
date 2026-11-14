@@ -5,28 +5,22 @@ import { MoneyGoalForm } from "./components/MoneyGoalForm";
 import { MoneyDashboard } from "./components/MoneyDashboard";
 import { MoneyGoalView } from "./components/MoneyGoalView";
 import type { LogDecision } from "./components/MoneyWhatIf";
-import { PathCards, type PathKind } from "./components/PathCards";
 import { PriceCheck } from "./components/PriceCheck";
 import { Settings } from "./components/Settings";
-import { StudyGoalForm } from "./components/StudyGoalForm";
-import { StudyGoalView } from "./components/StudyGoalView";
 import { TopNav } from "./components/TopNav";
 import { FinancialChat } from "./components/FinancialChat";
 import { AuroraBackground } from "./components/AuroraBackground";
-import { BackButton } from "./components/ui";
 import { todayISO } from "./lib/dates";
 import { EMPTY_STATE, type SavedState, demoState, loadState, saveState } from "./lib/storage";
 import type { Goal, MoneyGoal } from "./lib/types";
 import { spendableCash } from "./lib/money";
 import { useBank } from "./lib/useBank";
 
-// Three things: check a price, save for something, plan your studying.
+// Check a price, save for something, and understand your money.
 type Screen =
   | { name: "home" } // landing page
   | { name: "goals" } // dashboard
-  | { name: "new" } // pick a goal type
   | { name: "new-money" }
-  | { name: "new-study" }
   | { name: "goal"; id: string }
   | { name: "settings" }
   | { name: "check" } // snap a price tag / type a price
@@ -64,7 +58,6 @@ export default function App() {
   const moneyGoals = state.goals.filter((g): g is MoneyGoal => g.kind === "money");
   const goHome = () => setScreen({ name: "home" });
   const goGoals = () => setScreen(state.goals.length ? { name: "goals" } : { name: "home" });
-  const pick = (k: PathKind) => setScreen(k === "money" ? { name: "new-money" } : { name: "new-study" });
   const addGoal = (g: Goal) => {
     setState((s) => ({ ...s, goals: [...s.goals, g] }));
     setScreen({ name: "goal", id: g.id });
@@ -85,11 +78,10 @@ export default function App() {
           date: todayISO(),
           goalId: d.goalId ?? goal.id,
           goalName: d.goalName ?? goal.name,
-          kind: goal.kind === "study" ? "study" : "money",
+          kind: "money",
           label: d.label,
           effectDays: d.effectDays,
           amount: d.amount,
-          hours: d.hours,
         },
       ],
     }));
@@ -97,12 +89,12 @@ export default function App() {
     setState(demoState());
     setScreen({ name: "goals" });
   };
-  const back = () => setScreen(state.goals.length ? { name: "new" } : { name: "home" });
+  const back = goGoals;
 
   let body: React.ReactNode;
   switch (screen.name) {
     case "home":
-      body = <Landing onMoney={() => setScreen({ name: "money" })} goalCount={state.goals.length} onPick={pick} onDemo={loadDemo} onGoals={goGoals} onCheck={() => setScreen({ name: "check" })} moneyGoals={moneyGoals} bank={bank} onOpenGoal={(id) => setScreen({ name: "goal", id })} onUpdateGoal={updateGoal} />;
+      body = <Landing onMoney={() => setScreen({ name: "money" })} goalCount={state.goals.length} onNewGoal={() => setScreen({ name: "new-money" })} onDemo={loadDemo} onGoals={goGoals} onCheck={() => setScreen({ name: "check" })} moneyGoals={moneyGoals} bank={bank} onOpenGoal={(id) => setScreen({ name: "goal", id })} onUpdateGoal={updateGoal} />;
       break;
     case "money":
       body = (
@@ -128,27 +120,14 @@ export default function App() {
         />
       );
       break;
-    case "new":
-      body = (
-        <div>
-          <BackButton onClick={goGoals} label="My goals" />
-          <h1 className="mb-5 text-3xl font-bold text-ink">Add a goal</h1>
-          <PathCards onPick={pick} />
-        </div>
-      );
-      break;
     case "new-money":
       body = <MoneyGoalForm onCreate={addGoal} onBack={back} />;
-      break;
-    case "new-study":
-      body = <StudyGoalForm onCreate={addGoal} onBack={back} />;
       break;
     case "goal": {
       const g = state.goals.find((x) => x.id === screen.id);
       const common = { onDelete: () => g && deleteGoal(g.id), onBack: goGoals };
       if (!g) body = null;
-      else if (g.kind === "money") body = <MoneyGoalView goal={g} onChange={updateGoal} onLog={logFor(g)} {...common} />;
-      else body = <StudyGoalView goal={g} onChange={updateGoal} onLog={logFor(g)} {...common} />;
+      else body = <MoneyGoalView goal={g} onChange={updateGoal} onLog={logFor(g)} {...common} />;
       break;
     }
     case "settings":
@@ -166,7 +145,7 @@ export default function App() {
       );
       break;
     default:
-      body = <Home goals={state.goals} history={state.history} onOpen={(id) => setScreen({ name: "goal", id })} onNew={() => setScreen({ name: "new" })} onCheck={() => setScreen({ name: "check" })} />;
+      body = <Home goals={state.goals} history={state.history} onOpen={(id) => setScreen({ name: "goal", id })} onNew={() => setScreen({ name: "new-money" })} onCheck={() => setScreen({ name: "check" })} />;
   }
 
   const isLanding = screen.name === "home" || screen.name === "money"; // these render their own full-width layout
