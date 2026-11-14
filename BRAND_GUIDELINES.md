@@ -24,14 +24,16 @@ Use the NorthStar compass/star mark as the primary brand signature. Prefer it on
 | Aurora blue | Blue | `#74B9FF` | Core interface blue, charts, gradients |
 | Aurora violet | Violet | `#C294FF` | Gradient finish, investment accent |
 | Starlight | Primary text | `#EDF6FF` | Headings, balances, essential labels |
-| Moonlight | Secondary text | `#A8B9CF` | Supporting copy and metadata |
+| Moonlight | Secondary text | `#C0CDE0` | Supporting copy and metadata (brightened for contrast on cards) |
 | Star mint | Mint | `#54E2C2` | Glow, progress, sparing success accent |
 | Star sky | Sky | `#74B9FF` | Light/glow detail |
 | Star lavender | Lavender | `#C294FF` | Small star/gradient detail |
 | Positive | Green | `#138F83` | Gains, completed states, positive cash flow |
 | Caution | Amber | `#BD6F3A` | Delays, warning—not primary CTAs |
 
-**Signature gradient:** `linear-gradient(115deg, #168E90, #4B7FE0 60%, #9E64DF)`. Use it for one primary action or a hero/assistant accent per view, never as a full-page fill. Cards are translucent deep navy, separated with a subtle cool border—not white tiles.
+**Signature gradient:** `linear-gradient(115deg, #168E90, #4B7FE0 60%, #9E64DF)`. Use it for primary actions or a hero/assistant accent, never as a full-page fill.
+
+**Surfaces:** cards use a near-opaque navy gradient `linear-gradient(145deg, #13294A, #0C1B33)` with a cool border `rgb(160 198 244 / 26%)`. Rows, chips, and inner panels inside a card sit one step lighter at `rgb(148 192 243 / 9%)`. Cards should not be see-through: the aurora must never wash out text or numbers.
 
 ## Typography
 
@@ -47,16 +49,19 @@ Avoid all-caps paragraphs, decorative display fonts, and more than three type si
 
 ## Layout and components
 
-- Keep content roomy: 16px minimum edge spacing on mobile; 20–28px card padding on desktop.
+- Use the width: page content spans up to `1320px` (header included), with 32px side padding on desktop and 16px on mobile. Avoid narrow centered columns on wide screens.
+- Keep content roomy: 20–28px card padding on desktop.
 - Use a 8px spacing rhythm (8, 16, 24, 32).
-- The page canvas is Midnight. Cards are translucent deep navy with a subtle cool border/shadow and 12–16px rounded corners.
+- The page canvas is Midnight. Cards use the surface gradient above with a cool border, a soft shadow, and 12–16px rounded corners.
 - Buttons are clear verbs: one gradient/filled primary action, secondary actions as quiet outlined or text buttons.
-- Use `44px` minimum interactive height. The header stays compact, translucent white, and sticky.
+- Use `44px` minimum interactive height. The header stays compact, translucent Midnight, and sticky.
 - Numbers lead: put balances, goal progress, and due dates before explanatory copy.
 
 ## Graphics, charts, and imagery
 
-Use abstract aurora light, soft constellations, orbit paths, and simple geometric stars. Keep the background deep and low contrast so charts and account balances remain the focus. Prefer line/area charts with Aurora blue as the main series, violet as the comparison series, mint for achieved progress, and amber only for risk/delay.
+Use abstract aurora light, soft constellations, orbit paths, and simple geometric stars. Keep the background deep and low contrast so charts and account balances remain the focus. Prefer line/area charts with Aurora blue as the main series, violet as the comparison series, mint for achieved progress, and amber only for risk/delay. For categorical breakdowns (such as assets by institution) use, in order: violet `#C294FF`, mint `#54E2C2`, blue `#74B9FF`, amber `#FFB47A`, pink `#FF8FC7`, slate `#9FB0C8`.
+
+Keep the aurora background dim (about 55% opacity) so it reads as atmosphere, not as light behind the content.
 
 Do not use stock-money imagery, neon cyberpunk gradients, cluttered 3D renders, fake bank logos, or visual effects that make financial values harder to read.
 

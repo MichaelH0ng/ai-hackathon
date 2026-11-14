@@ -9,6 +9,7 @@ import { Settings } from "./components/Settings";
 import { TopNav, type NavPage } from "./components/TopNav";
 import SoftAurora from "./components/SoftAurora";
 import { todayISO } from "./lib/dates";
+import { applyTheme, savedTheme, type Theme } from "./lib/theme";
 import { EMPTY_STATE, type SavedState, demoState, loadState, saveState } from "./lib/storage";
 import type { Goal, MoneyGoal } from "./lib/types";
 import { spendableCash } from "./lib/money";
@@ -38,6 +39,8 @@ export default function App() {
   const [screen, setScreen] = useState<Screen>(() => screenForPage(pageFromHash()));
 
   const [dashboardTab, setDashboardTab] = useState<DashboardTab>(() => { const page = pageFromHash(); return isDashboardTab(page) ? page : "Overview"; });
+  const [theme, setTheme] = useState<Theme>(savedTheme);
+  useEffect(() => applyTheme(theme), [theme]);
   const bank = useBank();
   const navigate = (page: NavPage) => {
     if (isDashboardTab(page)) setDashboardTab(page);
@@ -175,6 +178,8 @@ export default function App() {
         <Settings
           profile={state.profile}
           onProfile={(p) => setState((s) => ({ ...s, profile: p }))}
+          theme={theme}
+          onTheme={setTheme}
           onDemo={loadDemo}
           onReset={() => {
             try { localStorage.removeItem("tradeoff:wealth:v1"); } catch { /* Storage can be blocked. */ }
@@ -211,7 +216,7 @@ export default function App() {
         layerOffset={0}
         clickPulse
         intro
-        lightMode={false}
+        lightMode={theme === "light"}
         className="soft-aurora-background"
       />
       <TopNav onNavigate={navigate} active={screen.name === "check" ? "Price check" : screen.name === "profile" ? "Profile" : screen.name === "goal" || screen.name === "new-money" ? "Goals" : screen.name === "settings" ? null : dashboardTab === "Activity" ? "Accounts" : dashboardTab} />
