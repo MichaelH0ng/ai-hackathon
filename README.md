@@ -2,6 +2,8 @@
 
 **Keep your financial goals in sight.**
 
+Design reference: [NorthStar Brand Guidelines](BRAND_GUIDELINES.md)
+
 NorthStar brings everyday accounts, savings plans, and spending choices into one beginner-friendly dashboard:
 
 1. **See your money.** Add accounts manually or connect through Plaid to review balances, holdings, net worth, cash flow, top spending, upcoming bills, and recent transactions.
