@@ -1,8 +1,6 @@
 import { useEffect, useState } from "react";
-import { Home } from "./components/Home";
-import { Landing } from "./components/Landing";
 import { MoneyGoalForm } from "./components/MoneyGoalForm";
-import { WealthDashboard } from "./components/WealthDashboard";
+import { WealthDashboard, type DashboardTab } from "./components/WealthDashboard";
 import { MoneyGoalView } from "./components/MoneyGoalView";
 import type { LogDecision } from "./components/MoneyWhatIf";
 import { PriceCheck } from "./components/PriceCheck";
@@ -27,8 +25,9 @@ type Screen =
 
 export default function App() {
   const [state, setState] = useState<SavedState>(loadState);
-  const [screen, setScreen] = useState<Screen>({ name: "home" });
+  const [screen, setScreen] = useState<Screen>({ name: "money" });
 
+  const [dashboardTab, setDashboardTab] = useState<DashboardTab>("Overview");
   const bank = useBank();
 
   useEffect(() => {
@@ -55,8 +54,8 @@ export default function App() {
   }, [screen]);
 
   const moneyGoals = state.goals.filter((g): g is MoneyGoal => g.kind === "money");
-  const goHome = () => setScreen({ name: "home" });
-  const goGoals = () => setScreen(state.goals.length ? { name: "goals" } : { name: "home" });
+  const goHome = () => { setDashboardTab("Overview"); setScreen({ name: "home" }); };
+  const goGoals = () => { setDashboardTab("Goals"); setScreen({ name: "money" }); };
   const addGoal = (g: Goal) => {
     setState((s) => ({ ...s, goals: [...s.goals, g] }));
     setScreen({ name: "goal", id: g.id });
@@ -65,7 +64,7 @@ export default function App() {
   const deleteGoal = (id: string) => {
     const goals = state.goals.filter((g) => g.id !== id);
     setState((s) => ({ ...s, goals }));
-    setScreen(goals.length ? { name: "goals" } : { name: "home" });
+    goGoals();
   };
   const logFor = (goal: Goal) => (d: LogDecision & { goalId?: string; goalName?: string }) =>
     setState((s) => ({
@@ -86,19 +85,22 @@ export default function App() {
     }));
   const loadDemo = () => {
     setState(demoState());
-    setScreen({ name: "goals" });
+    goGoals();
   };
   const back = goGoals;
 
   let body: React.ReactNode;
   switch (screen.name) {
     case "home":
-      body = <Landing onMoney={() => setScreen({ name: "money" })} goalCount={state.goals.length} onNewGoal={() => setScreen({ name: "new-money" })} onDemo={loadDemo} onGoals={goGoals} onCheck={() => setScreen({ name: "check" })} moneyGoals={moneyGoals} bank={bank} onOpenGoal={(id) => setScreen({ name: "goal", id })} onUpdateGoal={updateGoal} />;
-      break;
+    case "goals":
     case "money":
       body = (
         <WealthDashboard
           bank={bank}
+          selectedTab={dashboardTab}
+          onTabChange={setDashboardTab}
+          onCheck={() => setScreen({ name: "check" })}
+          onSettings={() => setScreen({ name: "settings" })}
           goals={moneyGoals}
           onUpdateGoal={updateGoal}
           onOpenGoal={(id) => setScreen({ name: "goal", id })}
@@ -138,17 +140,17 @@ export default function App() {
           onReset={() => {
             try { localStorage.removeItem("tradeoff:wealth:v1"); } catch { /* Storage can be blocked. */ }
             setState(EMPTY_STATE);
-            setScreen({ name: "home" });
+            goHome();
           }}
           onBack={goGoals}
         />
       );
       break;
     default:
-      body = <Home goals={state.goals} history={state.history} onOpen={(id) => setScreen({ name: "goal", id })} onNew={() => setScreen({ name: "new-money" })} onCheck={() => setScreen({ name: "check" })} />;
+      body = null;
   }
 
-  const isLanding = screen.name === "home" || screen.name === "money"; // these render their own full-width layout
+  const isLanding = screen.name === "home" || screen.name === "money" || screen.name === "goals"; // these render their own full-width layout
   return (
     <div className="relative min-h-dvh isolate">
       <SoftAurora
@@ -173,14 +175,11 @@ export default function App() {
         lightMode={false}
         className="soft-aurora-background"
       />
-      <TopNav
-        onHome={goHome}
-        onGoals={goGoals}
+      <TopNav onHome={goHome}
+        onMoney={() => { setDashboardTab("Overview"); setScreen({ name: "money" }); }}
+        onCheck={() => setScreen({ name: "check" })} onGoals={goGoals}
         onSettings={() => setScreen({ name: "settings" })}
-        onCheck={() => setScreen({ name: "check" })}
-        onMoney={() => setScreen({ name: "money" })}
-        goalCount={state.goals.length}
-        active={screen.name === "goals" ? "goals" : screen.name === "settings" ? "settings" : screen.name === "home" ? "home" : screen.name === "check" ? "check" : screen.name === "money" ? "money" : "other"}
+        active={screen.name === "settings" ? "settings" : screen.name === "check" ? "check" : screen.name === "goal" || screen.name === "new-money" || dashboardTab === "Goals" && (screen.name === "home" || screen.name === "money") ? "goals" : screen.name === "home" ? "home" : screen.name === "money" ? "money" : "other"}
       />
       {isLanding ? body : <main id="main" className="mx-auto max-w-md px-4 pb-16 pt-6 sm:max-w-2xl">{body}</main>}
     </div>
