@@ -16,7 +16,7 @@ export function Settings({
 }) {
   return (
     <div className="space-y-3">
-      <BackButton onClick={onBack} label="All goals" />
+      <BackButton onClick={onBack} />
       <Card>
         <h2 className="text-xl font-bold text-stone-900">Settings</h2>
         <div className="mt-4">
@@ -25,13 +25,13 @@ export function Settings({
             value={profile.hourlyWage ?? ""}
             onChange={(v) => onProfile({ hourlyWage: v === "" ? null : v })}
             suffix="/hr"
-            hint={`Adds "that's 67 minutes of work" to the money What-If.`}
+            hint={`Check a price will say "that's 2h 10m of work".`}
           />
         </div>
       </Card>
       <Card>
         <h3 className="font-bold text-stone-900">Demo</h3>
-        <p className="mb-3 text-sm text-stone-600">Loads the hoodie, stats exam, food budget and spring break examples. Replaces your current goals.</p>
+        <p className="mb-3 text-sm text-stone-600">Loads the hoodie, stats exam and spring break examples. Replaces your current goals.</p>
         <div className="grid grid-cols-2 gap-2">
           <Button variant="secondary" onClick={onDemo}>
             Load demo

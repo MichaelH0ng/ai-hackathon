@@ -2,6 +2,7 @@ import { useState } from "react";
 import { addDays, daysBetween, todayISO } from "../lib/dates";
 import { type Difficulty, type Grade, type Topic, recommendedHours, replan } from "../lib/study";
 import type { StudyGoal } from "../lib/types";
+import { PercentDial } from "./PercentDial";
 import { BackButton, Button, Card, Chip, DateField, NumberField, TextField } from "./ui";
 
 export function StudyGoalForm({ onCreate, onBack }: { onCreate: (g: StudyGoal) => void; onBack: () => void }) {
@@ -33,10 +34,13 @@ export function StudyGoalForm({ onCreate, onBack }: { onCreate: (g: StudyGoal) =
         <div className="mt-4 space-y-4">
           <TextField label="Subject" value={name} onChange={setName} placeholder="Statistics" />
           <DateField label="Exam date" value={examDate} onChange={setExamDate} min={addDays(todayISO(), 1)} />
-          <label className="block">
-            <span className="mb-1 block text-sm font-medium text-stone-700">Confidence level: {confidence}%</span>
-            <input type="range" min={0} max={100} step={5} value={confidence} onChange={(e) => setConfidence(Number(e.target.value))} className="w-full accent-brand-600" />
-          </label>
+          <div>
+            <span className="block text-sm font-medium text-stone-700">How ready do you feel right now?</span>
+            <div className="mt-1 flex flex-col items-center">
+              <PercentDial value={confidence} onChange={setConfidence} label="Ready" caption={() => `~${recommendedHours(grade, confidence)}h to study`} />
+              <p className="text-xs text-stone-500">Drag the dial. Less ready means more study hours.</p>
+            </div>
+          </div>
           <div>
             <span className="mb-1 block text-sm font-medium text-stone-700">Desired grade (or higher)</span>
             <div className="flex gap-2">

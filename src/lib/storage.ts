@@ -1,6 +1,6 @@
 import { addDays, todayISO } from "./dates";
 import { replan } from "./study";
-import type { Decision, Goal, Profile, StudyGoal } from "./types";
+import type { BankSnapshot, Decision, Goal, Profile, StudyGoal } from "./types";
 
 const KEY = "tradeoff:v1";
 
@@ -8,6 +8,7 @@ export interface SavedState {
   profile: Profile;
   goals: Goal[];
   history: Decision[];
+  bank?: BankSnapshot;
 }
 
 export const EMPTY_STATE: SavedState = { profile: { hourlyWage: null }, goals: [], history: [] };
@@ -15,7 +16,10 @@ export const EMPTY_STATE: SavedState = { profile: { hourlyWage: null }, goals: [
 export function loadState(): SavedState {
   try {
     const raw = localStorage.getItem(KEY);
-    return raw ? { ...EMPTY_STATE, ...JSON.parse(raw) } : EMPTY_STATE;
+    if (!raw) return EMPTY_STATE;
+    const saved = { ...EMPTY_STATE, ...JSON.parse(raw) } as SavedState;
+    // Older versions had a food-budget goal type; drop it so the app doesn't trip over it.
+    return { ...saved, goals: saved.goals.filter((g) => g.kind === "money" || g.kind === "study") };
   } catch {
     return EMPTY_STATE;
   }
@@ -36,7 +40,7 @@ function nextDec(day: number): string {
   return thisYear > t ? thisYear : `${year + 1}-12-${String(day).padStart(2, "0")}`;
 }
 
-/** The examples from the brainstorm: hoodie by Christmas, stats exam, $40 food budget, a $500 trip. */
+/** The examples from the brainstorm: hoodie by Christmas, a stats exam, a $500 trip. */
 export function demoState(): SavedState {
   const stats: StudyGoal = {
     kind: "study",
@@ -59,10 +63,9 @@ export function demoState(): SavedState {
   return {
     profile: { hourlyWage: 18 },
     goals: [
-      { kind: "money", id: "hoodie", name: "Hoodie", target: 150, saved: 60, weekly: 15, deadline: nextDec(25), risk: "low", certainty: 90 },
+      { kind: "money", id: "hoodie", name: "Hoodie", target: 150, saved: 60, weekly: 15, deadline: nextDec(25) },
       stats,
-      { kind: "food", id: "food", name: "Weekly food budget", weeklyBudget: 40, mealsPerWeek: 14, mealsOutPerWeek: 3, costPerMealOut: 15, swapPerWeek: 2, diets: [], linkedGoalId: "hoodie" },
-      { kind: "money", id: "trip", name: "Spring break trip", target: 500, saved: 120, weekly: 25, deadline: addDays(todayISO(), 120), risk: "low", certainty: 60 },
+      { kind: "money", id: "trip", name: "Spring break trip", target: 500, saved: 120, weekly: 25, deadline: addDays(todayISO(), 120) },
     ],
     history: [],
   };

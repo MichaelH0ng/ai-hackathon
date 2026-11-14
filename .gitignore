@@ -30,3 +30,6 @@ dist-ssr
 *api-key*
 *api_key*
 *.key
+
+# Saved Plaid bank connections (access tokens)
+server/data/

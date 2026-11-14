@@ -1,9 +1,8 @@
 import { Camera } from "lucide-react";
 import { daysBetween, formatDate, todayISO } from "../lib/dates";
 import { formatMoney, formatWeeks, projectedDate, weeksToGoal } from "../lib/finance";
-import { planGroceries, weeklySavings } from "../lib/grocery";
 import { freeHours, recommendedFor } from "../lib/study";
-import type { Decision, FoodGoal, Goal, MoneyGoal, StudyGoal } from "../lib/types";
+import type { Decision, Goal, MoneyGoal, StudyGoal } from "../lib/types";
 import { Button, Card, Progress } from "./ui";
 
 /** Home dashboard: every goal side by side, plus insights from the choices you've made. */
@@ -24,7 +23,7 @@ export function Home({
     <div className="space-y-4">
       <div>
         <h1 className="text-3xl font-bold text-ink">My goals</h1>
-        <p className="text-stone-600">Every goal side by side. Open one to test a choice.</p>
+        <p className="text-stone-600">Everything you're working toward, side by side.</p>
       </div>
 
       <button
@@ -41,8 +40,8 @@ export function Home({
       <div className="grid gap-3 sm:grid-cols-2">
         {goals.map((g) => (
           <button key={g.id} onClick={() => onOpen(g.id)} className="rounded-2xl bg-white p-4 text-left shadow-sm ring-1 ring-stone-200 hover:ring-brand-500">
-            {g.kind === "money" ? <MoneySummary goal={g} /> : g.kind === "study" ? <StudySummary goal={g} /> : <FoodSummary goal={g} />}
-            <p className="mt-3 text-sm font-semibold text-brand-700">Open · test a choice →</p>
+            {g.kind === "money" ? <MoneySummary goal={g} /> : <StudySummary goal={g} />}
+            <p className="mt-3 text-sm font-semibold text-brand-700">Open →</p>
           </button>
         ))}
       </div>
@@ -92,26 +91,13 @@ function StudySummary({ goal }: { goal: StudyGoal }) {
   );
 }
 
-function FoodSummary({ goal }: { goal: FoodGoal }) {
-  const plan = planGroceries(goal.weeklyBudget, goal.diets, goal.mealsPerWeek);
-  const savings = weeklySavings(goal.swapPerWeek, goal.costPerMealOut, plan.costPerMeal);
-  return (
-    <>
-      <p className="text-xs font-medium uppercase text-stone-500">🛒 Food budget</p>
-      <p className="text-lg font-bold text-stone-900">{formatMoney(goal.weeklyBudget)}/week</p>
-      <p className="mt-1 text-sm text-stone-700">{plan.meals} home meals at {formatMoney(plan.costPerMeal, true)} each</p>
-      <p className="text-sm text-stone-600">{savings > 0 ? `Cooking saves ${formatMoney(savings, true)}/week` : "Compare cooking vs eating out"}</p>
-    </>
-  );
-}
-
 /** Personalized habit insights from logged decisions. */
 function Insights({ history }: { history: Decision[] }) {
   if (!history.length) {
     return (
       <Card className="text-sm text-stone-600">
         <p className="font-semibold text-stone-900">Your choices</p>
-        Test a choice in any goal's "What if I…" and pick an option. Your tradeoffs will show up here.
+        Check a price and skip it, or buy it. Your choices will add up here.
       </Card>
     );
   }

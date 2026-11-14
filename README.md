@@ -2,9 +2,12 @@
 
 **See what today's choices cost tomorrow.**
 
-A personalized opportunity cost calculator for students. It combines budgeting, time management and what-if scenarios so every choice shows what it costs, or gains, toward your goals. It's a decision assistant, not a scolding budget coach.
+An opportunity cost app for students that does three things:
 
-> Set a Goal → Generate a Plan → Test a Decision → Calculate Opportunity Cost → Update the Timeline
+1. **Check a price.** Snap a price tag (or type the price) and see the hours of work, the days it adds to each savings goal, and a cheaper idea.
+2. **Save for something.** Set a goal and a weekly amount, then watch your finish date and the progress dial move with your choices.
+3. **See your money.** Connect a bank through Plaid to see net worth, cash flow, top spending, upcoming bills and recent transactions, each measured in days of your goals.
+4. **Study smarter.** Get a day-by-day exam plan with hard topics first, and see what a movie night really costs.
 
 ## Run it
 
@@ -13,61 +16,41 @@ npm install
 npm run dev              # app on http://localhost:5173 (+ API on :8787)
 ```
 
-On first visit, tap **Try the demo example** for the hoodie, stats exam, $40 food budget and spring break trip, or build your own goals.
+On the home page, tap **Try it with sample data** to load the hoodie, stats exam and spring break examples.
 
 Optional:
-- **AI features** (photo/cart scanning, meal ideas): `cp .env.example .env`, add an Anthropic API key, then restart. Everything else works without a key.
+- **Photo reading**: `cp .env.example .env`, add an Anthropic API key, then restart. Typed prices work without a key.
+- **Money dashboard (Plaid)**: add `PLAID_CLIENT_ID`, `PLAID_SECRET` and `PLAID_ENV=sandbox` to `.env`. On the Money page, tap **Use a test student bank** (made-up data you can edit in `server/sandboxStudent.ts`), or **Connect a bank** and sign in with `user_good` / `pass_good` for Plaid's own test data. Bank connections are saved in `server/data/` (git-ignored).
 - **On your phone** (same Wi-Fi): `npm run dev:phone` and open the "Network" URL.
 - **Tests**: `npm test`
 
-## Demo script
+## 30-second demo
 
-1. **Welcome**: "What are you working toward?" → **Saving for something**.
-2. **Set a goal**: New hoodie, $150 total, $60 saved, $15/week, 🎄 Christmas → **6.0 weeks**, 40% already saved.
-3. **What if I…** → 🍔 Eat out, $20.
-   - **Compare your options** timeline: A go out → Jan 4 (+9.3 days), B cook for $5 → +2.3 days, C avoid spending → no delay.
-   - Original **6.0** → new **7.3 weeks**.
-4. **Recommendation**: *"Going out to eat will delay your new hoodie goal by about 9 days. Cooking at home for $5 instead would reduce that delay to about 2 days. However, if spending time with friends is important to you, you can still choose dinner out and adjust your savings plan."*
-5. **Is it worth it to you?** Enjoyment, importance and urgency give **73/100, worth it for you**. Not every decision is purely financial.
-6. **Decide**: go and save $3.33 more/week to keep the date, accept the new date, cook instead, or skip.
-   - 🌱 **Make it a habit**: cook at home 2×/week → hoodie weeks sooner.
-7. **Study**: Statistics, exam in 5 days, 60% confident, at least a B, 8 hours, topics.
-   - ~7h schedule, hardest topics first, last day is review.
-   - 🎬 Movie 2h → 6h left and what to reschedule.
-   - Practice quiz → hours go up or down.
-   - The app never promises a grade.
-8. **Food budget**: $40/week → cheapest balanced grocery list, cost per meal vs $15 eating out.
-   - Swap 2 meals out → savings/week → "hoodie 29 days sooner" → add it to the hoodie plan.
-9. **Home**: all goals side by side, plus **Your choices** (days gained toward goals, money kept, study tradeoffs).
-
-## Features (mapped to the brainstorm)
-
-| Brainstorm | In the app |
-|---|---|
-| 1. Smart goal planner | Money, exam and food-budget goals, each with a personalized plan |
-| 2. Opportunity cost calculator | What-If for purchases (presets, custom, 📷 scan) and for time (movie, friends, shift, extra study hour) |
-| 3. Interactive progress dashboard | Progress bars, a visual timeline comparing options against your date, a multi-goal home screen |
-| 4. Confidence-based planning | Exam confidence and quiz scores set study hours; "how sure are you that you want it?" suggests a waiting period when unsure |
-| 5. Grocery vs eating out | Weekly budget → cheapest balanced grocery list (diet filters), cost per meal, savings, effect on goals, ✨ AI meal ideas |
-| 6. Decision score | Score from money cost, enjoyment, importance, urgency and goal confidence, with reasons |
-| 7. Positive opportunity cost | "Cook at home instead" gains, plus "Make it a habit" showing cumulative weekly and monthly savings and days sooner |
-| 8. Adaptive recommendations | Behind your date → one tap updates your weekly savings; spending → "save $X more/week to keep my date" |
-| Priority 3: AI recommendations, habit insights, multiple goals | AI scan and meal ideas, a "Your choices" log, side-by-side goals |
-| Extra | Hours of work (set pay in ⚙️ Settings); "where could this money grow?" for longer goals (educational only) |
+1. **Home**: tap **Try it with sample data**. In "How much can you save this week?", turn the dial from $15 to $30. The hoodie moves 21 days sooner and is on time for Christmas. Tap **Save $30/week to my plan**.
+2. **Check a price**: take a photo of a price tag, or type AirPods for $129.
+   - It shows 7h 10m of work, the hoodie arriving 60 days later and the trip 36 days later.
+   - Tap **Skip it and keep $129**.
+3. **Hoodie goal**: in "What if I buy something?", enter dinner out for $20 and cook at home for $5.
+   - Dinner out adds 9.3 days and cooking adds 2.3 days.
+   - Tap **Get cook at home instead**.
+4. **Statistics exam**: a 5-day plan with hard topics first. Turn the quiz dial to 90% and suggested study drops from 7h to 2.5h. Add a 2h movie and the schedule adjusts. The app never promises a grade.
 
 ## Code map
 
 | | |
 |---|---|
-| `src/lib/finance.ts` | Weeks to goal, what-if delay, keep-my-date amount, habit impact, decision score, certainty advice, recommendation text, growth |
-| `src/lib/study.ts` | Suggested hours, schedule, topic prioritization, replanning, activity what-if |
-| `src/lib/grocery.ts` | Grocery catalog (estimated prices) + meal-maximizing planner |
-| `src/lib/storage.ts` | Browser storage (localStorage) + demo data |
-| `src/components/` | `Welcome`, `Home`, `Money*`, `Study*`, `Food*`, `Timeline`, `PriceScanner`, `Settings`, `ui` |
-| `server/index.ts` | `/api/scan` (image → prices + cheaper option) and `/api/meals` (grocery list → meal ideas), via Claude |
+| `src/lib/finance.ts` | Weeks to goal, what-if delay, deadline amount, recommendation text, hours of work |
+| `src/lib/study.ts` | Suggested hours, schedule, topic order, replanning, activity what-if |
+| `src/lib/storage.ts` | Browser storage (localStorage) + sample data |
+| `src/components/Landing.tsx` | Home page: hero, `SavingsPlanner` (weekly-savings `CometDial`), three feature cards |
+| `src/components/PriceCheck.tsx` | Photo or typed price → hours of work, delay per goal, skip / cheaper / buy |
+| `src/components/Money*.tsx`, `Study*.tsx` | Goal forms and goal pages |
+| `src/lib/money.ts` | Net worth, cash flow, top categories, upcoming bills, transfer detection (ported from money-dashboard) |
+| `src/components/MoneyDashboard.tsx` | Money page: Plaid connect, widgets, goals linked to accounts |
+| `server/plaid.ts` | `/api/plaid/*`: link token, exchange, sandbox test bank, dashboard data, disconnect |
+| `server/index.ts` | `/api/scan`: image → item, price and a cheaper option, via Claude |
 
 **Formulas**
 - Weeks to goal = (goal − saved) ÷ weekly savings.
 - Delay = cost ÷ weekly savings × 7. This assumes the cost comes from savings.
-- Suggested study hours grow with the gap between readiness (confidence or latest quiz) and target grade. It's a rough estimate, not a grade prediction.
-- A grocery meal is one carb, one protein and one produce serving. The planner buys the cheapest serving in whichever category is lowest.
+- Suggested study hours grow with the gap between readiness (confidence or latest quiz) and the target grade. It's a rough estimate, not a grade prediction.

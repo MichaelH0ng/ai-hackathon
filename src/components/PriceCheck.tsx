@@ -1,10 +1,20 @@
-import { Camera, Clock, ImageUp, Lightbulb, PiggyBank, RotateCcw, Tag } from "lucide-react";
+import { Camera, Clock, ImageUp, Lightbulb, PiggyBank, RotateCcw, Tag, Wallet } from "lucide-react";
 import { useRef, useState } from "react";
 import { formatMoney, hoursOfWork, whatIfSpend } from "../lib/finance";
-import type { MoneyGoal, Profile } from "../lib/types";
+import type { BankSnapshot, MoneyGoal, Profile } from "../lib/types";
 import { type LogDecision, MoneyWhatIf, type WhatIfItem } from "./MoneyWhatIf";
-import { toJpegDataUrl } from "./PriceScanner";
 import { Button, Card, NumberField, Notice, TextField } from "./ui";
+
+/** Shrink photos before upload: faster, cheaper, and converts HEIC to JPEG in Safari. */
+async function toJpegDataUrl(file: File, maxSide = 1568): Promise<string> {
+  const bitmap = await createImageBitmap(file);
+  const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(bitmap.width * scale);
+  canvas.height = Math.round(bitmap.height * scale);
+  canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+  return canvas.toDataURL("image/jpeg", 0.85);
+}
 
 interface ScanResponse {
   kind: "single_item" | "cart" | "no_price_found";
@@ -27,6 +37,7 @@ interface Checked extends WhatIfItem {
 export function PriceCheck({
   moneyGoals,
   profile,
+  bank,
   onUpdateGoal,
   onLog,
   onNewGoal,
@@ -34,6 +45,7 @@ export function PriceCheck({
 }: {
   moneyGoals: MoneyGoal[];
   profile: Profile;
+  bank?: BankSnapshot;
   onUpdateGoal: (g: MoneyGoal) => void;
   onLog: (goal: MoneyGoal, d: LogDecision) => void;
   onNewGoal: () => void;
@@ -233,6 +245,15 @@ export function PriceCheck({
                 </div>
               )}
             </div>
+            {bank && (
+              <div className="mt-2 flex items-center gap-3 rounded-2xl bg-sky-50 p-3">
+                <Wallet className="h-5 w-5 shrink-0 text-sky-600" aria-hidden="true" />
+                <p className="text-sm text-stone-700">
+                  Your cash: <strong>{formatMoney(bank.cash)}</strong> → <strong className={bank.cash - item.price < 0 ? "text-red-700" : ""}>{formatMoney(bank.cash - item.price)}</strong> after this
+                  {bank.cash - item.price < 0 ? ". That's more than you have in checking and savings." : "."}
+                </p>
+              </div>
+            )}
             {item.note && <p className="mt-2 text-xs text-stone-500">{item.note}</p>}
           </Card>
 
@@ -256,7 +277,7 @@ export function PriceCheck({
             <>
               <Card>
                 <h3 className="text-lg font-bold text-ink">What it costs your goals</h3>
-                <p className="text-sm text-stone-600">If this comes out of your savings. Tap a goal to dig in.</p>
+                <p className="text-sm text-stone-600">How much later each goal arrives if you buy it. Tap one to decide.</p>
                 <ul className="mt-3 space-y-2" role="radiogroup" aria-label="Choose a goal">
                   {moneyGoals.map((g) => {
                     const w = whatIfSpend(g.target, g.saved, g.weekly, item.price);
@@ -287,9 +308,8 @@ export function PriceCheck({
                 <MoneyWhatIf
                   key={`${goal.id}-${version}`}
                   goal={goal}
-                  profile={profile}
                   initial={item}
-                  hidePresets
+                  hideInputs
                   onApply={(changes, msg, decision) => {
                     onUpdateGoal({ ...goal, ...changes });
                     if (decision) onLog(goal, decision);

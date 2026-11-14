@@ -1,5 +1,3 @@
-import type { Risk } from "./finance";
-import type { Diet } from "./grocery";
 import type { Grade, PlanDay, StudyActivity, Topic } from "./study";
 
 export interface MoneyGoal {
@@ -10,8 +8,7 @@ export interface MoneyGoal {
   saved: number;
   weekly: number; // what the user can save each week
   deadline?: string; // YYYY-MM-DD, optional "I want it by"
-  risk: Risk;
-  certainty?: number; // 0–100: how sure they are they want it (default 100)
+  linkedAccountId?: string; // Plaid account whose balance counts as "saved"
 }
 
 export interface StudyGoal {
@@ -28,21 +25,13 @@ export interface StudyGoal {
   topics?: Topic[];
 }
 
-export interface FoodGoal {
-  kind: "food";
-  id: string;
-  name: string;
-  weeklyBudget: number; // grocery budget per week
-  mealsPerWeek: number; // home meals to cover
-  mealsOutPerWeek: number; // how often they eat out now
-  costPerMealOut: number;
-  swapPerWeek: number; // meals out they'd swap for cooking
-  diets: Diet[];
-  linkedGoalId?: string; // money goal the savings go to
-  appliedPerWeek?: number; // savings already added to that goal's weekly plan
-}
+export type Goal = MoneyGoal | StudyGoal;
 
-export type Goal = MoneyGoal | StudyGoal | FoodGoal;
+/** Last numbers pulled from the connected bank, so other screens can use them. */
+export interface BankSnapshot {
+  cash: number; // checking + savings you could spend
+  fetchedAt: string;
+}
 
 export interface Profile {
   hourlyWage: number | null; // optional: lets us say "that's 48 minutes of work"
@@ -54,7 +43,7 @@ export interface Decision {
   date: string; // YYYY-MM-DD
   goalId: string;
   goalName: string;
-  label: string; // "Cooked at home instead of going out to eat"
+  label: string; // "Skipped AirPods"
   kind: "money" | "study";
   effectDays?: number; // + = goal sooner, − = goal later (money)
   amount?: number; // money kept (+) or spent (−)

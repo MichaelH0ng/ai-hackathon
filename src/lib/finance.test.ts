@@ -1,18 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   formatWeeks,
-  futureValue,
-  certaintyAdvice,
-  decisionScore,
   goalPhrase,
-  habitImpact,
   hoursOfWork,
-  monthlyNeeded,
-  monthsUntil,
   projectedDate,
-  projectedValue,
   recommendation,
-  requiredRate,
   weeklyNeededForDeadline,
   weeklyToKeepDate,
   weeksToGoal,
@@ -79,62 +71,9 @@ describe("hours of work", () => {
   });
 });
 
-describe("growth math", () => {
-  it("$2000 in 12 months at 0% and 5%", () => {
-    expect(monthlyNeeded(2000, 0, 12, 0)).toBeCloseTo(166.67, 2);
-    expect(monthlyNeeded(2000, 0, 12, 0.05)).toBeCloseTo(162.9, 1);
-  });
-  it("round-trips with projectedValue", () => {
-    const m = monthlyNeeded(10_000, 1_000, 36, 0.06);
-    expect(projectedValue(1_000, m, 36, 0.06)).toBeCloseTo(10_000, 4);
-  });
-  it("requiredRate finds the rate, or null when unreachable", () => {
-    expect(requiredRate(1200, 0, 100, 12)).toBe(0);
-    const r = requiredRate(10_000, 1_000, 220, 36)!;
-    expect(projectedValue(1_000, 220, 36, r)).toBeCloseTo(10_000, 2);
-    expect(requiredRate(1_000_000, 0, 10, 12)).toBeNull();
-  });
-  it("futureValue and monthsUntil", () => {
-    expect(futureValue(100, 10, 0.07)).toBeCloseTo(196.72, 2);
-    expect(monthsUntil("2027-11-13", new Date("2026-11-13T12:00:00"))).toBeCloseTo(12, 0);
-  });
-});
-
 describe("goalPhrase", () => {
   it("drops leading articles so sentences read naturally", () => {
     expect(goalPhrase("A new hoodie")).toBe("new hoodie");
     expect(goalPhrase("Hoodie")).toBe("hoodie");
-  });
-});
-
-describe("positive opportunity cost", () => {
-  it("cooking 2x/week instead of $20 meals ($30/week more) gets the hoodie much sooner", () => {
-    const h = habitImpact(150, 60, 15, 30);
-    expect(h.before).toBeCloseTo(6, 5);
-    expect(h.after).toBeCloseTo(2, 5);
-    expect(h.daysSooner).toBeCloseTo(28, 5);
-  });
-});
-
-describe("decision score", () => {
-  it("dinner with friends can still be worth it", () => {
-    const s = decisionScore({ delayDays: 9.33, goalWeeks: 6, enjoyment: 5, importance: 4, urgency: 3, goalCertainty: 80 });
-    expect(s.score).toBeGreaterThanOrEqual(70);
-    expect(s.verdict).toBe("Worth it for you");
-  });
-  it("a low-value purchase scores lower", () => {
-    const s = decisionScore({ delayDays: 9.33, goalWeeks: 6, enjoyment: 2, importance: 1, urgency: 1, goalCertainty: 90 });
-    expect(s.score).toBeLessThan(45);
-  });
-  it("no delay never hurts the score", () => {
-    expect(decisionScore({ delayDays: 0, goalWeeks: 6, enjoyment: 3, importance: 3, urgency: 3, goalCertainty: 100 }).score).toBe(75);
-  });
-});
-
-describe("certaintyAdvice", () => {
-  it("suggests waiting when unsure", () => {
-    expect(certaintyAdvice(90)).toBeNull();
-    expect(certaintyAdvice(50)).toMatch(/wait a week/);
-    expect(certaintyAdvice(20)).toMatch(/30 days/);
   });
 });

@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { daysBetween, formatWeekday, todayISO } from "../lib/dates";
-import { freeHours, recommendedFor, replan, whatIfActivity, type StudyActivity } from "../lib/study";
+import { freeHours, readiness, recommendedFor, replan, whatIfActivity, type StudyActivity } from "../lib/study";
 import type { StudyGoal } from "../lib/types";
 import type { LogDecision } from "./MoneyWhatIf";
+import { PercentDial } from "./PercentDial";
 import { BackButton, Button, Card, Chip, NumberField, Notice, Progress, Stat, TextField } from "./ui";
 
 interface ActivityPreset {
@@ -39,7 +40,8 @@ export function StudyGoalView({
   const today = todayISO();
   const upcoming = goal.plan.filter((d) => d.date >= today);
   const [message, setMessage] = useState<string | null>(null);
-  const [quiz, setQuiz] = useState<number | "">("");
+  const [quiz, setQuiz] = useState<number>(() => readiness(goal.confidence, goal.quizScores));
+  const [quizTouched, setQuizTouched] = useState(false);
   const [act, setAct] = useState<ActivityPreset>(PRESETS[0]);
   const [actDay, setActDay] = useState(upcoming[0]?.date ?? today);
 
@@ -133,29 +135,46 @@ export function StudyGoalView({
       {!examOver && (
         <Card>
           <h3 className="text-lg font-bold text-stone-900">Took a practice quiz?</h3>
-          <p className="text-sm text-stone-600">Enter your score and we'll adjust your study hours.</p>
-          <div className="mt-3 grid grid-cols-[1fr_auto] items-end gap-2">
-            <NumberField label="Score" value={quiz} onChange={setQuiz} prefix="" suffix="%" />
-            <Button
-              disabled={quiz === "" || quiz > 100}
-              onClick={() => {
-                const before = rec;
-                const next = { ...goal, quizScores: [...goal.quizScores, Number(quiz)] };
-                const after = recommendedFor(next);
-                update(
-                  { ...next, plan: replan(next) },
-                  after === before
-                    ? `Got it. ${quiz}% keeps your suggested study at ${h(after)}.`
-                    : after < before
-                      ? `Nice work! Based on your ${quiz}% quiz, suggested study went from ${h(before)} to ${h(after)}. That's ${h(before - after)} back for other things.`
-                      : `Based on your ${quiz}% quiz, suggested study went from ${h(before)} to ${h(after)}. Your schedule is updated.`,
-                );
-                setQuiz("");
+          <p className="text-sm text-stone-600">Turn the dial to your score. Your study hours adjust as you drag.</p>
+          <div className="mt-2 flex flex-col items-center">
+            <PercentDial
+              value={quiz}
+              onChange={(v) => {
+                setQuiz(v);
+                setQuizTouched(true);
               }}
-            >
-              Update plan
-            </Button>
+              label="Quiz score"
+              caption={(v) => `~${h(recommendedFor({ ...goal, quizScores: [...goal.quizScores, Math.round(v / 5) * 5] }))} to study`}
+            />
           </div>
+          {quizTouched && (() => {
+            const after = recommendedFor({ ...goal, quizScores: [...goal.quizScores, quiz] });
+            return (
+              <p className="mt-1 text-center text-sm text-stone-700" aria-live="polite">
+                Suggested study: {h(rec)} → <strong className={after < rec ? "text-emerald-700" : after > rec ? "text-amber-700" : ""}>{h(after)}</strong>
+              </p>
+            );
+          })()}
+          <Button
+            className="mt-3 w-full"
+            disabled={!quizTouched}
+            onClick={() => {
+              const before = rec;
+              const next = { ...goal, quizScores: [...goal.quizScores, quiz] };
+              const after = recommendedFor(next);
+              update(
+                { ...next, plan: replan(next) },
+                after === before
+                  ? `Got it. ${quiz}% keeps your suggested study at ${h(after)}.`
+                  : after < before
+                    ? `Nice work! Based on your ${quiz}% quiz, suggested study went from ${h(before)} to ${h(after)}. That's ${h(before - after)} back for other things.`
+                    : `Based on your ${quiz}% quiz, suggested study went from ${h(before)} to ${h(after)}. Your schedule is updated.`,
+              );
+              setQuizTouched(false);
+            }}
+          >
+            Save {quiz}% and update my plan
+          </Button>
           {goal.quizScores.length > 0 && <p className="mt-2 text-xs text-stone-500">Past quizzes: {goal.quizScores.map((s) => `${s}%`).join(", ")}</p>}
         </Card>
       )}

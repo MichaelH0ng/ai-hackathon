@@ -1,0 +1,98 @@
+import { describe, expect, it } from "vitest";
+import { type BankAccount, type BankTransaction, assetsByInstitution, detectTransferIds, netWorth, netWorthSeries, periodFlow, spendableCash, topCategories, upcomingBills } from "./money";
+
+const acct = (p: Partial<BankAccount>): BankAccount => ({ id: "a", name: "A", mask: null, type: "depository", subtype: "checking", current: 0, available: null, institution: "Bank", ...p });
+let n = 0;
+const tx = (p: Partial<BankTransaction>): BankTransaction => ({ id: `t${n++}`, accountId: "chk", date: "2026-11-10", name: "X", amount: 10, category: "FOOD_AND_DRINK", pending: false, ...p });
+const NOW = new Date(2026, 10, 14); // Nov 14, 2026 (a Saturday)
+
+describe("net worth", () => {
+  it("subtracts credit cards and loans", () => {
+    const r = netWorth([acct({ current: 1000 }), acct({ type: "credit", current: 300 }), acct({ type: "loan", current: 200 }), acct({ type: "investment", current: 500 })]);
+    expect(r).toEqual({ assets: 1500, debts: 500, net: 1000 });
+  });
+  it("spendable cash is checking + savings, preferring available", () => {
+    expect(spendableCash([acct({ current: 110, available: 100 }), acct({ subtype: "savings", current: 210 }), acct({ subtype: "cd", current: 1000 })])).toBe(310);
+  });
+});
+
+describe("transfers", () => {
+  it("pairs opposite amounts on different accounts within 3 days", () => {
+    const a = tx({ accountId: "chk", amount: 500, date: "2026-11-01", category: "GENERAL_MERCHANDISE" });
+    const b = tx({ accountId: "sav", amount: -500, date: "2026-11-02", category: "INCOME" });
+    const c = tx({ accountId: "chk", amount: 500, date: "2026-11-20" });
+    const ids = detectTransferIds([a, b, c]);
+    expect(ids.has(a.id) && ids.has(b.id)).toBe(true);
+    expect(ids.has(c.id)).toBe(false);
+  });
+});
+
+describe("cash flow", () => {
+  it("splits this month and last month, skipping transfers and loan payments", () => {
+    const txs = [
+      tx({ date: "2026-11-03", amount: 40 }),
+      tx({ date: "2026-11-05", amount: -1000, category: "INCOME" }),
+      tx({ date: "2026-11-06", amount: 25, category: "LOAN_PAYMENTS" }),
+      tx({ date: "2026-10-20", amount: 60 }),
+      tx({ date: "2026-09-20", amount: 999 }),
+    ];
+    const f = periodFlow(txs, new Set(), "month", NOW);
+    expect(f.current).toEqual({ in: 1000, out: 40 });
+    expect(f.previous).toEqual({ in: 0, out: 60 });
+  });
+});
+
+describe("top categories", () => {
+  it("totals the last 30 days of spending, biggest first", () => {
+    const r = topCategories([tx({ amount: 20 }), tx({ amount: 30 }), tx({ amount: 80, category: "TRAVEL" }), tx({ amount: 500, date: "2026-09-01" })], new Set(), 30, NOW);
+    expect(r.map((c) => [c.label, c.value])).toEqual([["Travel", 80], ["Food & drink", 50]]);
+  });
+});
+
+describe("upcoming bills", () => {
+  it("finds a monthly charge and projects the next date", () => {
+    const txs = ["2026-08-15", "2026-09-15", "2026-10-15"].map((date) => tx({ name: "Spotify", amount: 11.99, date }));
+    const [bill] = upcomingBills(txs, new Set(), NOW);
+    expect(bill.name).toBe("Spotify");
+    expect(bill.cadence).toBe("Monthly");
+    expect(bill.nextDue >= "2026-11-14" && bill.nextDue <= "2026-11-16").toBe(true);
+  });
+  it("ignores irregular amounts", () => {
+    const txs = [tx({ name: "Shop", amount: 10, date: "2026-10-01" }), tx({ name: "Shop", amount: 90, date: "2026-11-01" })];
+    expect(upcomingBills(txs, new Set(), NOW)).toEqual([]);
+  });
+});
+
+describe("net worth over time", () => {
+  it("walks backward from today's balance, skipping transfers", () => {
+    const accounts = [acct({ current: 1000 })];
+    const txs = [
+      tx({ date: "2026-11-13", amount: 50 }), // spent 50 yesterday
+      tx({ date: "2026-11-12", amount: -400, category: "INCOME" }), // paid 400 two days ago
+      tx({ date: "2026-11-12", amount: 100, category: "TRANSFER_OUT" }), // ignored
+    ];
+    const s = netWorthSeries(accounts, txs, 3, NOW);
+    expect(s.map((p) => [p.date, p.value])).toEqual([
+      ["2026-11-11", 650],
+      ["2026-11-12", 1050],
+      ["2026-11-13", 1000],
+      ["2026-11-14", 1000],
+    ]);
+  });
+});
+
+describe("assets by institution", () => {
+  it("groups assets by bank or brokerage and ignores debts", () => {
+    const r = assetsByInstitution([
+      acct({ institution: "Campus Bank (test)", current: 700 }),
+      acct({ institution: "Campus Bank (test)", type: "credit", current: 200 }),
+      acct({ institution: "Summit Investing (test)", type: "investment", current: 2100 }),
+      acct({ institution: "Sunrise (test)", subtype: "savings", current: 200 }),
+    ]);
+    expect(r.map((x) => [x.name, x.kind, x.value, Math.round(x.pct)])).toEqual([
+      ["Summit Investing", "Brokerage", 2100, 70],
+      ["Campus Bank", "Bank", 700, 23],
+      ["Sunrise", "Bank", 200, 7],
+    ]);
+  });
+});
