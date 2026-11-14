@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { answerMoneyQuestion, type MoneyAssistantContext } from "./moneyAssistant";
+import type { AssistantTurn } from "./investingConversation";
 
 const context: MoneyAssistantContext = {
   accounts: [{ name: "Everyday checking", kind: "Checking", balance: 1200, isDebt: false }],
@@ -16,6 +17,52 @@ const context: MoneyAssistantContext = {
 };
 
 describe("on-device money assistant", () => {
+  it("uses short follow-up replies and asks only for missing investing details", () => {
+    const history: AssistantTurn[] = [];
+    const ask = (question: string) => {
+      const answer = answerMoneyQuestion(question, context, history);
+      history.push({ role: "user", text: question }, { role: "assistant", text: answer });
+      return answer;
+    };
+    ask("How do I start investing?");
+    expect(ask("10 years")).toContain("You said you need the money in 10 years");
+    const answer = ask("I would hold");
+    expect(answer).toContain("10 years");
+    expect(answer).toContain("stay invested");
+    expect(answer).not.toContain("How would you react");
+  });
+
+  it("clarifies ambiguous replies, accepts corrections, and allows topic changes", () => {
+    const history: AssistantTurn[] = [
+      { role: "user", text: "How should I diversify?" },
+      { role: "assistant", text: answerMoneyQuestion("How should I diversify?", context) },
+    ];
+    const unclear = answerMoneyQuestion("yes", context, history);
+    expect(unclear).toContain("not sure");
+    history.push({ role: "user", text: "yes" }, { role: "assistant", text: unclear });
+    const answer = answerMoneyQuestion("6 months", context, history);
+    expect(answer).toContain("near-term");
+    history.push({ role: "user", text: "6 months" }, { role: "assistant", text: answer });
+    expect(answerMoneyQuestion("Actually 10 years", context, history)).toContain("10 years");
+    expect(answerMoneyQuestion("What is my net worth?", context, history)).toContain("$1,000.00");
+    expect(answerMoneyQuestion("What is an HSA?", context, history)).toContain("HSA:");
+  });
+  it("compares retirement accounts before generic account and investing handlers", () => {
+    const answer = answerMoneyQuestion("Compare Roth IRA vs traditional IRA for investing", context);
+    expect(answer).toContain("Traditional IRA:");
+    expect(answer).toContain("Roth IRA:");
+    expect(answerMoneyQuestion("Explain Roth 401(k)", context)).toContain("401(k):");
+    expect(answerMoneyQuestion("Explain Roth 401(k)", context)).not.toContain("Roth IRA:");
+    expect(answerMoneyQuestion("How much is in checking?", context)).toContain("$1,200.00");
+  });
+
+  it("covers health and education accounts and handles unverified annual limits", () => {
+    expect(answerMoneyQuestion("HSA vs FSA", context)).toContain("Unused funds are generally forfeited");
+    expect(answerMoneyQuestion("What is a 529?", context)).toContain("not federally deductible");
+    expect(answerMoneyQuestion("What is my IRA contribution limit?", context)).toContain("don’t have a live tax-rule lookup");
+    const overview = answerMoneyQuestion("Explain different retirement and tax-benefit accounts", context);
+    for (const label of ["401(k):", "403(b):", "457(b):", "HSA:", "529 plan:"]) expect(overview).toContain(label);
+  });
   it("answers questions using dashboard balances and goals", () => {
     expect(answerMoneyQuestion("What is my net worth?", context)).toContain("$1,000.00");
     expect(answerMoneyQuestion("How are my goals doing?", context)).toContain("Emergency fund");
@@ -30,5 +77,17 @@ describe("on-device money assistant", () => {
   it("explains common terms and answers investment questions", () => {
     expect(answerMoneyQuestion("What is a Roth IRA?", context)).toContain("after-tax money");
     expect(answerMoneyQuestion("How much is my portfolio worth?", context)).toContain("no brokerage or retirement accounts");
+  });
+
+  it("prioritizes investing guidance over savings lookups and uses budget context", () => {
+    expect(answerMoneyQuestion("How should I invest my savings?", context)).toContain("$1,000.00");
+    expect(answerMoneyQuestion("How do I start investing?", { ...context, monthlyIncome: 0 })).toContain("Add income and expenses");
+    expect(answerMoneyQuestion("How do I start investing?", { ...context, monthlyExpenses: 4000 })).toContain("Review that shortfall");
+  });
+
+  it("explains investment risks without inventing security recommendations", () => {
+    expect(answerMoneyQuestion("How should I diversify?", context)).toContain("can also lose value");
+    expect(answerMoneyQuestion("Explain index funds", context)).toContain("expense ratios");
+    expect(answerMoneyQuestion("What stocks should I buy?", context)).toContain("don’t have live prices");
   });
 });

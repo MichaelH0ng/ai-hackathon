@@ -1,4 +1,6 @@
 import { formatMoney } from "./finance";
+import { answerAccountEducation } from "./accountEducation";
+import { answerInvestingFollowUp, type AssistantTurn } from "./investingConversation";
 
 export interface MoneyAssistantContext {
   accounts: { name: string; kind: string; balance: number; isDebt: boolean }[];
@@ -16,9 +18,34 @@ export interface MoneyAssistantContext {
 
 const money = (amount: number) => formatMoney(amount, true);
 
-export function answerMoneyQuestion(question: string, context: MoneyAssistantContext): string {
+export function answerMoneyQuestion(question: string, context: MoneyAssistantContext, history: AssistantTurn[] = []): string {
   const query = question.trim().toLowerCase();
   if (!query) return "Ask me about your accounts, net worth, goals, budget, or retirement estimate.";
+  const followUp = answerInvestingFollowUp(question, history);
+  if (followUp) return followUp;
+  const accountEducation = answerAccountEducation(query);
+  if (accountEducation) return accountEducation;
+
+  // Advice intents precede balance lookups so “How should I invest my savings?”
+  // does not get swallowed by the savings or account handlers.
+  if (/\b(invest|investing|investment advice|investment strategy|diversif\w*|asset allocation|index funds?|etfs?|stocks?|bonds?|dollar.cost averaging)\b/.test(query)
+    && !/\b(how much|balance|total|worth)\b/.test(query)) {
+    const note = " Educational guidance, not a personalized investment recommendation.";
+    if (/\b(stock|stocks|pick|buy|sell)\b/.test(query)) {
+      return "For a stock or fund, compare what it owns, diversification, fees, and how it fits your time horizon. A single stock can lose most or all of its value; a broad fund spreads company-specific risk but can still fall. I don’t have live prices or enough information to pick a security for you. What are you investing for, and when will you need the money?" + note;
+    }
+    if (/\b(diversif\w*|asset allocation|risk|bonds?)\b/.test(query)) {
+      return "Diversification spreads money across companies, industries, and asset types. Stocks offer growth potential with larger swings; bonds carry interest-rate and credit risk and can also lose value. Your mix depends on when you need the money and how much loss you could tolerate without selling. Keep near-term spending needs separate from volatile investments. What is your time horizon?" + note;
+    }
+    if (/\b(index funds?|etfs?|fees?|dollar.cost averaging)\b/.test(query)) {
+      return "An index fund tracks a market index; an ETF is a fund structure that trades on an exchange. Many broad-market index funds offer diversified exposure at low cost, but narrow funds can be concentrated. Compare holdings, expense ratios, trading costs, and account fees. Regular contributions can build consistency, but do not prevent losses or guarantee better returns." + note;
+    }
+    const remaining = context.monthlyIncome - context.monthlyExpenses - context.monthlyGoalContributions;
+    const budget = context.monthlyIncome > 0
+      ? ` Your entered budget leaves ${money(Math.abs(remaining))} ${remaining < 0 ? "over budget" : "per month after spending and goal contributions"}. ${remaining <= 0 ? "Review that shortfall before adding investment contributions." : "That is a planning starting point, not an amount you should automatically invest; check irregular expenses and cash reserves first."}`
+      : " Add income and expenses in Budget to estimate room for contributions.";
+    return "Start with your goal and when you need the money. Build accessible emergency savings, review expensive debt, and check whether a workplace retirement plan offers a match. For long-term goals, compare diversified, low-cost funds and choose a stock/bond mix you can hold through downturns. Keep money needed soon in less volatile, accessible options." + budget + " When will you need this money, and how would you react to a substantial drop?" + note;
+  }
 
   if (/\b(net worth|overall picture|financial picture)\b/.test(query)) {
     return `Your net worth is ${money(context.netWorth)}: ${money(context.assets)} in assets minus ${money(context.debt)} in debt.`;
@@ -86,5 +113,5 @@ export function answerMoneyQuestion(question: string, context: MoneyAssistantCon
     return "Net worth is what you own minus what you owe. Your dashboard groups balances into assets and debt so you can see both sides.";
   }
 
-  return "I can help with balances, net worth, savings goals, budget, retirement, and spending trade-offs. Try asking “How are my goals doing?” or “What is my net worth?”";
+  return "I can help with balances, goals, budget, retirement, and investing basics. Try “How do I start investing?”, “Explain index funds”, or “How should I diversify?”";
 }

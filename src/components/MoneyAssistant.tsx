@@ -8,7 +8,7 @@ interface ChatMessage {
   text: string;
 }
 
-const prompts = ["What is my net worth?", "How are my goals doing?", "How much is in checking?"];
+const prompts = ["Compare retirement accounts", "Roth IRA vs traditional IRA", "What is an HSA?", "How do I start investing?"];
 
 export function MoneyAssistant({ context }: { context: MoneyAssistantContext }) {
   const [open, setOpen] = useState(false);
@@ -16,7 +16,7 @@ export function MoneyAssistant({ context }: { context: MoneyAssistantContext }) 
   const [messages, setMessages] = useState<ChatMessage[]>([{
     id: "welcome",
     role: "assistant",
-    text: "Hi, I’m Polaris. I can help explain your balances, goals, budget, or retirement estimate. Your dashboard data stays on this device.",
+    text: "Hi, I’m Polaris. I can help with your balances, goals, budget, retirement, and investing basics—from index funds to diversification and planning contributions. Your dashboard data stays on this device.",
   }]);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -30,7 +30,7 @@ export function MoneyAssistant({ context }: { context: MoneyAssistantContext }) 
     setMessages(current => [
       ...current,
       { id: crypto.randomUUID(), role: "user", text },
-      { id: crypto.randomUUID(), role: "assistant", text: answerMoneyQuestion(text, context) },
+      { id: crypto.randomUUID(), role: "assistant", text: answerMoneyQuestion(text, context, current) },
     ]);
     setQuestion("");
   }
