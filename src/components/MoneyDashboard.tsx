@@ -1,5 +1,6 @@
 import { ArrowDownLeft, ArrowUpRight, CalendarClock, Landmark, Link2, RefreshCw, Unplug, Wallet } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { AnimatedList } from "./AnimatedList";
 import { usePlaidLink } from "react-plaid-link";
 import { formatDate } from "../lib/dates";
 import { formatMoney } from "../lib/finance";
@@ -182,12 +183,12 @@ export function MoneyDashboard({
         {/* Recent transactions */}
         <Card className="lg:col-span-2">
           <h2 className="text-lg font-bold text-ink">Recent transactions</h2>
-          <ul className="mt-2 divide-y divide-stone-100">
+          <AnimatedList className="mt-2 divide-y divide-stone-100">
             {recent.map((t) => {
               const out = t.amount > 0;
               const transfer = isTransfer(t, transferIds);
               return (
-                <li key={t.id} className="flex items-center gap-3 py-2.5 text-sm">
+                <div key={t.id} className="flex items-center gap-3 py-2.5 text-sm">
                   <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-stone-100" aria-hidden="true">{categoryEmoji(t.category)}</span>
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-semibold text-stone-800">{t.name}</span>
@@ -196,12 +197,12 @@ export function MoneyDashboard({
                     </span>
                   </span>
                   <span className="shrink-0 text-right">
-                    <span className={`block font-bold ${out ? "text-ink" : "text-emerald-700"}`}>{out ? "−" : "+"}{money(Math.abs(t.amount))}</span>
+                    <span className={`block font-bold ${out ? "text-ink" : "text-[var(--color-gain)]"}`}>{out ? "−" : "+"}{money(Math.abs(t.amount))}</span>
                   </span>
-                </li>
+                </div>
               );
             })}
-          </ul>
+          </AnimatedList>
         </Card>
 
         {/* Goals linked to accounts */}

@@ -5,6 +5,7 @@ import { assetsByInstitution, detectTransferIds, netWorthSeries, periodFlow, spe
 import type { MoneyGoal } from "../lib/types";
 import type { Bank } from "../lib/useBank";
 import { AssetSplit } from "./AssetSplit";
+import { AnimatedList } from "./AnimatedList";
 import { ConnectCard } from "./MoneyDashboard";
 import { NetWorthChart } from "./NetWorthChart";
 import { SavingsPlanner } from "./SavingsPlanner";
@@ -152,9 +153,9 @@ export function HomeOverview({ data, goals = [], onCheck, onMoney, onGoals, onNe
           <div className="clay p-5">
             <CardHead icon={<CalendarClock className="h-4 w-4 text-brand-500" />} title="Upcoming bills" />
             {view.bills.length ? (
-              <ul className="mt-2 divide-y divide-stone-100">
+              <AnimatedList className="mt-2 divide-y divide-stone-100">
                 {view.bills.map((b) => (
-                  <li key={b.name} className="flex items-center justify-between gap-3 py-2.5">
+                  <div key={b.name} className="flex items-center justify-between gap-3 py-2.5">
                     <span className="min-w-0">
                       <span className="block truncate text-sm font-bold text-ink">{b.name}</span>
                       <span className="block text-xs text-stone-500">{b.cadence}</span>
@@ -163,9 +164,9 @@ export function HomeOverview({ data, goals = [], onCheck, onMoney, onGoals, onNe
                       <span className="block text-sm font-bold tabular-nums text-ink">{formatMoney(b.amount, true)}</span>
                       <span className="block text-xs text-stone-500">{b.daysUntil === 0 ? "Due today" : b.daysUntil === 1 ? "Tomorrow" : `In ${b.daysUntil} days`}</span>
                     </span>
-                  </li>
+                  </div>
                 ))}
-              </ul>
+              </AnimatedList>
             ) : (
               <p className="mt-2 text-sm leading-relaxed text-stone-600">
                 {data.transactions.length ? "No repeating bills spotted yet." : "Connect a bank account and recurring bills will show up here."}

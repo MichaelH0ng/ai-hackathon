@@ -828,3 +828,7 @@ body {
 .asset-split-tip strong { color: var(--night-text); font-variant-numeric: tabular-nums; }
 .asset-split-tip.at-start { left: 0; transform: scaleY(.84); }
 .asset-split-tip.at-end { left: auto; right: 0; transform: scaleY(.84); }
+
+/* React Bits pieces: Star Border on the primary "Add account" button, Spring Check on reached goals. */
+.wealth-add-account { min-height: 44px; padding: 0 18px; font-size: 14px; font-weight: 650; box-shadow: 0 8px 22px rgb(57 116 221 / 27%); }
+.wealth-goal-reached { margin-top: 2px; min-height: 0; font-weight: 650; }

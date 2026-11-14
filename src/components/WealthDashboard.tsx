@@ -3,6 +3,9 @@ import { ArrowDownLeft, ArrowRight, ArrowUpRight, Check, ChevronRight, CircleDol
 import type { Bank } from "../lib/useBank";
 import type { MoneyGoal } from "../lib/types";
 import { HomeOverview } from "./Landing";
+import { CountUp } from "./CountUp";
+import SpringCheck from "./SpringCheck";
+import StarBorder from "./StarBorder";
 import { SavingsPlanner } from "./SavingsPlanner";
 import { isLiability } from "../lib/money";
 import { formatMoney } from "../lib/finance";
@@ -178,7 +181,7 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; onUpdat
     </div>;
   };
   const accountSummary = assets.length > 0 && <section className="wealth-card accounts-summary" aria-label="Account totals">
-    <div className="accounts-summary-main"><span>Net worth</span><strong>{total - debts < 0 ? "−" : ""}{usd(Math.abs(total - debts))}</strong></div>
+    <div className="accounts-summary-main"><span>Net worth</span><strong><CountUp value={total - debts} format={n => `${n < 0 ? "−" : ""}${usd(Math.abs(n))}`} /></strong></div>
     <div className="accounts-summary-split">
       <span><small>Cash</small><strong>{usd(groupTotal(accountGroups[0].match))}</strong></span>
       <span><small>Investments</small><strong>{usd(groupTotal(investment))}</strong></span>
@@ -203,7 +206,7 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; onUpdat
     <div className="wealth-card-foot"><ShieldCheck size={14} /><span>{linked.length ? `${linked.length} connected · ` : ""}Manual accounts are saved in this browser only.</span></div>
   </section>;
   const goalList = <section className="wealth-card"><div className="wealth-section-head"><div><h2>Your savings goals</h2><p>Choose a goal and an amount to save each week.</p></div><button className="wealth-text-button" onClick={onNewGoal}><Plus size={16} /> New goal</button></div>
-    {goals.length ? <div className="wealth-goal-grid">{goals.map(g => <button key={g.id} className="wealth-goal" onClick={() => onOpenGoal(g.id)}><span className="wealth-goal-top"><span className="wealth-account-icon"><Target size={19} /></span><ChevronRight size={17} /></span><h3>{g.name}</h3><p><strong>{usd(g.saved)}</strong> <span>of {usd(g.target)}</span></p><div className="wealth-progress" role="progressbar" aria-label={`${g.name} funded`} aria-valuenow={Math.min(100, Math.round(g.saved / g.target * 100))} aria-valuemin={0} aria-valuemax={100}><i style={{ width: `${Math.min(100, g.saved / g.target * 100)}%` }} /></div><span className="wealth-goal-detail">{usd(g.weekly)}/week <span>{months(g.weekly > 0 ? Math.max(0, g.target - g.saved) / (g.weekly * 52 / 12) : Infinity)} to go</span></span>{g.deadline && <span className="wealth-goal-deadline">Target date · {g.deadline}</span>}</button>)}</div> : <div className="wealth-goal-placeholder"><Target size={25} /><div><h3>What does your money make possible?</h3><p>An emergency fund, a home, a trip. Give your savings a purpose.</p></div><button className="wealth-secondary" onClick={onNewGoal}>Create a goal <ArrowRight size={15} /></button></div>}
+    {goals.length ? <div className="wealth-goal-grid">{goals.map(g => <button key={g.id} className="wealth-goal" onClick={() => onOpenGoal(g.id)}><span className="wealth-goal-top"><span className="wealth-account-icon"><Target size={19} /></span><ChevronRight size={17} /></span><h3>{g.name}</h3><p><strong>{usd(g.saved)}</strong> <span>of {usd(g.target)}</span></p><div className="wealth-progress" role="progressbar" aria-label={`${g.name} funded`} aria-valuenow={Math.min(100, Math.round(g.saved / g.target * 100))} aria-valuemin={0} aria-valuemax={100}><i style={{ width: `${Math.min(100, g.saved / g.target * 100)}%` }} /></div>{g.target > 0 && g.saved >= g.target ? <SpringCheck readOnly checked label="Goal reached" strike="none" color="#edf6ff" fillColor="#54e2c2" checkColor="#050b16" boxSize={22} boxRadius={7} fontSize={14} doneOpacity={1} className="wealth-goal-reached" /> : <span className="wealth-goal-detail">{usd(g.weekly)}/week <span>{months(g.weekly > 0 ? Math.max(0, g.target - g.saved) / (g.weekly * 52 / 12) : Infinity)} to go</span></span>}{g.deadline && <span className="wealth-goal-deadline">Target date · {g.deadline}</span>}</button>)}</div> : <div className="wealth-goal-placeholder"><Target size={25} /><div><h3>What does your money make possible?</h3><p>An emergency fund, a home, a trip. Give your savings a purpose.</p></div><button className="wealth-secondary" onClick={onNewGoal}>Create a goal <ArrowRight size={15} /></button></div>}
   </section>;
   const assistantContext: MoneyAssistantContext = {
     accounts: assets.map(account => ({ name: account.name, kind: account.kind, balance: account.balance, isDebt: debt(account.kind) })),
@@ -219,7 +222,7 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; onUpdat
     retirementAge: retirementPoints.length ? retirementAge : null,
   };
   return <main id="main" className={`wealth-dashboard${tab === "Goals" ? " goals-page" : ""}`}>
-    <div className="wealth-page-head"><div><h1>{tab === "Goals" ? "My goals" : tab === "Activity" ? "Account activity" : tab}</h1><p>{tab === "Overview" ? "Your whole financial picture, in one place." : tab === "Accounts" || tab === "Activity" ? "Track your balances and connected accounts." : tab === "Goals" ? "Plan your savings and watch your progress grow." : tab === "Retirement" ? "Explore your long-term savings plan." : "Give your monthly income a plan."}</p></div>{(tab === "Overview" || tab === "Accounts") && <button className="wealth-primary" onClick={addAsset}><Plus size={16} /> Add account</button>}</div>
+    <div className="wealth-page-head"><div><h1>{tab === "Goals" ? "My goals" : tab === "Activity" ? "Account activity" : tab}</h1>{tab !== "Overview" && <p>{tab === "Accounts" || tab === "Activity" ? "Track your balances and connected accounts." : tab === "Goals" ? "Plan your savings and watch your progress grow." : tab === "Retirement" ? "Explore your long-term savings plan." : "Give your monthly income a plan."}</p>}</div>{(tab === "Overview" || tab === "Accounts") && <StarBorder onClick={addAsset} className="wealth-add-account" backgroundColor="linear-gradient(115deg, #168e90, #4b7fe0 60%, #9e64df)" textColor="#ffffff" borderColor="rgb(223 254 255 / 22%)" color="#dffeff" trailColor="#54e2c2" radius={10} thickness={1.5} duration={5} glow={0.8}><Plus size={16} aria-hidden="true" /> Add account</StarBorder>}</div>
     {tab === "Overview" && <>
       {bank.loading && !bank.data && !assets.length ? <section className="wealth-card" role="status">Loading your money overview…</section> : <HomeOverview data={{
         env: bank.data?.env ?? "manual",
