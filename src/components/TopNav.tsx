@@ -31,6 +31,7 @@ export function TopNav({
   onGoals,
   onSettings,
   onCheck,
+  onMoney,
   goalCount,
   active,
 }: {
@@ -51,10 +52,19 @@ export function TopNav({
           <button
             onClick={onHome}
             aria-current={active === "home" ? "page" : undefined}
-            aria-label="Dashboard"
+            aria-label="Home"
             className={`flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-xl px-2 text-sm font-bold sm:px-3 ${active === "home" ? "bg-brand-100 text-brand-700" : "text-stone-700 hover:bg-brand-50"}`}
           >
             <House className="h-5 w-5" aria-hidden="true" />
+            <span>Home</span>
+          </button>
+          <button
+            onClick={onMoney}
+            aria-current={active === "money" ? "page" : undefined}
+            aria-label="Dashboard"
+            className={`flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-xl px-2 text-sm font-bold sm:px-3 ${active === "money" ? "bg-brand-100 text-brand-700" : "text-stone-700 hover:bg-brand-50"}`}
+          >
+            <LayoutGrid className="h-5 w-5" aria-hidden="true" />
             <span>Dashboard</span>
           </button>
           <button
