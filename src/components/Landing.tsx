@@ -1,10 +1,11 @@
 import { ArrowRight, CalendarClock, Camera, PiggyBank, ShoppingBag, Target, Wallet } from "lucide-react";
 import { useMemo } from "react";
-import { formatMoney, goalPhrase, whatIfSpend } from "../lib/finance";
+import { formatMoney } from "../lib/finance";
 import { assetsByInstitution, detectTransferIds, netWorthSeries, periodFlow, spendableCash, upcomingBills } from "../lib/money";
 import type { MoneyGoal } from "../lib/types";
 import type { Bank } from "../lib/useBank";
 import { AssetSplit } from "./AssetSplit";
+import { AnimatedList } from "./AnimatedList";
 import { ConnectCard } from "./MoneyDashboard";
 import { NetWorthChart } from "./NetWorthChart";
 import { SavingsPlanner } from "./SavingsPlanner";
@@ -67,12 +68,14 @@ export function Landing({
 
 // ---------- connected: the dashboard ----------
 
-export function HomeOverview({ data, goal, goals = [], onCheck, onMoney, onGoals, onNewGoal, onOpenGoal }: {
+export function HomeOverview({ data, goals = [], onCheck, onMoney, addAccount, onGoals, onNewGoal, onOpenGoal }: {
   data: import("../lib/money").BankData;
   goal?: MoneyGoal;
   goals?: MoneyGoal[];
   onCheck: () => void;
   onMoney: () => void;
+  /** Optional "Add account" button; it shares the row with "View accounts and activity". */
+  addAccount?: React.ReactNode;
   onGoals?: () => void;
   onNewGoal?: () => void;
   onOpenGoal?: (id: string) => void;
@@ -90,13 +93,12 @@ export function HomeOverview({ data, goal, goals = [], onCheck, onMoney, onGoals
   // Unfinished goals first, so the snapshot shows what still needs saving.
   const topGoals = [...goals].sort((a, b) => Number(a.saved >= a.target) - Number(b.saved >= b.target)).slice(0, 2);
   const spent = view.flow.current.out;
-  const lastSpent = view.flow.previous.out;
 
   return (
     <section className="dashboard-home-overview" aria-label="Money overview">
       <div className="grid gap-5 lg:grid-cols-[1.75fr_1fr] [&>*]:min-w-0">
         <div className="clay p-5 sm:p-7">
-          <NetWorthChart series={view.series} note={data.env === "sandbox" ? "Includes sandbox test data; manual balances stay fixed in this estimate" : data.transactions.length ? "Estimated from transactions; manual balances stay fixed" : "Current balance snapshot; no transaction history available"} />
+          <NetWorthChart series={view.series} />
           <div className="mt-6">
             <AssetSplit slices={view.slices} />
           </div>
@@ -110,13 +112,15 @@ export function HomeOverview({ data, goal, goals = [], onCheck, onMoney, onGoals
               icon={<ShoppingBag className="h-4 w-4 text-amber-300" />}
               label="Spent this month"
               value={data.transactions.length ? formatMoney(spent) : "No activity yet"}
-              sub={lastSpent ? `${formatMoney(lastSpent)} last month` : undefined}
             />
           </div>
 
-          <button onClick={onMoney} className="wealth-primary w-full">
-            View accounts and activity <ArrowRight className="h-4 w-4" aria-hidden="true" />
-          </button>
+          <div className={addAccount ? "grid grid-cols-2 gap-3" : undefined}>
+            {addAccount}
+            <button onClick={onMoney} className="wealth-primary w-full min-w-0 justify-center whitespace-normal! text-center leading-tight">
+              View accounts and activity <ArrowRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+            </button>
+          </div>
 
           <div className="clay p-5">
             <CardHead icon={<Target className="h-4 w-4 text-[#c294ff]" />} title="Savings goals" action={goals.length && onGoals ? { label: "See all", onClick: onGoals } : undefined} />
@@ -154,9 +158,9 @@ export function HomeOverview({ data, goal, goals = [], onCheck, onMoney, onGoals
           <div className="clay p-5">
             <CardHead icon={<CalendarClock className="h-4 w-4 text-brand-500" />} title="Upcoming bills" />
             {view.bills.length ? (
-              <ul className="mt-2 divide-y divide-stone-100">
+              <AnimatedList className="mt-2 divide-y divide-stone-100">
                 {view.bills.map((b) => (
-                  <li key={b.name} className="flex items-center justify-between gap-3 py-2.5">
+                  <div key={b.name} className="flex items-center justify-between gap-3 py-2.5">
                     <span className="min-w-0">
                       <span className="block truncate text-sm font-bold text-ink">{b.name}</span>
                       <span className="block text-xs text-stone-500">{b.cadence}</span>
@@ -165,9 +169,9 @@ export function HomeOverview({ data, goal, goals = [], onCheck, onMoney, onGoals
                       <span className="block text-sm font-bold tabular-nums text-ink">{formatMoney(b.amount, true)}</span>
                       <span className="block text-xs text-stone-500">{b.daysUntil === 0 ? "Due today" : b.daysUntil === 1 ? "Tomorrow" : `In ${b.daysUntil} days`}</span>
                     </span>
-                  </li>
+                  </div>
                 ))}
-              </ul>
+              </AnimatedList>
             ) : (
               <p className="mt-2 text-sm leading-relaxed text-stone-600">
                 {data.transactions.length ? "No repeating bills spotted yet." : "Connect a bank account and recurring bills will show up here."}
@@ -175,7 +179,7 @@ export function HomeOverview({ data, goal, goals = [], onCheck, onMoney, onGoals
             )}
           </div>
 
-          <PriceAddon goal={goal} cash={view.cash} onCheck={onCheck} />
+          <PriceAddon onCheck={onCheck} />
         </aside>
       </div>
     </section>
@@ -213,34 +217,19 @@ function CardHead({ icon, title, action }: { icon: React.ReactNode; title: strin
   );
 }
 
-/** The photo feature, as an add-on to the dashboard. */
-function PriceAddon({ goal, cash, onCheck }: { goal?: MoneyGoal; cash?: number; onCheck: () => void }) {
-  const example = 49.99;
-  const delay = goal ? whatIfSpend(goal.target, goal.saved, goal.weekly, example).delayDays : null;
+/** The photo feature, as an add-on to the dashboard: one tap to Price check. */
+function PriceAddon({ onCheck }: { onCheck: () => void }) {
   return (
     <button
       onClick={onCheck}
-      className="clay block w-full p-5 text-left transition-transform duration-200 hover:-translate-y-0.5 active:translate-y-0 motion-reduce:transition-none"
+      className="clay flex w-full items-center gap-3 p-5 text-left transition-transform duration-200 hover:-translate-y-0.5 active:translate-y-0 motion-reduce:transition-none"
     >
-      <span className="flex items-center gap-3">
-        <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[rgb(84_226_194/14%)] text-[var(--aurora-teal)]"><Camera className="h-5 w-5" aria-hidden="true" /></span>
-        <span>
-          <span className="block font-display text-lg font-bold leading-tight text-ink">Thinking about buying something?</span>
-          <span className="block text-sm text-stone-600">Snap the price tag or type the price.</span>
+      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[rgb(84_226_194/14%)] text-[var(--aurora-teal)]"><Camera className="h-5 w-5" aria-hidden="true" /></span>
+      <span className="min-w-0 flex-1">
+        <span className="block font-display text-lg font-bold leading-tight text-ink">Thinking about buying something?</span>
+        <span className="mt-1 inline-flex items-center gap-1 text-sm font-bold text-[var(--aurora-teal)]">
+          Check a price <ArrowRight className="h-4 w-4" aria-hidden="true" />
         </span>
-      </span>
-      <span className="mt-4 block rounded-2xl bg-stone-100 px-4 py-3 text-sm text-stone-600">
-        {goal && delay != null && isFinite(delay) ? (
-          <>
-            A ${example} buy pushes your {goalPhrase(goal.name)} back <strong className="text-ink">{Math.round(delay)} days</strong>
-            {cash != null ? <> and leaves {formatMoney(cash - example)} to spend.</> : "."}
-          </>
-        ) : (
-          <>See the hours of work, what it does to your goals and a cheaper idea, before you buy.</>
-        )}
-      </span>
-      <span className="mt-3 inline-flex items-center gap-1 text-sm font-bold text-[var(--aurora-teal)]">
-        Check a price <ArrowRight className="h-4 w-4" aria-hidden="true" />
       </span>
     </button>
   );
@@ -250,7 +239,6 @@ function PriceAddon({ goal, cash, onCheck }: { goal?: MoneyGoal; cash?: number; 
 
 function Welcome({
   bank,
-  goal,
   goalCount,
   onCheck,
   onDemo,
@@ -277,7 +265,7 @@ function Welcome({
           </p>
           {bank.error && <p className="mt-4 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-900">{bank.error}</p>}
           <div className="mt-6 max-w-md">
-            <PriceAddon goal={goal} onCheck={onCheck} />
+            <PriceAddon onCheck={onCheck} />
           </div>
           {goalCount > 0 ? (
             <button onClick={onGoals} className="mt-4 inline-flex min-h-11 items-center gap-1 text-sm font-bold text-brand-700 hover:underline">

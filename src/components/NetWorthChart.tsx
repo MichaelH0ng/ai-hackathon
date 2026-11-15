@@ -1,3 +1,4 @@
+import { CountUp } from "./CountUp";
 import { useId, useMemo, useRef, useState } from "react";
 import { formatDate } from "../lib/dates";
 import { formatMoney } from "../lib/finance";
@@ -61,7 +62,7 @@ export function NetWorthChart({ series, note }: { series: NetWorthPoint[]; note?
     <div>
       <p className="text-sm font-semibold text-stone-500">Net worth</p>
       <p className="font-display text-5xl font-bold tabular-nums text-ink sm:text-6xl" aria-live="polite">
-        {money(shown?.value ?? 0)}
+        <CountUp value={shown?.value ?? 0} format={money} />
       </p>
       <p className="mt-1 text-sm font-bold tabular-nums" style={{ color: change >= 0 ? UP : DOWN }}>
         {change >= 0 ? "▲" : "▼"} {money(Math.abs(change))} ({Math.abs(pct).toFixed(2)}%)
