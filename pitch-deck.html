@@ -12,21 +12,19 @@
       :root {
         color-scheme: dark;
         font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-        color: #f4f8ff;
+        color: #edf6ff;
         background: #050b16;
         font-synthesis: none;
         text-rendering: optimizeLegibility;
         --night: #050b16;
-        --navy: #0d1d35;
-        --panel: #0d1d35;
-        --panel-light: #152c49;
+        --navy: #091426;
+        --panel: #10213b;
+        --panel-light: #142a47;
         --teal: #54e2c2;
-        --mint: #9bf4df;
-        --blue: #94c9ff;
-        --violet: #e5d1ff;
-        --purple: #a78bfa;
-        --muted: #d0def0;
-        --line: rgb(113 140 171 / 48%);
+        --blue: #74b9ff;
+        --violet: #c294ff;
+        --muted: #c0cde0;
+        --line: rgb(160 198 244 / 24%);
       }
 
       * { box-sizing: border-box; }
@@ -37,10 +35,8 @@
         margin: 0;
         overflow: hidden;
         background:
-          radial-gradient(ellipse at 2% 62%, rgb(25 129 116 / 25%), transparent 40%),
-          radial-gradient(ellipse at 97% 21%, rgb(132 91 206 / 34%), transparent 38%),
-          radial-gradient(ellipse at 72% 96%, rgb(94 61 158 / 18%), transparent 34%),
-          radial-gradient(ellipse at 54% 3%, rgb(48 92 151 / 15%), transparent 42%),
+          radial-gradient(ellipse at 82% 3%, rgb(116 185 255 / 10%), transparent 34rem),
+          radial-gradient(ellipse at 12% 100%, rgb(84 226 194 / 7%), transparent 32rem),
           var(--night);
       }
 
@@ -66,14 +62,12 @@
         aspect-ratio: 16 / 9;
         overflow: hidden;
         padding: clamp(28px, 5vw, 72px);
-        border: 1px solid rgb(113 140 171 / 40%);
-        border-radius: 16px;
+        border: 1px solid var(--line);
+        border-radius: 24px;
         background:
-          radial-gradient(ellipse at 1% 58%, rgb(25 129 116 / 10%), transparent 42%),
-          radial-gradient(ellipse at 98% 8%, rgb(137 92 208 / 22%), transparent 38%),
-          linear-gradient(145deg, rgb(71 54 119 / 14%), transparent 48%),
-          linear-gradient(145deg, #10213b, #091426 74%);
-        box-shadow: 0 12px 32px rgb(0 0 0 / 22%);
+          radial-gradient(ellipse at 95% 0%, rgb(116 185 255 / 12%), transparent 36%),
+          linear-gradient(145deg, #10213b, #091426 68%);
+        box-shadow: 0 24px 80px rgb(0 0 0 / 30%);
       }
 
       .slide.active { display: flex; flex-direction: column; }
@@ -101,7 +95,7 @@
         align-items: center;
         justify-content: space-between;
         gap: 16px;
-        margin-bottom: 30px;
+        margin-bottom: auto;
         color: var(--muted);
         font-size: 13px;
       }
@@ -110,31 +104,30 @@
         display: inline-flex;
         align-items: center;
         gap: 10px;
-        color: #f4f8ff;
+        color: #edf6ff;
         font-weight: 700;
       }
 
       .brand img { width: 28px; height: 28px; object-fit: contain; }
-      .slide-meta { color: var(--muted); font-size: 12px; white-space: nowrap; }
 
       h1, h2, h3, p { margin-top: 0; }
 
       h1 {
         max-width: 900px;
         margin-bottom: 20px;
-        font-size: clamp(38px, 5.2vw, 64px);
-        font-weight: 700;
-        letter-spacing: -.04em;
-        line-height: 1.08;
+        font-size: clamp(38px, 6vw, 76px);
+        font-weight: 800;
+        letter-spacing: -.055em;
+        line-height: 1.04;
       }
 
       h2 {
         max-width: 900px;
         margin-bottom: 18px;
-        font-size: clamp(30px, 4vw, 48px);
-        font-weight: 700;
-        letter-spacing: -.035em;
-        line-height: 1.12;
+        font-size: clamp(32px, 4.5vw, 56px);
+        font-weight: 800;
+        letter-spacing: -.045em;
+        line-height: 1.08;
       }
 
       h3 {
@@ -156,56 +149,38 @@
         line-height: 1.45;
       }
 
-      .accent {
-        color: var(--teal);
-        background: linear-gradient(105deg, var(--teal) 8%, #a9d8ed 58%, var(--violet) 100%);
-        background-clip: text;
-        -webkit-text-fill-color: transparent;
-      }
+      .accent { color: var(--teal); }
       .blue { color: var(--blue); }
-      .violet {
-        color: var(--violet);
-        background: linear-gradient(100deg, #e5d1ff, var(--purple));
-        background-clip: text;
-        -webkit-text-fill-color: transparent;
-      }
+      .violet { color: var(--violet); }
       .muted { color: var(--muted); }
 
       .cover {
-        justify-content: flex-start;
+        justify-content: space-between;
         background:
-          radial-gradient(ellipse at 1% 58%, rgb(25 129 116 / 14%), transparent 42%),
-          radial-gradient(ellipse at 98% 8%, rgb(145 94 225 / 30%), transparent 40%),
-          linear-gradient(120deg, rgb(77 59 132 / 16%), transparent 62%),
-          linear-gradient(145deg, #10213b, #091426 74%);
+          radial-gradient(ellipse at 80% 75%, rgb(84 226 194 / 11%), transparent 34%),
+          radial-gradient(ellipse at 97% 4%, rgb(194 148 255 / 13%), transparent 32%),
+          linear-gradient(145deg, #10213b, #091426 70%);
       }
 
-      .cover-main { padding-top: clamp(34px, 7vh, 72px); }
-      .cover h1 { margin-top: 18px; }
+      .cover-main { padding-top: clamp(24px, 5vh, 60px); }
+      .cover h1 { margin-top: 24px; }
 
       .cover-stat {
         display: grid;
         grid-template-columns: 1fr auto 1fr;
         align-items: center;
         gap: clamp(12px, 3vw, 34px);
-        width: min(100%, 680px);
-        margin-top: clamp(24px, 4vh, 40px);
+        width: min(100%, 740px);
+        margin-top: clamp(28px, 5vh, 52px);
       }
 
-      .stat-card, .step {
-        border: 0;
-        border-top: 1px solid var(--line);
-        border-radius: 0;
-        background: transparent;
+      .stat-card, .panel, .step, .path-card {
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: linear-gradient(145deg, rgb(20 42 71 / 92%), rgb(9 20 38 / 96%));
       }
 
-      .panel, .path-card {
-        border: 1px solid rgb(113 140 171 / 38%);
-        border-radius: 12px;
-        background: linear-gradient(135deg, rgb(94 70 145 / 24%), #13294a 48%, #0c1b33);
-      }
-
-      .stat-card { min-height: 104px; padding: 16px 0; }
+      .stat-card { min-height: 120px; padding: 20px; }
       .stat-label { color: var(--muted); font-size: 12px; font-weight: 600; }
       .stat-value { display: block; margin-top: 8px; font-size: clamp(28px, 4vw, 44px); font-weight: 800; letter-spacing: -.05em; }
       .stat-detail { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; }
@@ -225,14 +200,14 @@
         margin-top: 24px;
       }
 
-      .panel { padding: 18px; }
+      .panel { padding: clamp(18px, 2.4vw, 30px); }
       .panel p:last-child { margin-bottom: 0; }
 
       .persona {
         display: flex;
         flex-direction: column;
         justify-content: space-between;
-        min-height: 180px;
+        min-height: 210px;
       }
 
       .persona-label, .tag {
@@ -252,7 +227,8 @@
       }
 
       .evidence {
-        border-color: rgb(255 180 122 / 40%);
+        border-color: rgb(255 180 122 / 35%);
+        background: linear-gradient(145deg, rgb(189 111 58 / 13%), rgb(9 20 38 / 96%));
       }
 
       .evidence .tag { color: #ffb47a; }
@@ -267,22 +243,11 @@
         margin-top: 18px;
       }
 
-      .demo-flow {
-        max-width: 360px;
-        color: #f4f8ff;
-        font-size: clamp(22px, 3vw, 36px);
-        font-weight: 700;
-        letter-spacing: -.03em;
-        line-height: 1.5;
-      }
-
-      .demo-flow span { color: var(--teal); }
-
       .mock {
-        padding: 14px 18px;
-        border: 1px solid rgb(113 140 171 / 38%);
-        border-radius: 14px;
-        background: linear-gradient(135deg, rgb(94 70 145 / 26%), #13294a 48%, #0c1b33);
+        padding: clamp(20px, 3vw, 34px);
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        background: rgb(5 11 22 / 55%);
       }
 
       .mock-top { display: flex; justify-content: space-between; gap: 10px; color: var(--muted); font-size: 12px; }
@@ -304,8 +269,8 @@
       }
 
       .demo-steps { display: grid; gap: 12px; }
-      .step { display: grid; grid-template-columns: 38px 1fr; gap: 12px; align-items: start; padding: 14px 0; border-top: 1px solid var(--line); }
-      .step-num { display: grid; width: 30px; height: 30px; place-items: center; border: 1px solid rgb(116 185 255 / 50%); color: var(--blue); font-weight: 700; }
+      .step { display: grid; grid-template-columns: 38px 1fr; gap: 12px; align-items: start; padding: 16px; }
+      .step-num { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 50%; background: rgb(116 185 255 / 12%); color: var(--blue); font-weight: 800; }
       .step p { margin: 4px 0 0; font-size: 13px; }
 
       .ai-flow {
@@ -315,7 +280,7 @@
         margin: 26px 0 18px;
       }
 
-      .ai-card { min-height: 130px; padding: 18px; }
+      .ai-card { min-height: 150px; padding: 20px; }
       .ai-card p { margin: 0; font-size: 14px; }
       .ai-card .tag { display: block; margin-bottom: 14px; }
       .ai-card:nth-child(1) .tag { color: var(--blue); }
@@ -337,7 +302,7 @@
         margin: 24px 0 18px;
       }
 
-      .path-card { min-height: 145px; padding: 18px; }
+      .path-card { min-height: 155px; padding: 19px; }
       .path-card .tag { display: block; margin-bottom: 12px; }
       .path-card p { margin: 0; font-size: 14px; }
 
@@ -348,13 +313,13 @@
         gap: 18px;
         margin-top: auto;
         padding: 18px 22px;
-        border: 1px solid #d6c3ff;
-        border-radius: 10px;
-        background: linear-gradient(110deg, #9bf4df 0%, #c3e8f2 54%, #e5d1ff 100%);
+        border: 1px solid rgb(84 226 194 / 35%);
+        border-radius: 16px;
+        background: linear-gradient(115deg, rgb(22 142 144 / 24%), rgb(75 127 224 / 19%) 60%, rgb(158 100 223 / 20%));
       }
 
-      .ask p { margin: 0; color: #092c30; font-weight: 700; }
-      .ask span { flex: 0 0 auto; color: #333052; font-size: 12px; font-weight: 700; }
+      .ask p { margin: 0; color: #edf6ff; font-weight: 700; }
+      .ask span { flex: 0 0 auto; color: var(--teal); font-size: 12px; font-weight: 700; }
 
       .controls {
         display: flex;
@@ -366,38 +331,23 @@
         font-size: 12px;
       }
 
-      .speaker-notes:not([hidden]) {
-        position: fixed;
-        z-index: 2;
-        right: max(24px, calc((100vw - 1200px) / 2));
-        bottom: 76px;
-        width: min(620px, calc(100vw - 48px));
-        padding: 14px 18px;
-        border-left: 2px solid var(--teal);
-        background: var(--panel);
-        color: #f4f8ff;
-        font-size: 13px;
-        line-height: 1.5;
-        box-shadow: 0 8px 24px rgb(0 0 0 / 35%);
-      }
-
       .controls button {
         display: grid;
         width: 40px;
         height: 40px;
         place-items: center;
         border: 1px solid var(--line);
-        border-radius: 10px;
+        border-radius: 50%;
         background: var(--navy);
-        color: #f4f8ff;
+        color: #edf6ff;
         cursor: pointer;
       }
 
-      .controls button:hover:not(:disabled) { border-color: var(--mint); background: #203d5d; color: var(--mint); }
+      .controls button:hover:not(:disabled) { border-color: var(--teal); color: var(--teal); }
       .controls button:disabled { opacity: .4; cursor: default; }
       .controls button:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
       .progress { width: min(24vw, 190px); height: 3px; overflow: hidden; border-radius: 5px; background: rgb(192 205 224 / 17%); }
-      .progress > span { display: block; width: 20%; height: 100%; background: linear-gradient(90deg, var(--teal), var(--purple)); transition: width 180ms ease; }
+      .progress > span { display: block; width: 20%; height: 100%; background: var(--teal); transition: width 180ms ease; }
 
       @media (max-width: 700px) {
         body { overflow: auto; }
@@ -421,21 +371,21 @@
 
       @media (min-width: 701px) and (max-height: 850px) {
         .slide { padding: 30px 42px; }
-        .brandline { margin-bottom: 18px; }
+        .brandline { margin-bottom: 20px; }
         h2 { margin-bottom: 12px; font-size: clamp(32px, 4vw, 46px); }
         .lead { font-size: 19px; }
-        .cover-main { padding-top: 34px; }
+        .cover-main { padding-top: 20px; }
         .cover h1 { margin-top: 18px; font-size: clamp(42px, 5.2vw, 60px); }
         .cover-stat { margin-top: 26px; }
-        .stat-card { min-height: 92px; padding: 14px 0; }
+        .stat-card { min-height: 96px; padding: 16px; }
         .two-col { gap: 12px; margin-top: 14px; }
-        .panel { padding: 12px; }
+        .panel { padding: 16px; }
         .persona { min-height: 0; }
         .persona strong { margin-top: 10px; font-size: clamp(21px, 2.4vw, 29px); }
         .evidence { margin-top: 10px !important; }
         .evidence p { font-size: 13px; line-height: 1.45; }
         .demo { gap: 22px; margin-top: 4px; }
-        .mock { padding: 10px 14px; }
+        .mock { padding: 20px; }
         .mock-title { margin-top: 16px; }
         .mock-price { font-size: 48px; }
         .pill { min-height: 28px; margin-top: 8px; }
@@ -445,98 +395,17 @@
         .step h3 { margin-bottom: 3px; font-size: 16px; }
         .step p, .footnote { font-size: 11px; line-height: 1.45; }
         .ai-flow { gap: 10px; margin: 14px 0 10px; }
-        .ai-card { min-height: 0; padding: 12px; }
+        .ai-card { min-height: 0; padding: 14px; }
         .ai-card .tag { margin-bottom: 8px; }
         .ai-card h3, .guardrail h3 { margin-bottom: 5px; font-size: 16px; }
         .ai-card p, .guardrail p { font-size: 12px; line-height: 1.45; }
         .guardrail { gap: 10px; }
         .path-grid { gap: 10px; margin: 14px 0 10px; }
-        .path-card { min-height: 0; padding: 12px; }
+        .path-card { min-height: 0; padding: 14px; }
         .path-card .tag { margin-bottom: 8px; }
         .path-card h3 { margin-bottom: 6px; font-size: 16px; }
         .path-card p { font-size: 12px; line-height: 1.45; }
-        .ask { padding: 12px 14px; }
-      }
-
-      @media (min-width: 701px) and (max-height: 650px) {
-        .slides { padding: 8px; }
-        .slide { padding: 20px 28px; }
-        .brandline { margin-bottom: 10px; }
-        h1, h2 { margin-bottom: 8px; font-size: clamp(26px, 3.8vw, 36px); line-height: 1.06; }
-        .cover-main { padding-top: 16px; }
-        .cover h1 { margin-top: 10px; font-size: clamp(34px, 4.4vw, 44px); }
-        .lead { font-size: 15px; }
-        .cover-stat { gap: 18px; margin-top: 12px; }
-        .stat-card { min-height: 72px; padding: 8px 0; }
-        .stat-value { margin-top: 4px; font-size: 30px; }
-        .stat-detail, .stat-label { font-size: 10px; }
-        .footnote { margin-top: 8px; font-size: 10px; line-height: 1.3; }
-        .two-col, .path-grid { gap: 10px; margin-top: 8px; }
-        .panel, .path-card { padding: 8px; }
-        .persona { min-height: 0; }
-        .persona strong { margin-top: 6px; font-size: 19px; }
-        .persona p, .panel p, .path-card p { margin-bottom: 0; font-size: 11px; line-height: 1.35; }
-        .demo { gap: 14px; margin-top: 0; }
-        .mock { padding: 8px 10px; }
-        .mock-title { margin-top: 8px; }
-        .mock-price { font-size: 36px; }
-        .pill { min-height: 24px; margin-top: 4px; font-size: 10px; }
-        .goal-row { padding: 7px 0; font-size: 11px; }
-        .demo-steps { gap: 4px; }
-        .step { grid-template-columns: 30px 1fr; gap: 8px; padding: 7px 0; }
-        .step-num { width: 25px; height: 25px; font-size: 12px; }
-        .step h3, .path-card h3, .ai-card h3, .guardrail h3 { margin-bottom: 3px; font-size: 13px; }
-        .step p { font-size: 10px; line-height: 1.3; }
-        .ai-flow { gap: 8px; margin: 8px 0; }
-        .ai-card { min-height: 0; padding: 8px; }
-        .ai-card .tag, .path-card .tag { margin-bottom: 4px; }
-        .ai-card p, .guardrail p { font-size: 10px; line-height: 1.3; }
-        .guardrail { gap: 8px; }
-        .ask { gap: 10px; padding: 8px 10px; }
-        .ask p { font-size: 13px; }
-        .ask span { font-size: 10px; }
-      }
-
-      @media (min-width: 701px) and (max-width: 900px) {
-        .slides { padding: 8px; }
-        .slide {
-          width: calc(100vw - 16px);
-          min-height: 480px;
-          max-height: calc(100vh - 100px);
-          aspect-ratio: auto;
-          padding: 22px 28px;
-        }
-        .brandline { margin-bottom: 12px; }
-        h1, h2 { margin-bottom: 10px; font-size: clamp(28px, 4vw, 36px); }
-        .cover-main { padding-top: 20px; }
-        .cover h1 { margin-top: 12px; font-size: clamp(36px, 4.8vw, 44px); }
-        .cover-stat { margin-top: 16px; }
-        .stat-card { min-height: 80px; padding: 10px 0; }
-        .stat-value { margin-top: 5px; font-size: 32px; }
-        .two-col, .path-grid { gap: 10px; margin-top: 10px; }
-        .panel, .path-card { padding: 10px; }
-        .persona { min-height: 0; }
-        .persona strong { margin-top: 7px; font-size: 20px; }
-        .evidence { margin-top: 8px !important; }
-        .evidence p, .persona p, .panel p, .path-card p { margin-bottom: 0; font-size: 11px; line-height: 1.4; }
-        .demo { gap: 16px; margin-top: 2px; }
-        .mock { padding: 10px 12px; }
-        .mock-title { margin-top: 10px; }
-        .mock-price { font-size: 40px; }
-        .pill { min-height: 26px; margin-top: 6px; font-size: 11px; }
-        .goal-row { padding: 8px 0; font-size: 12px; }
-        .demo-steps { gap: 5px; }
-        .step { grid-template-columns: 30px 1fr; gap: 8px; padding: 8px 0; }
-        .step-num { width: 26px; height: 26px; }
-        .step h3, .path-card h3, .ai-card h3, .guardrail h3 { margin-bottom: 4px; font-size: 14px; }
-        .step p, .footnote { font-size: 10px; line-height: 1.35; }
-        .ai-flow { gap: 8px; margin: 10px 0; }
-        .ai-card { min-height: 0; padding: 10px; }
-        .ai-card .tag, .path-card .tag { margin-bottom: 5px; }
-        .ai-card p, .guardrail p { font-size: 11px; line-height: 1.4; }
-        .guardrail { gap: 8px; }
-        .ask { gap: 10px; padding: 10px 12px; }
-        .ask p { font-size: 14px; }
+        .ask { padding: 14px 18px; }
       }
 
       @media print {
@@ -557,163 +426,144 @@
           page-break-after: always;
         }
         .controls { display: none; }
-        .speaker-notes { display: none !important; }
       }
     </style>
   </head>
   <body>
     <main class="deck" aria-label="NorthStar pitch deck">
       <div class="slides">
-        <section class="slide cover active" aria-label="Slide 1: NorthStar" data-notes="0:00–0:25. “Imagine buying $129 AirPods today. In our sample scenario, that pushes a hoodie goal back 60 days. NorthStar makes that trade-off visible before the purchase. These are sample numbers, not a prediction.”">
+        <section class="slide cover active" aria-label="Slide 1: NorthStar">
           <div class="brandline">
             <span class="brand"><img src="./northstar-logo.png" alt="" /> NorthStar</span>
-            <span class="slide-meta">Cal Poly · 0:25</span>
+            <span>Cal Poly AI Hackathon · Pitch</span>
           </div>
           <div class="cover-main">
-            <div class="eyebrow">Our solution · a sample run</div>
-            <h1>$129 now. Hoodie <span class="accent">60 days later.</span></h1>
-            <div class="cover-stat" aria-label="Sample scenario: $129 AirPods purchase delays a hoodie goal by 60 days">
+            <div class="eyebrow">Keep your financial goals in sight</div>
+            <h1>A $129 choice can move a goal by <span class="accent">60 days.</span></h1>
+            <p class="lead">NorthStar turns the cost of a purchase into the time it costs a savings goal.</p>
+            <div class="cover-stat" aria-label="Sample scenario: $129 AirPods purchase delays a new phone goal by 60 days">
               <div class="stat-card">
-                <span class="stat-label">AIRPODS</span>
+                <span class="stat-label">SAMPLE PURCHASE</span>
                 <strong class="stat-value">$129</strong>
+                <span class="stat-detail">AirPods</span>
               </div>
               <span class="arrow" aria-hidden="true">→</span>
               <div class="stat-card">
-                <span class="stat-label">HOODIE GOAL</span>
+                <span class="stat-label">SAMPLE GOAL IMPACT</span>
                 <strong class="stat-value accent">+60 days</strong>
+                <span class="stat-detail">to a new phone goal</span>
               </div>
             </div>
+            <p class="footnote">Illustrative sample data. Planning comparison, not a financial recommendation.</p>
           </div>
         </section>
 
-        <section class="slide" aria-label="Slide 2: The person and problem" data-notes="0:25–0:55. “We built for a student balancing everyday spending with a savings goal. A price tag tells you what something costs now; it doesn’t show what that choice could delay. This is our starting hypothesis, not a user finding—we still need to test it with students.”">
-          <div class="brandline"><span class="eyebrow">The problem</span><span class="slide-meta">02 · 0:30</span></div>
-          <h2>Student goals compete with everyday spending.</h2>
+        <section class="slide" aria-label="Slide 2: The person and problem">
+          <div class="brandline"><span class="eyebrow">01 / Real problem, real user</span><span>NorthStar</span></div>
+          <h2>Built for a student balancing <span class="blue">today's spending</span> with a goal.</h2>
           <div class="two-col">
             <article class="panel persona">
               <div>
-                <span class="persona-label">WHO</span>
-                <strong>Student goal-setters</strong>
+                <span class="persona-label">WHO WE'RE DESIGNING FOR</span>
+                <strong>A student or first-time budgeter saving toward something specific.</strong>
               </div>
+              <p>They need to make everyday choices without losing sight of a near-term goal.</p>
             </article>
             <article class="panel">
-              <span class="persona-label">THE QUESTION</span>
-              <h3 style="margin-top: 18px">What gets pushed back?</h3>
+              <span class="persona-label">THE MOMENT THAT MATTERS</span>
+              <h3 style="margin-top: 18px">“What will this purchase change for me?”</h3>
+              <p>A price tag gives the cost today. NorthStar makes the possible trade-off visible in hours of work and time to a goal.</p>
             </article>
           </div>
           <article class="panel evidence" style="margin-top: 16px">
-            <span class="tag">Test with five students</span>
+            <span class="tag">Validation gap — be transparent</span>
+            <p style="margin: 8px 0 0">We don't yet have interview evidence in this deck. Before presenting, add one real user's words (with permission) and what they do today instead. Don't present this persona as a validated finding.</p>
           </article>
         </section>
 
-        <section class="slide" aria-label="Slide 3: Product demo" data-notes="0:55–1:50. “Here’s the product. I’ll enter AirPods at $129, then compare that with the hoodie and spring break goals. NorthStar estimates 60 extra days for the hoodie and 36 for spring break. At the sample pay rate, that’s 7 hours and 10 minutes of work. The calculation assumes the whole purchase comes from goal savings and weekly contributions stay the same. The user decides what matters more.”">
-          <div class="brandline"><span class="eyebrow">Product demo</span><span class="slide-meta">03 · 0:55</span></div>
-          <h2><span class="accent">$129 purchase.</span> +60 days.</h2>
+        <section class="slide" aria-label="Slide 3: Product demo">
+          <div class="brandline"><span class="eyebrow">02 / Execution &amp; design</span><span>Live product · Sample data</span></div>
+          <h2>Make the trade-off <span class="accent">visible before</span> the decision.</h2>
           <div class="demo">
             <div class="mock" aria-label="NorthStar sample purchase impact">
-              <div class="mock-top"><span>SAMPLE</span></div>
+              <div class="mock-top"><span>CHECK A PURCHASE</span><span>NorthStar</span></div>
               <p class="mock-title">AirPods</p>
               <p class="mock-price">$129</p>
-              <span class="pill">7h 10m work</span>
+              <span class="pill">7h 10m of work at sample pay</span>
               <div style="height: 20px"></div>
-              <div class="goal-row"><span>Hoodie</span><strong class="accent">+60d</strong></div>
-              <div class="goal-row"><span>Trip</span><strong class="blue">+36d</strong></div>
+              <div class="goal-row"><span>New phone goal</span><strong class="accent">+60 days</strong></div>
+              <div class="goal-row"><span>Spring break goal</span><strong class="blue">+36 days</strong></div>
+              <p class="footnote">Sample values from the working demo.</p>
             </div>
-            <p class="demo-flow">Price <span>→</span> Goal <span>→</span> Impact</p>
+            <div class="demo-steps">
+              <div class="step"><span class="step-num">1</span><div><h3>Enter a price</h3><p>Type an item or scan a price tag.</p></div></div>
+              <div class="step"><span class="step-num">2</span><div><h3>Choose a goal</h3><p>See how the same purchase changes each goal's timeline.</p></div></div>
+              <div class="step"><span class="step-num">3</span><div><h3>Choose for yourself</h3><p>Keep the purchase, choose a cheaper option, or protect the goal timeline.</p></div></div>
+              <p class="footnote">Demo on stage: open Price check → enter “AirPods” and “129” → compare with goals → show the new phone delay → choose skip.</p>
+            </div>
           </div>
         </section>
 
-        <section class="slide" aria-label="Slide 4: Purposeful AI" data-notes="1:50–2:25. “AI helps with inputs that are hard to structure: a photo of a price tag, or a question for Polaris. The app—not the model—does the goal math. When enabled, questions send relevant dashboard context to the configured AI provider. Common Polaris questions can fall back to on-device answers.”">
-          <div class="brandline"><span class="eyebrow">Where AI helps</span><span class="slide-meta">04 · 0:35</span></div>
-          <h2>AI reads. <span class="violet">NorthStar calculates.</span></h2>
+        <section class="slide" aria-label="Slide 4: Purposeful AI">
+          <div class="brandline"><span class="eyebrow">03 / Creative use of AI</span><span>AI for messy inputs, code for the math</span></div>
+          <h2>AI helps translate real life into a <span class="violet">clearer choice.</span></h2>
           <div class="ai-flow">
             <article class="panel ai-card">
-              <span class="tag">PHOTO</span>
-              <h3>Finds price</h3>
+              <span class="tag">01 · SEE</span>
+              <h3>Understand the purchase</h3>
+              <p>With a photo, Claude extracts item and price and suggests a cheaper alternative.</p>
             </article>
             <article class="panel ai-card">
-              <span class="tag">APP</span>
-              <h3>Goal delay</h3>
+              <span class="tag">02 · CONNECT</span>
+              <h3>Put it in context</h3>
+              <p>Polaris can answer questions using relevant account, spending, and goal context.</p>
             </article>
             <article class="panel ai-card">
-              <span class="tag">POLARIS</span>
-              <h3>Answers</h3>
+              <span class="tag">03 · EXPLAIN</span>
+              <h3>Keep the decision human</h3>
+              <p>NorthStar shows the time impact. The person decides whether that trade-off is worth it.</p>
             </article>
           </div>
-          <p class="footnote">AI for input. App formulas for money.</p>
+          <div class="guardrail">
+            <article class="panel"><h3>Reliable arithmetic</h3><p>Goal dates and purchase delays come from app formulas—not generated model math. Assumptions are shown beside the result.</p></article>
+            <article class="panel"><h3>Clear fallback</h3><p>When Polaris AI is unavailable, common questions can be answered on-device. AI requests send relevant context to the configured provider.</p></article>
+          </div>
+          <p class="footnote">This is a planning tool, not financial advice. Photo scanning needs the configured AI service; typed prices work without it.</p>
         </section>
 
-        <section class="slide" aria-label="Slide 5: Differentiation" data-notes="2:25–2:55. “Monarch's public positioning centers on seeing accounts, budgeting, and planning goals. We are not claiming Monarch cannot do purchase scenarios. NorthStar's wedge is a student purchase decision flow: enter or scan an item, check a 30-day cash forecast when cash or transaction data is available, see the work hours and savings-goal impact, then compare buying, a cheaper option, or skipping. The math is rule-based; AI can help read a price. We still need to test whether students find this more useful than their current approach.”">
-          <div class="brandline"><span class="eyebrow">Our wedge</span><span class="slide-meta">05 · 0:30</span></div>
-          <h2>NorthStar starts at the <span class="accent">purchase decision.</span></h2>
+        <section class="slide" aria-label="Slide 5: Customer path and ask">
+          <div class="brandline"><span class="eyebrow">04 / Path to customers</span><span>Next: prove it helps</span></div>
+          <h2>Start with five students. <span class="blue">Learn before scaling.</span></h2>
           <div class="path-grid">
             <article class="path-card">
-              <span class="tag">MONARCH</span>
-              <h3>Accounts · budgets · goals</h3>
-            </article>
-            <article class="path-card">
-              <span class="tag">NORTHSTAR</span>
-              <h3>30-day cash check</h3>
-            </article>
-            <article class="path-card">
-              <span class="tag">STUDENT LENS</span>
-              <h3>Work hours · goal dates</h3>
-            </article>
-          </div>
-          <div class="ask">
-            <p>Scan → compare → choose</p>
-            <span>Buy · swap · wait</span>
-          </div>
-        </section>
-
-        <section class="slide" aria-label="Slide 6: Customer path and validation" data-notes="2:55–3:30. “Our first step is five short walkthroughs with Cal Poly students who are saving toward something. We’ll watch whether they can check a purchase and explain the goal impact without help. We haven’t done those tests yet. If students find the tool useful, we’ll ask campus financial-wellness teams whether a pilot makes sense. We don’t have a confirmed payer.”">
-          <div class="brandline"><span class="eyebrow">What happens next</span><span class="slide-meta">06 · 0:35</span></div>
-          <h2>First: <span class="blue">five Cal Poly students.</span></h2>
-          <div class="path-grid">
-            <article class="path-card">
-              <span class="tag">WHO</span>
-              <h3>Student savers</h3>
+              <span class="tag">FIRST USERS</span>
+              <h3>Cal Poly students with a savings goal</h3>
+              <p>Recruit through student clubs, peer networks, and campus financial-wellness events.</p>
             </article>
             <article class="path-card">
               <span class="tag">TEST</span>
-              <h3>Explain the impact?</h3>
+              <h3>Five short task walkthroughs</h3>
+              <p>Can a student compare a purchase with a goal and explain the impact without help?</p>
             </article>
             <article class="path-card">
-              <span class="tag">PAYER</span>
-              <h3>Unknown</h3>
+              <span class="tag">PAYER HYPOTHESIS</span>
+              <h3>Free for students first</h3>
+              <p>Test usefulness before pursuing a campus financial-wellness partnership. No payer is confirmed yet.</p>
             </article>
           </div>
           <div class="ask">
-            <p>Five tests → campus pilot?</p>
+            <p>Our ask: introduce us to five student testers and one campus financial-wellness partner.</p>
+            <span>5 users → evidence → next pilot</span>
           </div>
-        </section>
-
-        <section class="slide" aria-label="Slide 7: Team" data-notes="3:30–4:00. “We’ve already built a working demo with the purchase-to-goal flow, photo price-reading, and Polaris. That gives us something concrete to put in front of students and improve. Our ask is simple: help us find five testers who’ll tell us honestly when it doesn’t help. Add each team member’s name and relevant strength before presenting.”">
-          <div class="brandline"><span class="eyebrow">The team</span><span class="slide-meta">07 · 0:30</span></div>
-          <h2>Built. <span class="accent">Ready to test.</span></h2>
-          <div class="two-col">
-            <article class="panel">
-              <span class="persona-label">BUILT</span>
-              <h3 style="margin-top: 18px">Working demo</h3>
-            </article>
-            <article class="panel">
-              <span class="persona-label">NEXT</span>
-              <h3 style="margin-top: 18px">Next: five tests</h3>
-            </article>
-          </div>
-          <div class="ask" style="margin-top: auto">
-            <p>Help find five testers.</p>
-            <span>Add team names</span>
-          </div>
+          <p class="footnote">Proposed test: measure task completion, whether the trade-off is understood, and whether the student wants to use it again. These are goals, not results.</p>
         </section>
       </div>
-      <aside class="speaker-notes" id="speaker-notes" aria-live="polite" aria-label="Speaker notes" hidden></aside>
       <nav class="controls" aria-label="Presentation controls">
         <button id="prev" type="button" aria-label="Previous slide" title="Previous slide (←)">←</button>
         <span id="counter" aria-live="polite">1 / 5</span>
-        <div class="progress" role="progressbar" aria-label="Deck progress" aria-valuemin="1" aria-valuemax="7" aria-valuenow="1"><span id="bar"></span></div>
+        <div class="progress" role="progressbar" aria-label="Deck progress" aria-valuemin="1" aria-valuemax="5" aria-valuenow="1"><span id="bar"></span></div>
         <button id="next" type="button" aria-label="Next slide" title="Next slide (→)">→</button>
-        <span>4:00 total · N for notes · P to print</span>
+        <span>Arrow keys to present · P to print</span>
       </nav>
     </main>
     <script>
@@ -723,7 +573,6 @@
       const counter = document.getElementById("counter");
       const bar = document.getElementById("bar");
       const progress = document.querySelector(".progress");
-      const speakerNotes = document.getElementById("speaker-notes");
       let current = 0;
 
       function showSlide(index) {
@@ -734,9 +583,7 @@
         });
         counter.textContent = `${current + 1} / ${slides.length}`;
         bar.style.width = `${((current + 1) / slides.length) * 100}%`;
-        progress.setAttribute("aria-valuemax", String(slides.length));
         progress.setAttribute("aria-valuenow", String(current + 1));
-        speakerNotes.textContent = slides[current].dataset.notes;
         prev.disabled = current === 0;
         next.disabled = current === slides.length - 1;
         history.replaceState(null, "", `#${current + 1}`);
@@ -748,7 +595,6 @@
         if (event.key === "ArrowRight" || event.key === " ") showSlide(current + 1);
         if (event.key === "ArrowLeft") showSlide(current - 1);
         if (event.key.toLowerCase() === "p") window.print();
-        if (event.key.toLowerCase() === "n") speakerNotes.hidden = !speakerNotes.hidden;
         if (event.key === "Home") showSlide(0);
         if (event.key === "End") showSlide(slides.length - 1);
       });

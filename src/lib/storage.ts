@@ -19,7 +19,10 @@ export function loadState(): SavedState {
     if (!raw) return EMPTY_STATE;
     const saved = { ...EMPTY_STATE, ...JSON.parse(raw) } as SavedState;
     // Drop retired goal types when opening an older saved state.
-    return { ...saved, goals: saved.goals.filter((g) => g.kind === "money") };
+    return { ...saved, goals: saved.goals.filter((g) => g.kind === "money").map(g =>
+      g.id === "hoodie" && g.name === "Hoodie" && g.target === 150
+        ? { ...g, name: "New phone", target: 1199 }
+        : g) };
   } catch {
     return EMPTY_STATE;
   }
@@ -45,7 +48,7 @@ export function demoState(): SavedState {
   return {
     profile: { hourlyWage: 18 },
     goals: [
-      { kind: "money", id: "hoodie", name: "Hoodie", target: 150, saved: 60, weekly: 15, deadline: nextDec(25) },
+      { kind: "money", id: "new-phone", name: "New phone", target: 1199, saved: 60, weekly: 15, deadline: nextDec(25) },
       { kind: "money", id: "trip", name: "Spring break trip", target: 500, saved: 120, weekly: 25, deadline: addDays(todayISO(), 120) },
     ],
     history: [],

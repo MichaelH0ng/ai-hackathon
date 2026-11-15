@@ -26,7 +26,7 @@ export interface WhatIf {
 
 /**
  * What happens to the goal if `spend` comes out of savings and the weekly rate stays the same.
- * Example: $150 hoodie, $60 saved, $15/week → 6.0 weeks; spend $20 → 7.3 weeks (9.3 days later).
+ * Example: $1,199 new phone, $60 saved, $15/week → 75.9 weeks; spend $20 → 77.3 weeks (9.3 days later).
  */
 export function whatIfSpend(target: number, saved: number, weekly: number, spend: number): WhatIf {
   const originalWeeks = weeksToGoal(target, saved, weekly);
@@ -85,7 +85,7 @@ export function recommendation(opts: {
   return parts.join(" ");
 }
 
-/** "A new hoodie" → "new hoodie", so sentences read "your new hoodie goal". */
+/** "A new new phone" → "new new phone", so sentences read "your new new phone goal". */
 export function goalPhrase(name: string): string {
   // Keep the name exactly as the user wrote it ("Japan trip", "Emergency Fund"); only drop a leading article.
   return name.trim().replace(/^(a|an|the|my)\s+/i, "");

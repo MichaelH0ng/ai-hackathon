@@ -13,29 +13,29 @@ import {
   whatIfSpend,
 } from "./finance";
 
-// The hoodie example from the brainstorm: $150 goal, $60 saved, $15/week.
-describe("hoodie example", () => {
-  it("takes 6.0 weeks", () => {
-    expect(formatWeeks(weeksToGoal(150, 60, 15))).toBe("6.0 weeks");
+// The new phone example from the brainstorm: $1,199 goal, $60 saved, $15/week.
+describe("new phone example", () => {
+  it("takes 75.9 weeks", () => {
+    expect(formatWeeks(weeksToGoal(1199, 60, 15))).toBe("75.9 weeks");
   });
-  it("$20 dinner → 7.3 weeks, 9.3 days later", () => {
-    const w = whatIfSpend(150, 60, 15, 20);
-    expect(formatWeeks(w.originalWeeks)).toBe("6.0 weeks");
-    expect(formatWeeks(w.newWeeks)).toBe("7.3 weeks");
+  it("$20 dinner → 77.3 weeks, 9.3 days later", () => {
+    const w = whatIfSpend(1199, 60, 15, 20);
+    expect(formatWeeks(w.originalWeeks)).toBe("75.9 weeks");
+    expect(formatWeeks(w.newWeeks)).toBe("77.3 weeks");
     expect(w.delayDays).toBeCloseTo(9.33, 2);
   });
   it("cooking for $5 → about 2 days", () => {
-    expect(whatIfSpend(150, 60, 15, 5).delayDays).toBeCloseTo(2.33, 2);
+    expect(whatIfSpend(1199, 60, 15, 5).delayDays).toBeCloseTo(2.33, 2);
   });
   it("skipping → no delay", () => {
-    expect(whatIfSpend(150, 60, 15, 0).delayDays).toBe(0);
+    expect(whatIfSpend(1199, 60, 15, 0).delayDays).toBe(0);
   });
-  it("keeping the date after dinner needs $18.33/week", () => {
-    expect(weeklyToKeepDate(150, 60, 15, 20)).toBeCloseTo(18.33, 2);
+  it("keeping the date after dinner needs $15.26/week", () => {
+    expect(weeklyToKeepDate(1199, 60, 15, 20)).toBeCloseTo(15.26, 2);
   });
   it("recommendation is a decision assistant, not a scold", () => {
     const text = recommendation({
-      goalName: "hoodie",
+      goalName: "new phone",
       spendLabel: "going out to eat",
       spendDelayDays: 9.33,
       altLabel: "cooking at home",
@@ -45,7 +45,7 @@ describe("hoodie example", () => {
       choiceLabel: "dinner out",
     });
     expect(text).toBe(
-      "Going out to eat will delay your hoodie goal by about 9 days. Cooking at home for $5 instead would reduce that delay to about 2 days. However, if spending time with friends is important to you, you can still choose dinner out and adjust your savings plan.",
+      "Going out to eat will delay your new phone goal by about 9 days. Cooking at home for $5 instead would reduce that delay to about 2 days. However, if spending time with friends is important to you, you can still choose dinner out and adjust your savings plan.",
     );
   });
 });
@@ -85,7 +85,7 @@ describe("hours of work", () => {
 
 describe("goalPhrase", () => {
   it("drops leading articles so sentences read naturally", () => {
-    expect(goalPhrase("A new hoodie")).toBe("new hoodie");
+    expect(goalPhrase("A new new phone")).toBe("new new phone");
     expect(goalPhrase("Emergency Fund")).toBe("Emergency Fund");
     expect(goalPhrase("New AirPods")).toBe("New AirPods");
   });

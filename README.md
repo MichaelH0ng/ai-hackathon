@@ -19,7 +19,7 @@ npm install
 npm run dev              # app on http://localhost:5173 (+ API on :8787)
 ```
 
-On the home page, tap **Try it with sample data** to load the hoodie and spring break examples.
+On the home page, tap **Try it with sample data** to load the $1,199 new phone and spring break examples.
 
 Optional:
 - **Photo reading**: `cp .env.example .env`, add an Anthropic API key, then restart. Typed prices work without a key.
@@ -30,11 +30,11 @@ Optional:
 
 ## 30-second demo
 
-1. **Home**: tap **Try it with sample data**. In "How much can you save this week?", turn the dial from $15 to $30. The hoodie moves 21 days sooner and is on time for Christmas. Tap **Save $30/week to my plan**.
+1. **Home**: tap **Try it with sample data**. In "How much can you save this week?", turn the dial from $15 to $30. The $1,199 new phone goal moves closer as you increase weekly savings. Tap **Save $30/week to my plan**.
 2. **Check a price**: take a photo of a price tag, or type AirPods for $129.
-   - It shows 7h 10m of work, the hoodie arriving 60 days later and the trip 36 days later.
+   - It shows 7h 10m of work, the new phone arriving 60 days later and the trip 36 days later.
    - Tap **Skip it and keep $129**.
-3. **Hoodie goal**: in "What if I buy something?", enter dinner out for $20 and cook at home for $5.
+3. **New phone goal**: in "What if I buy something?", enter dinner out for $20 and cook at home for $5.
    - Dinner out adds 9.3 days and cooking adds 2.3 days.
    - Tap **Get cook at home instead**.
 
