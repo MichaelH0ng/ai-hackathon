@@ -1,16 +1,11 @@
+import { useRef, useState } from "react";
+import { ProfileAvatar, avatarColors } from "./ProfileAvatar";
 import { ArrowRight, Landmark, PiggyBank, Settings as SettingsIcon, Sparkles, Target, UserRound } from "lucide-react";
 import { formatMoney } from "../lib/finance";
 import { netWorth } from "../lib/money";
 import type { Decision, MoneyGoal, Profile as ProfileData } from "../lib/types";
 import type { Bank } from "../lib/useBank";
 import { Card, Progress, Stat, TextField } from "./ui";
-
-/** "Nicholas Pinto" → "NP"; empty → null so we can show a generic icon. */
-function initials(name: string | undefined): string | null {
-  const parts = (name ?? "").trim().split(/\s+/).filter(Boolean);
-  if (!parts.length) return null;
-  return (parts[0][0] + (parts.length > 1 ? parts[parts.length - 1][0] : "")).toUpperCase();
-}
 
 /**
  * Profile: who you are (editable, saved on this device) plus a snapshot of your
@@ -45,20 +40,70 @@ export function Profile({
   const banks = bank.status?.items ?? [];
   const worth = bank.data?.accounts.length ? netWorth(bank.data.accounts).net : null;
 
-  const avatar = initials(profile.name);
+  const uploadInput = useRef<HTMLInputElement>(null);
+  const latestProfile = useRef(profile);
+  latestProfile.current = profile;
+  const [imageError, setImageError] = useState("");
+  const [uploading, setUploading] = useState(false);
+  async function uploadPhoto(file: File | undefined) {
+    if (!file) return;
+    setImageError("");
+    if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) {
+      setImageError("Choose a JPG, PNG, or WebP image.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setImageError("Choose an image smaller than 5 MB.");
+      return;
+    }
+    setUploading(true);
+    const url = URL.createObjectURL(file);
+    try {
+      const image = new Image();
+      image.src = url;
+      await image.decode();
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = 256;
+      const context = canvas.getContext("2d");
+      if (!context) throw new Error("Image editing unavailable");
+      const size = Math.min(image.naturalWidth, image.naturalHeight);
+      context.drawImage(image, (image.naturalWidth - size) / 2, (image.naturalHeight - size) / 2, size, size, 0, 0, 256, 256);
+      onProfile({ ...latestProfile.current, avatarImage: canvas.toDataURL("image/webp", 0.85) });
+    } catch {
+      setImageError("Couldn't read that image. Try another photo.");
+    } finally {
+      URL.revokeObjectURL(url);
+      setUploading(false);
+    }
+  }
   const emailLooksWrong = !!profile.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profile.email);
 
   return (
     <div className="space-y-4">
       {/* Header */}
       <Card className="flex items-center gap-4">
-        <span className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full bg-brand-600 font-display text-2xl font-bold text-white" aria-hidden="true">
-          {avatar ?? <UserRound className="h-8 w-8" />}
-        </span>
+        <ProfileAvatar profile={profile} className="h-16 w-16 text-2xl" />
         <div className="min-w-0">
           <h1 className="truncate text-2xl font-bold text-ink">{profile.name?.trim() || "Your profile"}</h1>
           <p className="truncate text-sm text-stone-600">{profile.email || "Add your details below."}</p>
         </div>
+      </Card>
+
+      <Card>
+        <h2 className="text-lg font-bold text-ink">Profile picture</h2>
+        <p className="mt-1 text-sm text-stone-600">Choose a color for your initials or upload a photo.</p>
+        <div className="mt-4 flex flex-wrap gap-3" role="group" aria-label="Profile picture colors">
+          {avatarColors.map(color => <button key={color.value} type="button" aria-label={color.name} aria-pressed={!profile.avatarImage && (profile.avatarColor ?? avatarColors[0].value) === color.value} disabled={uploading} onClick={() => update({ avatarColor: color.value, avatarImage: undefined })} className="profile-color-swatch" style={{ backgroundColor: color.value }}>
+            {!profile.avatarImage && (profile.avatarColor ?? avatarColors[0].value) === color.value ? "✓" : ""}
+          </button>)}
+        </div>
+        <input ref={uploadInput} type="file" accept="image/jpeg,image/png,image/webp" className="hidden" aria-label="Upload profile picture" onChange={event => { void uploadPhoto(event.target.files?.[0]); event.target.value = ""; }} />
+        <div className="mt-4 flex flex-wrap gap-2">
+          <button type="button" className="wealth-secondary" disabled={uploading} onClick={() => uploadInput.current?.click()}>{uploading ? "Preparing photo…" : "Upload photo"}</button>
+          {profile.avatarImage && <button type="button" className="wealth-secondary" disabled={uploading} onClick={() => update({ avatarImage: undefined })}>Remove photo</button>}
+        </div>
+        <p className="mt-3 text-xs text-stone-500">JPG, PNG, or WebP, up to 5 MB. Photos are cropped to the center and saved on this device.</p>
+        {imageError && <p role="alert" className="mt-2 text-sm text-cost">{imageError}</p>}
       </Card>
 
       {/* About you */}

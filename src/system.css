@@ -85,6 +85,10 @@
 :root[data-theme] .goals-tool-icon { border-radius: var(--ns-radius-control); }
 
 /* ---------- Text ---------- */
+.profile-color-swatch { width: 44px; height: 44px; border-radius: 50%; color: white; font-size: 22px; font-weight: 700; border: 2px solid transparent; }
+.profile-color-swatch[aria-pressed="true"] { border-color: white; box-shadow: 0 0 0 2px var(--ns-focus); }
+.profile-color-swatch:disabled { opacity: .5; cursor: wait; }
+
 /* Form labels were left in an old low-contrast gray; make them readable everywhere. */
 :root[data-theme] :is(.wealth-field, .ui-field) > span:first-child { color: var(--ns-label); font-size: 14px; font-weight: 600; }
 
@@ -252,6 +256,17 @@
 .goal-linked p { margin: 0; flex: 1 1 260px; }
 .goal-saved-edit > button, .goal-saved-edit > :is(.ui-button) { margin-top: 26px; }
 /* "Add to savings": the Add button matches the input's height and lines up with it. */
+:root[data-theme] .purchase-goal-option {
+  border: 1px solid var(--ns-line);
+  background: var(--ns-secondary-bg);
+  box-shadow: none;
+}
+:root[data-theme] button.purchase-goal-option:hover { background: var(--ns-secondary-hover); }
+:root[data-theme] button.purchase-goal-option:focus-visible {
+  outline: 2px solid var(--ns-focus);
+  outline-offset: -1px;
+}
+
 .goal-deposit .ui-button { height: var(--goal-input-h, 46px); min-height: 0; padding-block: 0; display: inline-flex; align-items: center; justify-content: center; }
 .goal-deposit-hint { margin: 6px 0 0; font-size: 12px; color: var(--ns-label); }
 /* Rename a goal: Save and Cancel line up with the name field. */

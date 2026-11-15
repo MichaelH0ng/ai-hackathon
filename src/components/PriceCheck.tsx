@@ -1,4 +1,4 @@
-import { ArrowRight, Clock, Lightbulb, PiggyBank, RotateCcw, Tag, Wallet } from "lucide-react";
+import { ArrowRight, Check, Clock, Lightbulb, PiggyBank, RotateCcw, Tag, Wallet } from "lucide-react";
 import { goalForItem } from "../lib/envelopes";
 import { formatDate } from "../lib/dates";
 import { useMemo, useState } from "react";
@@ -201,7 +201,7 @@ export function PriceCheck({
                 <ul className="mt-3 space-y-2" role="radiogroup" aria-label="Choose a goal">
                   {moneyGoals.map((g) => {
                     if (isEmergencyFund(g)) return (
-                      <li key={g.id} className="flex min-h-14 items-center justify-between gap-3 rounded-2xl px-4 ring-1 ring-stone-200">
+                      <li key={g.id} className="purchase-goal-option flex min-h-14 items-center justify-between gap-3 rounded-2xl px-4">
                         <span className="font-semibold text-ink">{g.name}</span>
                         <span className="text-sm font-semibold text-stone-600">Not affected: never used for purchases</span>
                       </li>
@@ -214,10 +214,10 @@ export function PriceCheck({
                           role="radio"
                           aria-checked={on}
                           onClick={() => setGoalId(g.id)}
-                          className={`flex min-h-14 w-full items-center justify-between gap-3 rounded-2xl px-4 text-left ring-1 transition-colors duration-200 ${on ? "bg-brand-50 ring-2 ring-brand-500" : "bg-white ring-stone-200 hover:bg-stone-50"}`}
+                          className="purchase-goal-option flex min-h-14 w-full items-center justify-between gap-3 rounded-2xl px-4 text-left transition-colors duration-200"
                         >
                           <span className="min-w-0">
-                            <span className="block font-semibold text-ink">{g.name}</span>
+                            <span className="flex items-center gap-2 font-semibold text-ink">{g.name}{on && <Check size={16} aria-hidden="true" />}</span>
                             {(() => {
                               const from = projectedDate(w.originalWeeks);
                               const to = projectedDate(w.newWeeks);
