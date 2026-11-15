@@ -166,6 +166,8 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; onUpdat
     ].map(a => ({ ...a, id: crypto.randomUUID(), sample: true, updatedAt: new Date().toISOString() }))] });
   }
   const addAsset = () => setAssetForm({ id: crypto.randomUUID(), name: "", institution: "", kind: "Checking", balance: 0 });
+  /** Animated "Add account" button: in the Accounts header, and beside "View accounts and activity" on Overview. */
+  const addAccountButton = (extraClass = "") => <StarBorder onClick={addAsset} className={`wealth-add-account ${extraClass}`} backgroundColor="linear-gradient(115deg, #168e90, #4b7fe0 60%, #9e64df)" textColor="#ffffff" borderColor="rgb(223 254 255 / 22%)" color="#dffeff" trailColor="#54e2c2" radius={10} thickness={1.5} duration={5} glow={0.8}><Plus size={16} aria-hidden="true" /> Add account</StarBorder>;
   const groupTotal = (kind: (k: string) => boolean) => assets.filter(a => kind(a.kind)).reduce((sum, a) => sum + a.balance, 0);
   const accountRow = (a: Asset) => {
     const isLinked = linked.some(account => account.id === a.id);
@@ -222,7 +224,7 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; onUpdat
     retirementAge: retirementPoints.length ? retirementAge : null,
   };
   return <main id="main" className={`wealth-dashboard${tab === "Goals" ? " goals-page" : ""}`}>
-    <div className="wealth-page-head"><div><h1>{tab === "Goals" ? "My goals" : tab === "Activity" ? "Account activity" : tab}</h1>{tab !== "Overview" && <p>{tab === "Accounts" || tab === "Activity" ? "Track your balances and connected accounts." : tab === "Goals" ? "Plan your savings and watch your progress grow." : tab === "Retirement" ? "Explore your long-term savings plan." : "Give your monthly income a plan."}</p>}</div>{(tab === "Overview" || tab === "Accounts") && <StarBorder onClick={addAsset} className="wealth-add-account" backgroundColor="linear-gradient(115deg, #168e90, #4b7fe0 60%, #9e64df)" textColor="#ffffff" borderColor="rgb(223 254 255 / 22%)" color="#dffeff" trailColor="#54e2c2" radius={10} thickness={1.5} duration={5} glow={0.8}><Plus size={16} aria-hidden="true" /> Add account</StarBorder>}</div>
+    <div className="wealth-page-head"><div><h1>{tab === "Goals" ? "My goals" : tab === "Activity" ? "Account activity" : tab}</h1>{tab !== "Overview" && <p>{tab === "Accounts" || tab === "Activity" ? "Track your balances and connected accounts." : tab === "Goals" ? "Plan your savings and watch your progress grow." : tab === "Retirement" ? "Explore your long-term savings plan." : "Give your monthly income a plan."}</p>}</div>{tab === "Accounts" && addAccountButton()}</div>
     {tab === "Overview" && <>
       {bank.loading && !bank.data && !assets.length ? <section className="wealth-card" role="status">Loading your money overview…</section> : <HomeOverview data={{
         env: bank.data?.env ?? "manual",
@@ -234,7 +236,7 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; onUpdat
         }))],
         transactions: bank.data?.transactions ?? [], status: bank.data?.status ?? [],
         fetchedAt: bank.data?.fetchedAt ?? new Date().toISOString(),
-      }} goal={goals.find(g => g.saved < g.target) ?? goals[0]} goals={goals} onCheck={props.onCheck} onMoney={() => setTab("Accounts")} onGoals={() => setTab("Goals")} onNewGoal={onNewGoal} onOpenGoal={onOpenGoal} />}
+      }} goal={goals.find(g => g.saved < g.target) ?? goals[0]} goals={goals} onCheck={props.onCheck} onMoney={() => setTab("Accounts")} addAccount={addAccountButton("w-full min-w-0 text-center")} onGoals={() => setTab("Goals")} onNewGoal={onNewGoal} onOpenGoal={onOpenGoal} />}
       {!assets.length && <div className="wealth-sample"><Sparkles size={18} /><span>Start with your own numbers, or explore with clearly labeled sample accounts.</span><button onClick={sample}>Try sample accounts <ArrowRight size={15} /></button></div>}
       {assets.some(a => a.sample) && <div className="wealth-sample"><Sparkles size={17} /><span>Sample accounts are included in these totals.</span><button onClick={() => update({ assets: plan.assets.filter(a => !a.sample) })}>Remove sample accounts <X size={14} /></button></div>}
 

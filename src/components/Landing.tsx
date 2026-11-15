@@ -68,12 +68,14 @@ export function Landing({
 
 // ---------- connected: the dashboard ----------
 
-export function HomeOverview({ data, goals = [], onCheck, onMoney, onGoals, onNewGoal, onOpenGoal }: {
+export function HomeOverview({ data, goals = [], onCheck, onMoney, addAccount, onGoals, onNewGoal, onOpenGoal }: {
   data: import("../lib/money").BankData;
   goal?: MoneyGoal;
   goals?: MoneyGoal[];
   onCheck: () => void;
   onMoney: () => void;
+  /** Optional "Add account" button; it shares the row with "View accounts and activity". */
+  addAccount?: React.ReactNode;
   onGoals?: () => void;
   onNewGoal?: () => void;
   onOpenGoal?: (id: string) => void;
@@ -113,9 +115,12 @@ export function HomeOverview({ data, goals = [], onCheck, onMoney, onGoals, onNe
             />
           </div>
 
-          <button onClick={onMoney} className="wealth-primary w-full">
-            View accounts and activity <ArrowRight className="h-4 w-4" aria-hidden="true" />
-          </button>
+          <div className={addAccount ? "grid grid-cols-2 gap-3" : undefined}>
+            {addAccount}
+            <button onClick={onMoney} className="wealth-primary w-full min-w-0 justify-center whitespace-normal! text-center leading-tight">
+              View accounts and activity <ArrowRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+            </button>
+          </div>
 
           <div className="clay p-5">
             <CardHead icon={<Target className="h-4 w-4 text-[#c294ff]" />} title="Savings goals" action={goals.length && onGoals ? { label: "See all", onClick: onGoals } : undefined} />
