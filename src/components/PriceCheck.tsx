@@ -159,8 +159,6 @@ export function PriceCheck({
 
       {/* 1. Capture */}
       <Card className="purchase-check-entry">
-        <details className="goals-photo-option">
-        <summary><Camera size={18} aria-hidden="true" /> Use a photo instead</summary>
         <div className="relative w-full rounded-2xl bg-brand-600 px-18 py-4 text-center text-white shadow-[0_5px_0_0_rgb(59_7_100/0.25)]">
           {/* Icon sits on the left edge; the text is centred across the whole box, independent of the icon. */}
           <span className="absolute top-1/2 left-4 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-2xl bg-white/15"><Camera className="h-6 w-6" aria-hidden="true" /></span>
@@ -209,7 +207,9 @@ export function PriceCheck({
           </div>
         )}
 
-        </details>
+        <div className="my-5 flex items-center gap-3 text-xs font-bold uppercase tracking-wider text-stone-400">
+          <span className="h-px flex-1 bg-stone-200" /> or type it in <span className="h-px flex-1 bg-stone-200" />
+        </div>
         <div className="grid grid-cols-[1fr_8rem] gap-2">
           <TextField label="What is it?" value={name} onChange={setName} placeholder="AirPods" />
           <NumberField label="How much?" value={price} onChange={setPrice} />
