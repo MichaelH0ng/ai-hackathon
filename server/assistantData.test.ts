@@ -54,7 +54,7 @@ describe("comparisonPeriods", () => {
 });
 
 describe("goals", () => {
-  const goals = [{ name: "Spring break trip", target: 800, saved: 320, weekly: 40 }, { name: "Hoodie", target: 60, saved: 60, weekly: 10 }];
+  const goals = [{ name: "Spring break trip", target: 800, saved: 320, weekly: 40 }, { name: "New phone", target: 60, saved: 60, weekly: 10 }];
   it("matches the goal a question names", () => {
     expect(matchGoal("When will I reach my spring break goal?", goals)?.name).toBe("Spring break trip");
     expect(matchGoal("How are my goals doing?", goals)).toBeNull();
