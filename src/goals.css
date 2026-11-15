@@ -169,3 +169,56 @@ button.purchase-check-compare:focus-visible { outline: 3px solid #4c86d9; outlin
   .goals-page .goals-tool > summary::after { margin-left: 52px; }
   .goals-page .goals-tool > summary .goals-tool-arrow { display: none; }
 }
+
+/* Solid action surfaces keep labels readable over the aurora in both themes. */
+button.ui-button, button.wealth-primary, button.wealth-secondary {
+  min-height: 48px;
+  font-size: 15px;
+  line-height: 1.4;
+  font-weight: 700;
+  white-space: normal;
+  opacity: 1;
+}
+button.ui-button-primary, button.wealth-primary {
+  background: #234e91;
+  color: #ffffff;
+  border: 1px solid #234e91;
+  box-shadow: none;
+}
+button.ui-button-primary:hover:not(:disabled), button.wealth-primary:hover:not(:disabled) { background: #183b73; color: #ffffff; }
+button.ui-button-secondary, button.wealth-secondary { background: #edf3fc; color: #193d70; border: 1px solid #7690b4; }
+button.ui-button-secondary:hover:not(:disabled), button.wealth-secondary:hover:not(:disabled) { background: #dce8f9; color: #193d70; }
+button.ui-button-ghost { color: #324f73; }
+button.ui-button:disabled, button.wealth-primary:disabled, button.wealth-secondary:disabled {
+  background: #d9e1ec;
+  color: #3d4c62;
+  border: 1px solid #8999ae;
+  box-shadow: none;
+  cursor: not-allowed;
+  opacity: 1;
+}
+button.ui-button > span, button.wealth-primary > span, button.wealth-secondary > span { color: inherit; }
+.weekly-target { padding: 18px; border: 1px solid #86b6a8; border-radius: 14px; background: #eaf9f3; color: #153f35; }
+.weekly-target > span { display: block; font-size: 15px; font-weight: 600; }
+.weekly-target > strong { display: block; margin: 6px 0; font-size: 32px; line-height: 1.25; font-variant-numeric: tabular-nums; }
+.weekly-target small { font-size: 16px; }
+.weekly-target p { font-size: 15px; line-height: 1.6; color: inherit; }
+.goal-weekly-needed { display: block; margin-top: 12px; font-size: 15px; line-height: 1.6; font-weight: 700; color: #1a5949; }
+:root[data-theme="dark"] button.ui-button-primary, :root[data-theme="dark"] button.wealth-primary {
+  background: #9bf4df; color: #092c30; border-color: #9bf4df;
+}
+:root[data-theme="dark"] button.ui-button-primary:hover:not(:disabled), :root[data-theme="dark"] button.wealth-primary:hover:not(:disabled) { background: #c4ffef; color: #092c30; }
+:root[data-theme="dark"] button.ui-button-secondary, :root[data-theme="dark"] button.wealth-secondary {
+  background: #203958; color: #f1f7ff; border-color: #839dbc;
+}
+:root[data-theme="dark"] button.ui-button-secondary:hover:not(:disabled), :root[data-theme="dark"] button.wealth-secondary:hover:not(:disabled) { background: #304f74; color: #f1f7ff; }
+:root[data-theme="dark"] button.ui-button-ghost { color: #d4e5ff; }
+:root[data-theme="dark"] button.ui-button:disabled, :root[data-theme="dark"] button.wealth-primary:disabled, :root[data-theme="dark"] button.wealth-secondary:disabled {
+  background: #293b51; color: #c1ccda; border-color: #71849b; opacity: 1;
+}
+:root[data-theme="dark"] .weekly-target { background: #103435; border-color: #54b8a4; color: #e2fff6; }
+:root[data-theme="dark"] .weekly-target p, :root[data-theme="dark"] .goal-weekly-needed { color: #b9f7e6; }
+.money-assistant-launch { background: #234e91; color: #fff; font-size: 15px; font-weight: 700; }
+.money-assistant-launch:hover { background: #183b73; color: #fff; }
+:root[data-theme="dark"] .money-assistant-launch { background: #9bf4df; color: #092c30; }
+:root[data-theme="dark"] .money-assistant-launch:hover { background: #c4ffef; color: #092c30; }

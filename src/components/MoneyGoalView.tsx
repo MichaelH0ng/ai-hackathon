@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { daysBetween, formatDate } from "../lib/dates";
+import { daysBetween, formatDate, todayISO } from "../lib/dates";
 import { formatMoney, formatWeeks, goalPhrase, projectedDate, weeklyNeededForDeadline, weeksToGoal } from "../lib/finance";
 import type { MoneyGoal } from "../lib/types";
 import { type LogDecision, MoneyWhatIf } from "./MoneyWhatIf";
 import { Timeline } from "./Timeline";
-import { BackButton, Button, Card, NumberField, Notice, Progress, Stat } from "./ui";
+import { BackButton, Button, Card, DateField, NumberField, Notice, Progress, Stat } from "./ui";
 
 export function MoneyGoalView({
   goal,
@@ -27,7 +27,7 @@ export function MoneyGoalView({
   const finish = projectedDate(weeks);
   const done = goal.saved >= goal.target;
   const lateBy = goal.deadline && finish ? daysBetween(goal.deadline, finish) : 0;
-  const neededForDeadline = goal.deadline ? weeklyNeededForDeadline(goal.target, goal.saved, goal.deadline) : 0;
+  const neededForDeadline = goal.deadline ? Math.ceil(weeklyNeededForDeadline(goal.target, goal.saved, goal.deadline) * 100) / 100 : 0;
 
   function apply(changes: Partial<MoneyGoal>, msg: string, decision?: LogDecision) {
     onChange({ ...goal, ...changes });
@@ -73,19 +73,14 @@ export function MoneyGoalView({
             <div className="mt-3">
               <Timeline deadline={goal.deadline} rows={[{ label: "Your plan", end: finish, tone: lateBy > 0 ? "warn" : "good" }]} />
             </div>
-            {goal.deadline && finish && lateBy > 0 && (
-              <div className="mt-3">
-                <Notice tone="warn">
-                  You're about {lateBy} day{lateBy === 1 ? "" : "s"} behind your date. Saving <strong>{formatMoney(neededForDeadline, true)}/week</strong> gets you back on track.
-                  <Button
-                    className="mt-2 w-full"
-                    onClick={() => apply({ weekly: Math.round(neededForDeadline * 100) / 100 }, `Plan updated: ${formatMoney(neededForDeadline, true)}/week puts you back on track.`)}
-                  >
-                    Update my plan
-                  </Button>
-                </Notice>
-              </div>
-            )}
+            <div className="mt-3 weekly-target" aria-live="polite">
+              {goal.deadline ? goal.deadline > todayISO() ? <>
+                <span>Save each week to reach your goal</span>
+                <strong>{formatMoney(neededForDeadline, true)}<small> / week</small></strong>
+                <p>{formatMoney(Math.max(0, goal.target - goal.saved), true)} remaining ÷ {(daysBetween(todayISO(), goal.deadline) / 7).toFixed(1)} weeks until {formatDate(goal.deadline)}. Recalculates as you add savings.</p>
+                {goal.weekly !== neededForDeadline && <Button className="mt-3 w-full" onClick={() => apply({ weekly: neededForDeadline }, `Weekly plan updated to ${formatMoney(neededForDeadline, true)}.`)}>Use {formatMoney(neededForDeadline, true)}/week</Button>}
+              </> : <p>{formatMoney(Math.max(0, goal.target - goal.saved), true)} remains. Your target date has arrived or passed; choose a future date to calculate a weekly plan.</p> : <p>Add a target date below to see how much to save each week.</p>}
+            </div>
           </>
         )}
 
@@ -102,6 +97,7 @@ export function MoneyGoalView({
           </Button>
         </div>
         <div className="mt-2">
+          <DateField label="Target date" value={goal.deadline ?? ""} min={todayISO()} onChange={deadline => onChange({ ...goal, deadline: deadline || undefined })} />
           <NumberField label="Weekly savings" value={goal.weekly} onChange={(v) => onChange({ ...goal, weekly: Number(v || 0) })} suffix="/wk" />
         </div>
       </Card>

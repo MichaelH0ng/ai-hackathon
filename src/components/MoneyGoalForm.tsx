@@ -13,10 +13,11 @@ export function MoneyGoalForm({ onCreate, onBack }: { onCreate: (g: MoneyGoal) =
 
   const t = Number(target || 0);
   const s = Number(saved || 0);
-  const w = Number(weekly || 0);
+  const needed = deadline ? Math.ceil(weeklyNeededForDeadline(t, s, deadline) * 100) / 100 : 0;
+  const w = deadline ? needed : Number(weekly || 0);
   const weeks = weeksToGoal(t, s, w);
   const finish = projectedDate(weeks);
-  const ready = name.trim() && t > 0 && w > 0;
+  const ready = name.trim() && t > 0 && (s >= t || w > 0) && (!deadline || deadline >= todayISO());
 
   return (
     <div className="goal-flow">
@@ -29,11 +30,13 @@ export function MoneyGoalForm({ onCreate, onBack }: { onCreate: (g: MoneyGoal) =
             <NumberField label="Target amount" value={target} onChange={setTarget} />
             <NumberField label="Already saved" value={saved} onChange={setSaved} />
           </div>
-          <NumberField label="Plan to save each week" value={weekly} onChange={setWeekly} suffix="/wk" />
-          <details className="goal-optional">
-            <summary>Add a target date (optional)</summary>
-            <DateField label="Want it by (optional)" value={deadline} onChange={setDeadline} min={todayISO()} />
-          </details>
+          <DateField label="Target date" value={deadline} onChange={setDeadline} min={todayISO()} hint="Choose when you want to reach your goal. We’ll calculate your weekly savings." />
+          {!deadline && <NumberField label="Or choose your own weekly savings" value={weekly} onChange={setWeekly} suffix="/wk" />}
+          {deadline && t > 0 && <div className="weekly-target" aria-live="polite">
+            <span>{s >= t ? "Goal already funded" : "Save each week"}</span>
+            <strong>{formatMoney(needed, true)}<small> / week</small></strong>
+            <p>{formatMoney(Math.max(0, t - s), true)} left after your {formatMoney(s, true)} already saved, by {formatDate(deadline)}.</p>
+          </div>}
         </div>
       </Card>
 

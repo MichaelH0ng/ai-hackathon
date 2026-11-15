@@ -59,6 +59,16 @@ describe("weekly plan edge cases", () => {
   it("projected date rounds up to whole days", () => {
     expect(projectedDate(6, "2026-11-13")).toBe("2026-12-25");
   });
+  it("subtracts existing savings and recalculates after deposits", () => {
+    expect(weeklyNeededForDeadline(1000, 200, "2026-12-12", "2026-11-14")).toBe(200);
+    expect(weeklyNeededForDeadline(1000, 400, "2026-12-12", "2026-11-14")).toBe(150);
+  });
+  it("needs no weekly contribution once fully funded", () => {
+    expect(weeklyNeededForDeadline(1000, 1200, "2026-12-12", "2026-11-14")).toBe(0);
+  });
+  it("prorates a timeline shorter than one week", () => {
+    expect(weeklyNeededForDeadline(100, 40, "2026-11-17", "2026-11-14")).toBe(140);
+  });
   it("weekly needed for a deadline", () => {
     expect(weeklyNeededForDeadline(150, 60, "2026-12-25", "2026-11-13")).toBeCloseTo(15, 5);
   });

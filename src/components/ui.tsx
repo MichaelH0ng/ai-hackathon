@@ -123,7 +123,7 @@ export function Button({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`min-h-11 rounded-2xl px-4 py-2.5 text-sm font-bold transition-all duration-200 ${styles} ${className}`}
+      className={`ui-button ui-button-${variant} min-h-11 rounded-2xl px-4 py-2.5 text-sm font-bold transition-all duration-200 ${styles} ${className}`}
     >
       {children}
     </button>
