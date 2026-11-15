@@ -1,0 +1,606 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#050b16" />
+    <title>NorthStar — Pitch Deck</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        color: #edf6ff;
+        background: #050b16;
+        font-synthesis: none;
+        text-rendering: optimizeLegibility;
+        --night: #050b16;
+        --navy: #091426;
+        --panel: #10213b;
+        --panel-light: #142a47;
+        --teal: #54e2c2;
+        --blue: #74b9ff;
+        --violet: #c294ff;
+        --muted: #c0cde0;
+        --line: rgb(160 198 244 / 24%);
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        min-width: 320px;
+        min-height: 100vh;
+        margin: 0;
+        overflow: hidden;
+        background:
+          radial-gradient(ellipse at 82% 3%, rgb(116 185 255 / 10%), transparent 34rem),
+          radial-gradient(ellipse at 12% 100%, rgb(84 226 194 / 7%), transparent 32rem),
+          var(--night);
+      }
+
+      button { font: inherit; }
+
+      .deck {
+        display: grid;
+        min-height: 100vh;
+        grid-template-rows: 1fr auto;
+      }
+
+      .slides {
+        display: grid;
+        min-height: 0;
+        place-items: center;
+        padding: 18px 24px 8px;
+      }
+
+      .slide {
+        position: relative;
+        display: none;
+        width: min(100%, 1200px, calc((100vh - 112px) * 16 / 9));
+        aspect-ratio: 16 / 9;
+        overflow: hidden;
+        padding: clamp(28px, 5vw, 72px);
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        background:
+          radial-gradient(ellipse at 95% 0%, rgb(116 185 255 / 12%), transparent 36%),
+          linear-gradient(145deg, #10213b, #091426 68%);
+        box-shadow: 0 24px 80px rgb(0 0 0 / 30%);
+      }
+
+      .slide.active { display: flex; flex-direction: column; }
+
+      .eyebrow {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        color: var(--teal);
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: .12em;
+        text-transform: uppercase;
+      }
+
+      .eyebrow::before {
+        width: 22px;
+        height: 1px;
+        background: var(--teal);
+        content: "";
+      }
+
+      .brandline {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: auto;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        color: #edf6ff;
+        font-weight: 700;
+      }
+
+      .brand img { width: 28px; height: 28px; object-fit: contain; }
+
+      h1, h2, h3, p { margin-top: 0; }
+
+      h1 {
+        max-width: 900px;
+        margin-bottom: 20px;
+        font-size: clamp(38px, 6vw, 76px);
+        font-weight: 800;
+        letter-spacing: -.055em;
+        line-height: 1.04;
+      }
+
+      h2 {
+        max-width: 900px;
+        margin-bottom: 18px;
+        font-size: clamp(32px, 4.5vw, 56px);
+        font-weight: 800;
+        letter-spacing: -.045em;
+        line-height: 1.08;
+      }
+
+      h3 {
+        margin-bottom: 10px;
+        font-size: clamp(17px, 1.8vw, 22px);
+        letter-spacing: -.02em;
+      }
+
+      p {
+        color: var(--muted);
+        font-size: clamp(15px, 1.5vw, 19px);
+        line-height: 1.6;
+      }
+
+      .lead {
+        max-width: 720px;
+        margin-bottom: 0;
+        font-size: clamp(18px, 2vw, 25px);
+        line-height: 1.45;
+      }
+
+      .accent { color: var(--teal); }
+      .blue { color: var(--blue); }
+      .violet { color: var(--violet); }
+      .muted { color: var(--muted); }
+
+      .cover {
+        justify-content: space-between;
+        background:
+          radial-gradient(ellipse at 80% 75%, rgb(84 226 194 / 11%), transparent 34%),
+          radial-gradient(ellipse at 97% 4%, rgb(194 148 255 / 13%), transparent 32%),
+          linear-gradient(145deg, #10213b, #091426 70%);
+      }
+
+      .cover-main { padding-top: clamp(24px, 5vh, 60px); }
+      .cover h1 { margin-top: 24px; }
+
+      .cover-stat {
+        display: grid;
+        grid-template-columns: 1fr auto 1fr;
+        align-items: center;
+        gap: clamp(12px, 3vw, 34px);
+        width: min(100%, 740px);
+        margin-top: clamp(28px, 5vh, 52px);
+      }
+
+      .stat-card, .panel, .step, .path-card {
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: linear-gradient(145deg, rgb(20 42 71 / 92%), rgb(9 20 38 / 96%));
+      }
+
+      .stat-card { min-height: 120px; padding: 20px; }
+      .stat-label { color: var(--muted); font-size: 12px; font-weight: 600; }
+      .stat-value { display: block; margin-top: 8px; font-size: clamp(28px, 4vw, 44px); font-weight: 800; letter-spacing: -.05em; }
+      .stat-detail { display: block; margin-top: 2px; color: var(--muted); font-size: 12px; }
+      .arrow { color: var(--teal); font-size: 28px; }
+
+      .footnote {
+        margin: 16px 0 0;
+        color: #9fb0c8;
+        font-size: 12px;
+      }
+
+      .two-col {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        align-items: stretch;
+        gap: 18px;
+        margin-top: 24px;
+      }
+
+      .panel { padding: clamp(18px, 2.4vw, 30px); }
+      .panel p:last-child { margin-bottom: 0; }
+
+      .persona {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        min-height: 210px;
+      }
+
+      .persona-label, .tag {
+        color: var(--teal);
+        font-size: 11px;
+        font-weight: 700;
+        letter-spacing: .1em;
+        text-transform: uppercase;
+      }
+
+      .persona strong {
+        display: block;
+        margin-top: 16px;
+        font-size: clamp(22px, 2.7vw, 34px);
+        letter-spacing: -.04em;
+        line-height: 1.2;
+      }
+
+      .evidence {
+        border-color: rgb(255 180 122 / 35%);
+        background: linear-gradient(145deg, rgb(189 111 58 / 13%), rgb(9 20 38 / 96%));
+      }
+
+      .evidence .tag { color: #ffb47a; }
+      .evidence p { font-size: 15px; }
+
+      .demo {
+        display: grid;
+        grid-template-columns: 1fr 1.1fr;
+        align-items: center;
+        gap: clamp(20px, 4vw, 50px);
+        flex: 1;
+        margin-top: 18px;
+      }
+
+      .mock {
+        padding: clamp(20px, 3vw, 34px);
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        background: rgb(5 11 22 / 55%);
+      }
+
+      .mock-top { display: flex; justify-content: space-between; gap: 10px; color: var(--muted); font-size: 12px; }
+      .mock-title { margin: 26px 0 4px; font-size: 14px; font-weight: 700; }
+      .mock-price { margin: 0; color: var(--blue); font-size: clamp(42px, 6vw, 68px); font-weight: 800; letter-spacing: -.06em; }
+      .goal-row { display: flex; justify-content: space-between; gap: 12px; padding: 14px 0; border-top: 1px solid var(--line); font-size: 13px; }
+      .goal-row strong { text-align: right; }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        min-height: 32px;
+        margin-top: 14px;
+        padding: 0 12px;
+        border: 1px solid rgb(84 226 194 / 35%);
+        border-radius: 999px;
+        color: var(--teal);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .demo-steps { display: grid; gap: 12px; }
+      .step { display: grid; grid-template-columns: 38px 1fr; gap: 12px; align-items: start; padding: 16px; }
+      .step-num { display: grid; width: 34px; height: 34px; place-items: center; border-radius: 50%; background: rgb(116 185 255 / 12%); color: var(--blue); font-weight: 800; }
+      .step p { margin: 4px 0 0; font-size: 13px; }
+
+      .ai-flow {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 14px;
+        margin: 26px 0 18px;
+      }
+
+      .ai-card { min-height: 150px; padding: 20px; }
+      .ai-card p { margin: 0; font-size: 14px; }
+      .ai-card .tag { display: block; margin-bottom: 14px; }
+      .ai-card:nth-child(1) .tag { color: var(--blue); }
+      .ai-card:nth-child(2) .tag { color: var(--violet); }
+
+      .guardrail {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+        margin-top: auto;
+      }
+
+      .guardrail p { margin: 0; font-size: 13px; }
+
+      .path-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr 1fr;
+        gap: 14px;
+        margin: 24px 0 18px;
+      }
+
+      .path-card { min-height: 155px; padding: 19px; }
+      .path-card .tag { display: block; margin-bottom: 12px; }
+      .path-card p { margin: 0; font-size: 14px; }
+
+      .ask {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        margin-top: auto;
+        padding: 18px 22px;
+        border: 1px solid rgb(84 226 194 / 35%);
+        border-radius: 16px;
+        background: linear-gradient(115deg, rgb(22 142 144 / 24%), rgb(75 127 224 / 19%) 60%, rgb(158 100 223 / 20%));
+      }
+
+      .ask p { margin: 0; color: #edf6ff; font-weight: 700; }
+      .ask span { flex: 0 0 auto; color: var(--teal); font-size: 12px; font-weight: 700; }
+
+      .controls {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 16px;
+        padding: 12px 20px 18px;
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .controls button {
+        display: grid;
+        width: 40px;
+        height: 40px;
+        place-items: center;
+        border: 1px solid var(--line);
+        border-radius: 50%;
+        background: var(--navy);
+        color: #edf6ff;
+        cursor: pointer;
+      }
+
+      .controls button:hover:not(:disabled) { border-color: var(--teal); color: var(--teal); }
+      .controls button:disabled { opacity: .4; cursor: default; }
+      .controls button:focus-visible { outline: 2px solid var(--teal); outline-offset: 3px; }
+      .progress { width: min(24vw, 190px); height: 3px; overflow: hidden; border-radius: 5px; background: rgb(192 205 224 / 17%); }
+      .progress > span { display: block; width: 20%; height: 100%; background: var(--teal); transition: width 180ms ease; }
+
+      @media (max-width: 700px) {
+        body { overflow: auto; }
+        .deck { min-height: 100dvh; }
+        .slides { padding: 10px; }
+        .slide { width: 100%; min-height: 680px; aspect-ratio: auto; padding: 24px; border-radius: 18px; }
+        .brandline { margin-bottom: 32px; }
+        .cover { min-height: 720px; }
+        .cover-stat, .two-col, .demo, .ai-flow, .guardrail, .path-grid { grid-template-columns: 1fr; }
+        .cover-stat { gap: 10px; }
+        .cover-stat .arrow { justify-self: center; transform: rotate(90deg); }
+        .stat-card { min-height: 94px; }
+        .persona { min-height: 160px; }
+        .demo { gap: 14px; }
+        .ai-flow { gap: 10px; }
+        .ai-card { min-height: auto; }
+        .path-grid { gap: 10px; }
+        .path-card { min-height: auto; }
+        .ask { align-items: flex-start; flex-direction: column; }
+      }
+
+      @media (min-width: 701px) and (max-height: 850px) {
+        .slide { padding: 30px 42px; }
+        .brandline { margin-bottom: 20px; }
+        h2 { margin-bottom: 12px; font-size: clamp(32px, 4vw, 46px); }
+        .lead { font-size: 19px; }
+        .cover-main { padding-top: 20px; }
+        .cover h1 { margin-top: 18px; font-size: clamp(42px, 5.2vw, 60px); }
+        .cover-stat { margin-top: 26px; }
+        .stat-card { min-height: 96px; padding: 16px; }
+        .two-col { gap: 12px; margin-top: 14px; }
+        .panel { padding: 16px; }
+        .persona { min-height: 0; }
+        .persona strong { margin-top: 10px; font-size: clamp(21px, 2.4vw, 29px); }
+        .evidence { margin-top: 10px !important; }
+        .evidence p { font-size: 13px; line-height: 1.45; }
+        .demo { gap: 22px; margin-top: 4px; }
+        .mock { padding: 20px; }
+        .mock-title { margin-top: 16px; }
+        .mock-price { font-size: 48px; }
+        .pill { min-height: 28px; margin-top: 8px; }
+        .goal-row { padding: 10px 0; }
+        .demo-steps { gap: 8px; }
+        .step { padding: 11px; }
+        .step h3 { margin-bottom: 3px; font-size: 16px; }
+        .step p, .footnote { font-size: 11px; line-height: 1.45; }
+        .ai-flow { gap: 10px; margin: 14px 0 10px; }
+        .ai-card { min-height: 0; padding: 14px; }
+        .ai-card .tag { margin-bottom: 8px; }
+        .ai-card h3, .guardrail h3 { margin-bottom: 5px; font-size: 16px; }
+        .ai-card p, .guardrail p { font-size: 12px; line-height: 1.45; }
+        .guardrail { gap: 10px; }
+        .path-grid { gap: 10px; margin: 14px 0 10px; }
+        .path-card { min-height: 0; padding: 14px; }
+        .path-card .tag { margin-bottom: 8px; }
+        .path-card h3 { margin-bottom: 6px; font-size: 16px; }
+        .path-card p { font-size: 12px; line-height: 1.45; }
+        .ask { padding: 14px 18px; }
+      }
+
+      @media print {
+        @page { size: 13.333in 7.5in; margin: 0; }
+        body { overflow: visible; background: var(--night); print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+        .deck { display: block; }
+        .slides { display: block; padding: 0; }
+        .slide, .slide.active {
+          display: flex !important;
+          width: 13.333in;
+          height: 7.5in;
+          max-height: none;
+          aspect-ratio: auto;
+          border: 0;
+          border-radius: 0;
+          box-shadow: none;
+          break-after: page;
+          page-break-after: always;
+        }
+        .controls { display: none; }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="deck" aria-label="NorthStar pitch deck">
+      <div class="slides">
+        <section class="slide cover active" aria-label="Slide 1: NorthStar">
+          <div class="brandline">
+            <span class="brand"><img src="./northstar-logo.png" alt="" /> NorthStar</span>
+            <span>Cal Poly AI Hackathon · Pitch</span>
+          </div>
+          <div class="cover-main">
+            <div class="eyebrow">Keep your financial goals in sight</div>
+            <h1>A $129 choice can move a goal by <span class="accent">60 days.</span></h1>
+            <p class="lead">NorthStar turns the cost of a purchase into the time it costs a savings goal.</p>
+            <div class="cover-stat" aria-label="Sample scenario: $129 AirPods purchase delays a hoodie goal by 60 days">
+              <div class="stat-card">
+                <span class="stat-label">SAMPLE PURCHASE</span>
+                <strong class="stat-value">$129</strong>
+                <span class="stat-detail">AirPods</span>
+              </div>
+              <span class="arrow" aria-hidden="true">→</span>
+              <div class="stat-card">
+                <span class="stat-label">SAMPLE GOAL IMPACT</span>
+                <strong class="stat-value accent">+60 days</strong>
+                <span class="stat-detail">to a hoodie goal</span>
+              </div>
+            </div>
+            <p class="footnote">Illustrative sample data. Planning comparison, not a financial recommendation.</p>
+          </div>
+        </section>
+
+        <section class="slide" aria-label="Slide 2: The person and problem">
+          <div class="brandline"><span class="eyebrow">01 / Real problem, real user</span><span>NorthStar</span></div>
+          <h2>Built for a student balancing <span class="blue">today's spending</span> with a goal.</h2>
+          <div class="two-col">
+            <article class="panel persona">
+              <div>
+                <span class="persona-label">WHO WE'RE DESIGNING FOR</span>
+                <strong>A student or first-time budgeter saving toward something specific.</strong>
+              </div>
+              <p>They need to make everyday choices without losing sight of a near-term goal.</p>
+            </article>
+            <article class="panel">
+              <span class="persona-label">THE MOMENT THAT MATTERS</span>
+              <h3 style="margin-top: 18px">“What will this purchase change for me?”</h3>
+              <p>A price tag gives the cost today. NorthStar makes the possible trade-off visible in hours of work and time to a goal.</p>
+            </article>
+          </div>
+          <article class="panel evidence" style="margin-top: 16px">
+            <span class="tag">Validation gap — be transparent</span>
+            <p style="margin: 8px 0 0">We don't yet have interview evidence in this deck. Before presenting, add one real user's words (with permission) and what they do today instead. Don't present this persona as a validated finding.</p>
+          </article>
+        </section>
+
+        <section class="slide" aria-label="Slide 3: Product demo">
+          <div class="brandline"><span class="eyebrow">02 / Execution &amp; design</span><span>Live product · Sample data</span></div>
+          <h2>Make the trade-off <span class="accent">visible before</span> the decision.</h2>
+          <div class="demo">
+            <div class="mock" aria-label="NorthStar sample purchase impact">
+              <div class="mock-top"><span>CHECK A PURCHASE</span><span>NorthStar</span></div>
+              <p class="mock-title">AirPods</p>
+              <p class="mock-price">$129</p>
+              <span class="pill">7h 10m of work at sample pay</span>
+              <div style="height: 20px"></div>
+              <div class="goal-row"><span>Hoodie goal</span><strong class="accent">+60 days</strong></div>
+              <div class="goal-row"><span>Spring break goal</span><strong class="blue">+36 days</strong></div>
+              <p class="footnote">Sample values from the working demo.</p>
+            </div>
+            <div class="demo-steps">
+              <div class="step"><span class="step-num">1</span><div><h3>Enter a price</h3><p>Type an item or scan a price tag.</p></div></div>
+              <div class="step"><span class="step-num">2</span><div><h3>Choose a goal</h3><p>See how the same purchase changes each goal's timeline.</p></div></div>
+              <div class="step"><span class="step-num">3</span><div><h3>Choose for yourself</h3><p>Keep the purchase, choose a cheaper option, or protect the goal timeline.</p></div></div>
+              <p class="footnote">Demo on stage: open Price check → enter “AirPods” and “129” → compare with goals → show the hoodie delay → choose skip.</p>
+            </div>
+          </div>
+        </section>
+
+        <section class="slide" aria-label="Slide 4: Purposeful AI">
+          <div class="brandline"><span class="eyebrow">03 / Creative use of AI</span><span>AI for messy inputs, code for the math</span></div>
+          <h2>AI helps translate real life into a <span class="violet">clearer choice.</span></h2>
+          <div class="ai-flow">
+            <article class="panel ai-card">
+              <span class="tag">01 · SEE</span>
+              <h3>Understand the purchase</h3>
+              <p>With a photo, Claude extracts item and price and suggests a cheaper alternative.</p>
+            </article>
+            <article class="panel ai-card">
+              <span class="tag">02 · CONNECT</span>
+              <h3>Put it in context</h3>
+              <p>Polaris can answer questions using relevant account, spending, and goal context.</p>
+            </article>
+            <article class="panel ai-card">
+              <span class="tag">03 · EXPLAIN</span>
+              <h3>Keep the decision human</h3>
+              <p>NorthStar shows the time impact. The person decides whether that trade-off is worth it.</p>
+            </article>
+          </div>
+          <div class="guardrail">
+            <article class="panel"><h3>Reliable arithmetic</h3><p>Goal dates and purchase delays come from app formulas—not generated model math. Assumptions are shown beside the result.</p></article>
+            <article class="panel"><h3>Clear fallback</h3><p>When Polaris AI is unavailable, common questions can be answered on-device. AI requests send relevant context to the configured provider.</p></article>
+          </div>
+          <p class="footnote">This is a planning tool, not financial advice. Photo scanning needs the configured AI service; typed prices work without it.</p>
+        </section>
+
+        <section class="slide" aria-label="Slide 5: Customer path and ask">
+          <div class="brandline"><span class="eyebrow">04 / Path to customers</span><span>Next: prove it helps</span></div>
+          <h2>Start with five students. <span class="blue">Learn before scaling.</span></h2>
+          <div class="path-grid">
+            <article class="path-card">
+              <span class="tag">FIRST USERS</span>
+              <h3>Cal Poly students with a savings goal</h3>
+              <p>Recruit through student clubs, peer networks, and campus financial-wellness events.</p>
+            </article>
+            <article class="path-card">
+              <span class="tag">TEST</span>
+              <h3>Five short task walkthroughs</h3>
+              <p>Can a student compare a purchase with a goal and explain the impact without help?</p>
+            </article>
+            <article class="path-card">
+              <span class="tag">PAYER HYPOTHESIS</span>
+              <h3>Free for students first</h3>
+              <p>Test usefulness before pursuing a campus financial-wellness partnership. No payer is confirmed yet.</p>
+            </article>
+          </div>
+          <div class="ask">
+            <p>Our ask: introduce us to five student testers and one campus financial-wellness partner.</p>
+            <span>5 users → evidence → next pilot</span>
+          </div>
+          <p class="footnote">Proposed test: measure task completion, whether the trade-off is understood, and whether the student wants to use it again. These are goals, not results.</p>
+        </section>
+      </div>
+      <nav class="controls" aria-label="Presentation controls">
+        <button id="prev" type="button" aria-label="Previous slide" title="Previous slide (←)">←</button>
+        <span id="counter" aria-live="polite">1 / 5</span>
+        <div class="progress" role="progressbar" aria-label="Deck progress" aria-valuemin="1" aria-valuemax="5" aria-valuenow="1"><span id="bar"></span></div>
+        <button id="next" type="button" aria-label="Next slide" title="Next slide (→)">→</button>
+        <span>Arrow keys to present · P to print</span>
+      </nav>
+    </main>
+    <script>
+      const slides = [...document.querySelectorAll(".slide")];
+      const prev = document.getElementById("prev");
+      const next = document.getElementById("next");
+      const counter = document.getElementById("counter");
+      const bar = document.getElementById("bar");
+      const progress = document.querySelector(".progress");
+      let current = 0;
+
+      function showSlide(index) {
+        current = Math.max(0, Math.min(slides.length - 1, index));
+        slides.forEach((slide, i) => {
+          slide.classList.toggle("active", i === current);
+          slide.setAttribute("aria-hidden", String(i !== current));
+        });
+        counter.textContent = `${current + 1} / ${slides.length}`;
+        bar.style.width = `${((current + 1) / slides.length) * 100}%`;
+        progress.setAttribute("aria-valuenow", String(current + 1));
+        prev.disabled = current === 0;
+        next.disabled = current === slides.length - 1;
+        history.replaceState(null, "", `#${current + 1}`);
+      }
+
+      prev.addEventListener("click", () => showSlide(current - 1));
+      next.addEventListener("click", () => showSlide(current + 1));
+      document.addEventListener("keydown", event => {
+        if (event.key === "ArrowRight" || event.key === " ") showSlide(current + 1);
+        if (event.key === "ArrowLeft") showSlide(current - 1);
+        if (event.key.toLowerCase() === "p") window.print();
+        if (event.key === "Home") showSlide(0);
+        if (event.key === "End") showSlide(slides.length - 1);
+      });
+
+      const requestedSlide = Number(location.hash.slice(1));
+      showSlide(Number.isInteger(requestedSlide) && requestedSlide > 0 ? requestedSlide - 1 : 0);
+    </script>
+  </body>
+</html>

@@ -80,7 +80,7 @@ export function BudgetNorthStar({ progress, hasIncome, remainder }: {
       ? "Your monthly plan is balanced."
       : `${formatMoney(remainder, true)} left to plan.`;
 
-  return <section className="northstar-summary" aria-labelledby="budget-northstar-title">
+  return <section className="northstar-summary wealth-accent" aria-labelledby="budget-northstar-title">
     <div className="northstar-art">
       <Constellation litStars={milestone.litStars} segments={milestone.segments} />
       <span>{milestone.name}</span>

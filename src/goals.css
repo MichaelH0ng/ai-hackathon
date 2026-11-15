@@ -222,3 +222,11 @@ button.ui-button > span, button.wealth-primary > span, button.wealth-secondary >
 .money-assistant-launch:hover { background: #183b73; color: #fff; }
 :root[data-theme="dark"] .money-assistant-launch { background: #9bf4df; color: #092c30; }
 :root[data-theme="dark"] .money-assistant-launch:hover { background: #c4ffef; color: #092c30; }
+
+/* Repeat the Goals rail on key cards across the main tabs. */
+.wealth-dashboard .wealth-accent {
+  border-left: 4px solid #54e2c2;
+}
+:root[data-theme="dark"] .wealth-dashboard .wealth-accent {
+  border-left-color: #54e2c2;
+}

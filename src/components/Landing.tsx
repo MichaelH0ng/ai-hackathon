@@ -98,7 +98,7 @@ export function HomeOverview({ data, goals = [], onCheck, onMoney, addAccount, o
   return (
     <section className="dashboard-home-overview" aria-label="Money overview">
       <div className="grid gap-5 lg:grid-cols-[1.75fr_1fr] [&>*]:min-w-0">
-        <div className="clay p-5 sm:p-7">
+        <div className="clay wealth-accent p-5 sm:p-7">
           <NetWorthChart series={view.series} />
           <div className="mt-6">
             <AssetSplit slices={view.slices} />
@@ -124,7 +124,7 @@ export function HomeOverview({ data, goals = [], onCheck, onMoney, addAccount, o
             </StarBorder>
           </div>
 
-          <div className="clay p-5">
+          <div className="clay wealth-accent p-5">
             <CardHead icon={<Target className="h-4 w-4 text-[#c294ff]" />} title="Savings goals" action={goals.length && onGoals ? { label: "See all", onClick: onGoals } : undefined} />
             {topGoals.length ? (
               <ul className="mt-3 space-y-3">
@@ -157,7 +157,7 @@ export function HomeOverview({ data, goals = [], onCheck, onMoney, addAccount, o
             )}
           </div>
 
-          <div className="clay p-5">
+          <div className="clay wealth-accent p-5">
             <CardHead icon={<CalendarClock className="h-4 w-4 text-brand-500" />} title="Upcoming bills" />
             {view.bills.length ? (
               <AnimatedList className="mt-2 divide-y divide-stone-100">
