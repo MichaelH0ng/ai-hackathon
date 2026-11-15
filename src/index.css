@@ -1052,7 +1052,7 @@ html, body { overscroll-behavior-y: none; }
 :root[data-theme="dark"] .polaris-afford.not-yet .polaris-afford-badge { background: rgb(255 138 128 / 16%); color: #ffb3ab; }
 
 /* Reminder dot on the Ask Polaris button. */
-.money-assistant-dock .money-assistant-launch { position: relative; }
+.money-assistant-dock .money-assistant-launch { position: relative; inset: auto; }
 .money-assistant-dot { position: absolute; top: 6px; right: 8px; width: 10px; height: 10px; border: 2px solid #fff; border-radius: 50%; background: #ff6b5e; }
 
 /* Reminders from Polaris, on My goals. */
