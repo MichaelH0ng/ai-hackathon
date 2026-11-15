@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { formatMoney } from "../lib/finance";
+import { formatExact } from "../lib/finance";
 import type { InstitutionSlice } from "../lib/money";
 
 const COLORS = ["#c294ff", "#54e2c2", "#74b9ff", "#ffb47a", "#ff8fc7", "#9fb0c8"];
@@ -17,7 +17,7 @@ export function AssetSplit({ slices }: { slices: InstitutionSlice[] }) {
           Across {slices.length} institution{slices.length === 1 ? "" : "s"}
         </h2>
         <p className="text-sm text-stone-500">
-          Assets <strong className="text-ink">{formatMoney(total)}</strong>
+          Assets <strong className="text-ink">{formatExact(total)}</strong>
         </p>
       </div>
 
@@ -44,17 +44,17 @@ export function AssetSplit({ slices }: { slices: InstitutionSlice[] }) {
         ))}
       </div>
 
-      <ul className="mt-4 grid gap-2">
+      <ul className="mt-3 divide-y divide-stone-100">
         {slices.map((s, i) => (
           <li
             key={s.name}
             onMouseEnter={() => setHot(i)}
             onMouseLeave={() => setHot(null)}
-            className={`flex items-center gap-3 rounded-2xl px-3 py-3 transition-colors duration-200 ${hot === i ? "bg-stone-100" : "bg-stone-50"}`}
+            className={`asset-split-row flex items-center gap-3 px-2 py-3${hot === i ? " is-hot" : ""}`}
           >
             <span className="h-3 w-3 shrink-0 rounded-full" style={{ background: COLORS[i % COLORS.length] }} aria-hidden="true" />
             <span className="min-w-0 flex-1 truncate text-sm font-bold text-ink">{s.name}</span>
-            <span className="shrink-0 text-sm font-bold tabular-nums text-ink">{formatMoney(s.value)}</span>
+            <span className="shrink-0 text-sm font-bold tabular-nums text-ink">{formatExact(s.value)}</span>
           </li>
         ))}
       </ul>

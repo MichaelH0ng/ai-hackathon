@@ -6,10 +6,11 @@ import { HomeOverview } from "./Landing";
 import { CountUp } from "./CountUp";
 import SpringCheck from "./SpringCheck";
 import StarBorder from "./StarBorder";
+import { ProgressRing } from "./ProgressRing";
 import { SavingsPlanner } from "./SavingsPlanner";
 import { isLiability } from "../lib/money";
 import { todayISO } from "../lib/dates";
-import { formatMoney, weeklyNeededForDeadline } from "../lib/finance";
+import { formatExact, formatMoney, weeklyNeededForDeadline } from "../lib/finance";
 import { annualSpending, budgetBalanceProgress, opportunityCost, retirementProjection, type RetirementPoint, type SpendingFrequency, type RepeatUnit } from "../lib/planning";
 import { BudgetNorthStar, NorthStar } from "./NorthStar";
 import { MoneyAssistant } from "./MoneyAssistant";
@@ -18,7 +19,7 @@ import { ConnectButton, MoneyDashboard } from "./MoneyDashboard";
 
 export type DashboardTab = "Overview" | "Accounts" | "Goals" | "Retirement" | "Budget" | "Activity";
 
-const usd = (value: number) => formatMoney(value, true);
+const usd = (value: number) => formatExact(value);
 const kinds = ["Checking", "Savings", "Roth IRA", "Traditional IRA", "401(k)", "Brokerage", "Property", "Other asset", "Credit card", "Loan"];
 export interface Asset { id: string; name: string; institution: string; kind: string; balance: number; sample?: boolean; updatedAt?: string }
 export interface Plan { assets: Asset[]; risk: string; horizon: string; future: string; income: number; essentials: number; lifestyle: number; currentAge: number | null; retirementAge: number | null; retirementMonthly: number; retirementReturn: number }
@@ -192,7 +193,7 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; priceCh
       <span><small>Debt</small><strong className={debts > 0 ? "is-debt" : ""}>{debts > 0 ? "−" : ""}{usd(debts)}</strong></span>
     </div>
   </section>;
-  const accountList = <section className="wealth-card wealth-accent"><div className="wealth-section-head"><div><h2>Your accounts</h2><p>Every account. One clear picture.</p></div>{linked.length > 0 && <button className="wealth-text-button" onClick={() => setTab("Activity")}>View all activity <ArrowRight size={15} /></button>}</div>
+  const accountList = <section className="wealth-card wealth-accent"><div className="wealth-section-head"><div><h2>Your accounts</h2></div>{linked.length > 0 && <button className="wealth-text-button" onClick={() => setTab("Activity")}>View all activity <ArrowRight size={15} /></button>}</div>
     {!assets.length ? <div className="wealth-empty"><Landmark size={30} /><h3>Bring your money together</h3><p>Use <strong>Add account</strong> above to connect your bank or enter a balance yourself.</p></div> : <div className="wealth-accounts">{accountGroups.map(group => {
       const list = assets.filter(a => group.match(a.kind));
       if (!list.length) return null;
@@ -208,8 +209,10 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; priceCh
     })}</div>}
     <div className="wealth-card-foot"><ShieldCheck size={14} /><span>{linked.length ? `${linked.length} connected · ` : ""}Manual accounts are saved in this browser only.</span></div>
   </section>;
-  const goalList = <section className="wealth-card"><div className="wealth-section-head"><div><h2>Your savings goals</h2><p>Set a target date to see how much to save each week.</p></div><button className="wealth-text-button" onClick={onNewGoal}><Plus size={16} /> New goal</button></div>
-    {goals.length ? <div className="wealth-goal-grid">{goals.map(g => <button key={g.id} className="wealth-goal" onClick={() => onOpenGoal(g.id)}><span className="wealth-goal-top"><span className="wealth-account-icon"><Target size={19} /></span><ChevronRight size={17} /></span><h3>{g.name}</h3><p><strong>{usd(g.saved)}</strong> <span>of {usd(g.target)}</span></p><div className="wealth-progress" role="progressbar" aria-label={`${g.name} funded`} aria-valuenow={Math.min(100, Math.round(g.saved / g.target * 100))} aria-valuemin={0} aria-valuemax={100}><i style={{ width: `${Math.min(100, g.saved / g.target * 100)}%` }} /></div>{g.target > 0 && g.saved >= g.target ? <SpringCheck readOnly checked label="Goal reached" strike="none" color="#edf6ff" fillColor="#54e2c2" checkColor="#050b16" boxSize={22} boxRadius={7} fontSize={14} doneOpacity={1} className="wealth-goal-reached" /> : <span className="wealth-goal-detail">{usd(g.weekly)}/week <span>{months(g.weekly > 0 ? Math.max(0, g.target - g.saved) / (g.weekly * 52 / 12) : Infinity)} to go</span></span>}{g.saved < g.target && <span className="goal-weekly-needed">{g.deadline && g.deadline > todayISO() ? `Save ${formatMoney(Math.ceil(weeklyNeededForDeadline(g.target, g.saved, g.deadline) * 100) / 100, true)}/week to meet your date` : g.deadline ? "Choose a new target date to update your weekly plan" : "Add a target date to calculate weekly savings"}</span>}{g.deadline && <span className="wealth-goal-deadline">Target date · {g.deadline}</span>}</button>)}</div> : <div className="wealth-goal-placeholder"><Target size={25} /><div><h3>What does your money make possible?</h3><p>An emergency fund, a home, a trip. Give your savings a purpose.</p></div><button className="wealth-secondary" onClick={onNewGoal}>Create a goal <ArrowRight size={15} /></button></div>}
+  const undatedGoals = goals.filter(g => g.saved < g.target && !g.deadline).length;
+  const goalList = <section className="goals-list"><div className="wealth-section-head"><div><h2>Your savings goals</h2></div><button className="wealth-text-button" onClick={onNewGoal}><Plus size={16} /> New goal</button></div>
+    {goals.length ? <div className="wealth-goal-grid">{goals.map(g => <button key={g.id} className="wealth-goal" onClick={() => onOpenGoal(g.id)}><span className="wealth-goal-top"><ProgressRing value={g.target > 0 ? g.saved / g.target * 100 : 0} label={`${g.name} funded`} /><ChevronRight size={17} /></span><h3>{g.name}</h3><p><strong>{usd(g.saved)}</strong> <span>of {usd(g.target)}</span></p>{g.target > 0 && g.saved >= g.target ? <SpringCheck readOnly checked label="Goal reached" strike="none" color="#edf6ff" fillColor="#54e2c2" checkColor="#050b16" boxSize={22} boxRadius={7} fontSize={14} doneOpacity={1} className="wealth-goal-reached" /> : <span className="wealth-goal-detail">{usd(g.weekly)}/week <span>{months(g.weekly > 0 ? Math.max(0, g.target - g.saved) / (g.weekly * 52 / 12) : Infinity)} to go</span></span>}{g.saved < g.target && g.deadline && <span className="goal-weekly-needed">{g.deadline > todayISO() ? `Save ${formatMoney(Math.ceil(weeklyNeededForDeadline(g.target, g.saved, g.deadline) * 100) / 100, true)}/week to meet your date` : "Choose a new target date to update your weekly plan"}</span>}{g.deadline && <span className="wealth-goal-deadline">Target date · {g.deadline}</span>}</button>)}</div> : <div className="wealth-goal-placeholder"><Target size={25} /><div><h3>What does your money make possible?</h3><p>An emergency fund, a home, a trip. Give your savings a purpose.</p></div><button className="wealth-secondary" onClick={onNewGoal}>Create a goal <ArrowRight size={15} /></button></div>}
+    {undatedGoals > 0 && <p className="wealth-note goals-nudge">{undatedGoals === goals.filter(g => g.saved < g.target).length ? "Add a target date to a goal" : `Add a target date to ${undatedGoals} more goal${undatedGoals === 1 ? "" : "s"}`} to see the weekly amount needed to finish on time.</p>}
   </section>;
   const assistantContext: MoneyAssistantContext = {
     accounts: assets.map(account => ({ name: account.name, kind: account.kind, balance: account.balance, isDebt: debt(account.kind) })),
@@ -224,10 +227,18 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; priceCh
     retirementEstimate: retirementPoints.at(-1)?.balance ?? null,
     retirementAge: retirementPoints.length ? retirementAge : null,
   };
+  // One line of real numbers under each page title (instead of a tagline).
+  const goalsSaved = goals.reduce((sum, g) => sum + Math.min(g.saved, g.target), 0);
+  const goalsWeekly = goals.filter(g => g.saved < g.target).reduce((sum, g) => sum + g.weekly, 0);
+  const pageFact =
+    tab === "Accounts" || tab === "Activity" ? (assets.length ? `${assets.length} account${assets.length === 1 ? "" : "s"} · ${formatMoney(total - debts)} net worth` : "No accounts yet")
+      : tab === "Goals" ? (goals.length ? `${goals.length} goal${goals.length === 1 ? "" : "s"} · ${formatMoney(goalsSaved)} saved of ${formatMoney(totalGoalTarget)}${goalsWeekly > 0 ? ` · saving ${formatMoney(goalsWeekly)}/week` : ""}` : "No goals yet")
+        : tab === "Retirement" ? `${formatMoney(retirementBalance)} in retirement accounts${retirementPoints.length && retirementAge !== null ? ` · about ${formatMoney(retirementPoints.at(-1)?.balance ?? 0)} by age ${retirementAge}` : ""}`
+          : plan.income > 0 ? `${formatMoney(plan.income)} monthly income · ${available >= 0 ? `${formatMoney(available)} left to plan` : `${formatMoney(-available)} over budget`}` : "No monthly income entered yet";
   return <main id="main" className={`wealth-dashboard${tab === "Goals" ? " goals-page" : ""}`}>
-    <div className="wealth-page-head"><div><h1>{tab === "Goals" ? "My goals" : tab === "Activity" ? "Account activity" : tab}</h1>{tab !== "Overview" && <p>{tab === "Accounts" || tab === "Activity" ? "Track your balances and connected accounts." : tab === "Goals" ? "Plan your savings and watch your progress grow." : tab === "Retirement" ? "Explore your long-term savings plan." : "Give your monthly income a plan."}</p>}</div>{(tab === "Overview" || tab === "Accounts") && addAccountButton()}</div>
+    <div className="wealth-page-head"><div><h1>{tab === "Goals" ? "My goals" : tab === "Activity" ? "Account activity" : tab}</h1>{tab !== "Overview" && <p>{pageFact}</p>}</div>{(tab === "Overview" || tab === "Accounts") && addAccountButton()}</div>
     {tab === "Overview" && <>
-      {bank.loading && !bank.data && !assets.length ? <section className="wealth-card" role="status">Loading your money overview…</section> : <HomeOverview data={{
+      {bank.loading && !bank.data && !assets.length ? <OverviewSkeleton /> : <HomeOverview data={{
         env: bank.data?.env ?? "manual",
         accounts: [...(bank.data?.accounts ?? []), ...plan.assets.map(a => ({
           id: a.id, name: a.name, institution: a.institution || "Manual accounts", mask: null,
@@ -260,7 +271,7 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; priceCh
       </details>
     </div>}
     {tab === "Retirement" && <section className="wealth-card wealth-retirement wealth-accent">
-      <div className="wealth-section-head"><div><h2>Plan for retirement</h2><p>Explore how your savings could grow over time.</p></div><span className="wealth-account-icon"><Target size={20} /></span></div>
+      <div className="wealth-section-head"><div><h2>Plan for retirement</h2></div></div>
       <div className="wealth-retirement-balance"><span>Retirement accounts you’ve added</span><strong>{usd(retirementBalance)}</strong></div>
       {!retirementBalance && <p className="wealth-note">Add a Roth IRA, traditional IRA, or 401(k) in Accounts to include its current balance.</p>}
       <div className="wealth-two-fields">
@@ -282,7 +293,7 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; priceCh
     </section>}
     {tab === "Budget" && <div className="wealth-stack">
       <BudgetNorthStar progress={budgetProgress} hasIncome={plan.income > 0} remainder={available} />
-      <section className="wealth-card wealth-accent"><div className="wealth-section-head"><div><h2>Your monthly budget</h2><p>Plan for your spending and savings.</p></div><CircleDollarSign size={22} /></div><div className="wealth-stack"><Amount label="Monthly income (after tax)" value={plan.income} onChange={income => update({ income })} /><Amount label="Monthly essentials · rent, groceries, bills" value={plan.essentials} onChange={essentials => update({ essentials })} /><Amount label="Monthly lifestyle · shopping, dining, fun" value={plan.lifestyle} onChange={lifestyle => update({ lifestyle })} /><div className="wealth-budget-line"><span>Savings goal contributions</span><strong>{usd(monthlyGoals)} / mo</strong></div><p className="wealth-note">Weekly contributions × 52 ÷ 12. Edit contributions in your goals.</p><div className={`wealth-budget-remainder ${available < 0 ? "over" : ""}`}><span>{available < 0 ? "Over budget" : "Left to plan"}</span><strong>{usd(Math.abs(available))}</strong></div>{available < 0 && <p className="wealth-note">Your spending and goal contributions exceed your income. Adjust your plan to close the gap.</p>}</div></section>
+      <section className="wealth-card wealth-accent"><div className="wealth-section-head"><div><h2>Your monthly budget</h2></div></div><div className="wealth-stack"><Amount label="Monthly income (after tax)" value={plan.income} onChange={income => update({ income })} /><Amount label="Monthly essentials · rent, groceries, bills" value={plan.essentials} onChange={essentials => update({ essentials })} /><Amount label="Monthly lifestyle · shopping, dining, fun" value={plan.lifestyle} onChange={lifestyle => update({ lifestyle })} /><div className="wealth-budget-line"><span>Savings goal contributions</span><strong>{usd(monthlyGoals)} / mo</strong></div><p className="wealth-note">Weekly contributions × 52 ÷ 12. Edit contributions in your goals.</p><div className={`wealth-budget-remainder ${available < 0 ? "over" : ""}`}><span>{available < 0 ? "Over budget" : "Left to plan"}</span><strong>{usd(Math.abs(available))}</strong></div>{available < 0 && <p className="wealth-note">Your spending and goal contributions exceed your income. Adjust your plan to close the gap.</p>}</div></section>
     </div>}
     {tab === "Activity" && <div className="wealth-stack"><button className="wealth-text-button" onClick={() => setTab("Accounts")}>← Back to your accounts</button><MoneyDashboard {...props} /></div>}
     <MoneyAssistant context={assistantContext} />
@@ -357,4 +368,15 @@ function RetirementChart({ points, currentAge, retirementAge }: { points: Retire
     <path className="retirement-balance-line" d={path("balance")} fill="none" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" />
     {labels.map(year => <text key={year} x={x(year)} y={height - 8} textAnchor={year === 0 ? "start" : year === retirementAge - currentAge ? "end" : "middle"} fill="#657360" fontSize="11">{year === 0 ? `Age ${currentAge}` : `Age ${currentAge + year}`}</text>)}
   </svg>;
+}
+
+/** Gray shapes of the Overview while accounts load (announced once for screen readers). */
+function OverviewSkeleton() {
+  return <section role="status" aria-label="Loading your money overview" className="grid gap-5">
+    <div className="skeleton h-24" />
+    <div className="grid gap-5 lg:grid-cols-[1.75fr_1fr]">
+      <div className="skeleton h-[28rem]" />
+      <div className="grid gap-4"><div className="skeleton h-12" /><div className="skeleton h-40" /><div className="skeleton h-40" /></div>
+    </div>
+  </section>;
 }

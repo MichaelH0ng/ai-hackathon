@@ -1,11 +1,10 @@
-import { ArrowRight, CalendarClock, PiggyBank, ShoppingBag, Target, Wallet } from "lucide-react";
+import { ArrowRight, PiggyBank, ShoppingBag, Wallet } from "lucide-react";
 import { useMemo } from "react";
-import { formatMoney } from "../lib/finance";
+import { formatExact, formatMoney } from "../lib/finance";
 import { assetsByInstitution, detectTransferIds, netWorthSeries, periodFlow, spendableCash, upcomingBills } from "../lib/money";
 import type { MoneyGoal } from "../lib/types";
 import type { Bank } from "../lib/useBank";
 import { AssetSplit } from "./AssetSplit";
-import { AnimatedList } from "./AnimatedList";
 import { ConnectCard } from "./MoneyDashboard";
 import { NetWorthChart } from "./NetWorthChart";
 import { SavingsPlanner } from "./SavingsPlanner";
@@ -105,9 +104,8 @@ export function HomeOverview({ data, goals = [], onCheck, onMoney, addAccount, o
         </div>
 
         <aside className="space-y-4">
-
           <div className="clay divide-y divide-stone-100 px-5 py-2">
-            <Stat icon={<Wallet className="h-4 w-4 text-sky-300" />} label="Spendable cash" value={formatMoney(view.cash)} />
+            <Stat icon={<Wallet className="h-4 w-4 text-sky-300" />} label="Spendable cash" value={formatExact(view.cash)} />
             <Stat
               icon={<ShoppingBag className="h-4 w-4 text-amber-300" />}
               label="Spent this month"
@@ -124,14 +122,14 @@ export function HomeOverview({ data, goals = [], onCheck, onMoney, addAccount, o
           </div>
 
           <div className="clay wealth-accent p-5">
-            <CardHead icon={<Target className="h-4 w-4 text-[#c294ff]" />} title="Savings goals" action={goals.length && onGoals ? { label: "See all", onClick: onGoals } : undefined} />
+            <CardHead title="Savings goals" action={goals.length && onGoals ? { label: "See all", onClick: onGoals } : undefined} />
             {topGoals.length ? (
-              <ul className="mt-3 space-y-3">
+              <ul className="mt-1 divide-y divide-stone-100">
                 {topGoals.map((g) => {
                   const pct = g.target > 0 ? Math.min(100, (g.saved / g.target) * 100) : 0;
                   return (
                     <li key={g.id}>
-                      <button onClick={() => onOpenGoal?.(g.id)} className="block w-full rounded-xl bg-stone-50 px-3 py-2.5 text-left transition-colors duration-200 hover:bg-stone-100">
+                      <button onClick={() => onOpenGoal?.(g.id)} className="overview-row block w-full py-3 text-left">
                         <span className="flex items-baseline justify-between gap-2">
                           <span className="truncate text-sm font-bold text-ink">{g.name}</span>
                           <span className="shrink-0 text-xs font-semibold tabular-nums text-stone-500">{Math.round(pct)}%</span>
@@ -140,8 +138,8 @@ export function HomeOverview({ data, goals = [], onCheck, onMoney, addAccount, o
                           <i style={{ width: `${pct}%` }} />
                         </span>
                         <span className="flex justify-between gap-2 text-xs tabular-nums text-stone-500">
-                          <span>{formatMoney(g.saved)} of {formatMoney(g.target)}</span>
-                          <span>{formatMoney(g.weekly)}/week</span>
+                          <span>{formatExact(g.saved)} of {formatExact(g.target)}</span>
+                          <span>{formatExact(g.weekly)}/week</span>
                         </span>
                       </button>
                     </li>
@@ -150,29 +148,29 @@ export function HomeOverview({ data, goals = [], onCheck, onMoney, addAccount, o
               </ul>
             ) : (
               <p className="mt-2 text-sm leading-relaxed text-stone-600">
-                Give your savings a purpose: an emergency fund, a trip, a home.{" "}
+                No savings goals yet.{" "}
                 {onNewGoal && <button onClick={onNewGoal} className="font-bold text-[var(--aurora-teal)] hover:underline">Create a goal</button>}
               </p>
             )}
           </div>
 
           <div className="clay wealth-accent p-5">
-            <CardHead icon={<CalendarClock className="h-4 w-4 text-brand-500" />} title="Upcoming bills" />
+            <CardHead title="Upcoming bills" />
             {view.bills.length ? (
-              <AnimatedList className="mt-2 divide-y divide-stone-100">
+              <ul className="mt-1 divide-y divide-stone-100">
                 {view.bills.map((b) => (
-                  <div key={b.name} className="flex items-center justify-between gap-3 py-2.5">
+                  <li key={b.name} className="flex items-center justify-between gap-3 py-2.5">
                     <span className="min-w-0">
                       <span className="block truncate text-sm font-bold text-ink">{b.name}</span>
                       <span className="block text-xs text-stone-500">{b.cadence}</span>
                     </span>
                     <span className="shrink-0 text-right">
-                      <span className="block text-sm font-bold tabular-nums text-ink">{formatMoney(b.amount, true)}</span>
+                      <span className="block text-sm font-bold tabular-nums text-ink">{formatExact(b.amount)}</span>
                       <span className="block text-xs text-stone-500">{b.daysUntil === 0 ? "Due today" : b.daysUntil === 1 ? "Tomorrow" : `In ${b.daysUntil} days`}</span>
                     </span>
-                  </div>
+                  </li>
                 ))}
-              </AnimatedList>
+              </ul>
             ) : (
               <p className="mt-2 text-sm leading-relaxed text-stone-600">
                 {data.transactions.length ? "No repeating bills spotted yet." : "Connect a bank account and recurring bills will show up here."}
@@ -202,11 +200,11 @@ function Stat({ icon, label, value, sub }: { icon: React.ReactNode; label: strin
   );
 }
 
-function CardHead({ icon, title, action }: { icon: React.ReactNode; title: string; action?: { label: string; onClick: () => void } }) {
+function CardHead({ icon, title, action }: { icon?: React.ReactNode; title: string; action?: { label: string; onClick: () => void } }) {
   return (
     <div className="flex items-center justify-between gap-3">
       <h2 className="flex items-center gap-2 text-base font-bold text-ink">
-        <span aria-hidden="true">{icon}</span>
+        {icon && <span aria-hidden="true">{icon}</span>}
         {title}
       </h2>
       {action && (

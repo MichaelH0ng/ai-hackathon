@@ -1,10 +1,9 @@
 import { CategoryIcon } from "./CategoryIcon";
-import { ArrowDownLeft, ArrowUpRight, CalendarClock, Landmark, Link2, RefreshCw, Unplug, Wallet } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Landmark, RefreshCw, Unplug, Wallet } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { AnimatedList } from "./AnimatedList";
 import { usePlaidLink } from "react-plaid-link";
 import { formatDate } from "../lib/dates";
-import { formatMoney } from "../lib/finance";
+import { formatExact } from "../lib/finance";
 import {
   ACCOUNT_GROUPS,
   type FlowPeriod,
@@ -22,7 +21,7 @@ import type { MoneyGoal } from "../lib/types";
 import { type Bank, api, post } from "../lib/useBank";
 import { Button, Card, Notice } from "./ui";
 
-const money = (n: number) => formatMoney(n, Math.abs(n) < 1000 && n % 1 !== 0);
+const money = (n: number) => formatExact(n);
 
 /** Money dashboard: your real balances and spending from Plaid. */
 export function MoneyDashboard({
@@ -58,7 +57,7 @@ export function MoneyDashboard({
   if (loading && !data) {
     return (
       <Shell>
-        <Card><p className="animate-pulse text-stone-600">Loading your accounts…</p></Card>
+        <div role="status" aria-label="Loading your accounts" className="grid gap-4 lg:grid-cols-3"><div className="skeleton h-40 lg:col-span-2" /><div className="skeleton h-40" /><div className="skeleton h-72 lg:col-span-2" /><div className="skeleton h-72" /></div>
       </Shell>
     );
   }
@@ -107,11 +106,11 @@ export function MoneyDashboard({
         {/* Net worth */}
         <Card className="lg:col-span-2">
           <p className="text-sm font-semibold text-stone-500">Net worth</p>
-          <p className="font-display text-4xl font-bold text-ink sm:text-5xl">{formatMoney(nw.net)}</p>
+          <p className="font-display text-4xl font-bold text-ink sm:text-5xl">{formatExact(nw.net)}</p>
           <div className="mt-4 grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
-            <Mini label="Assets" value={formatMoney(nw.assets)} tone="text-emerald-700" />
-            <Mini label="Debts" value={formatMoney(nw.debts)} tone="text-amber-700" />
-            <Mini label="Spendable cash" value={formatMoney(cash)} tone="text-brand-700" />
+            <Mini label="Assets" value={formatExact(nw.assets)} tone="text-emerald-700" />
+            <Mini label="Debts" value={formatExact(nw.debts)} tone="text-amber-700" />
+            <Mini label="Spendable cash" value={formatExact(cash)} tone="text-brand-700" />
           </div>
         </Card>
 
@@ -162,7 +161,7 @@ export function MoneyDashboard({
 
         {/* Upcoming bills */}
         <Card>
-          <h2 className="flex items-center gap-2 text-lg font-bold text-ink"><CalendarClock className="h-5 w-5 text-brand-600" aria-hidden="true" /> Upcoming bills</h2>
+          <h2 className="text-lg font-bold text-ink">Upcoming bills</h2>
           {bills.length === 0 ? (
             <p className="mt-2 text-sm text-stone-500">No repeating charges found yet.</p>
           ) : (
@@ -183,12 +182,12 @@ export function MoneyDashboard({
         {/* Recent transactions */}
         <Card className="lg:col-span-2">
           <h2 className="text-lg font-bold text-ink">Recent transactions</h2>
-          <AnimatedList className="mt-2 divide-y divide-stone-100">
+          <ul className="mt-2 divide-y divide-stone-100">
             {recent.map((t) => {
               const out = t.amount > 0;
               const transfer = isTransfer(t, transferIds);
               return (
-                <div key={t.id} className="flex items-center gap-3 py-2.5 text-sm">
+                <li key={t.id} className="flex items-center gap-3 py-2.5 text-sm">
                   <CategoryIcon category={transfer ? (t.amount < 0 ? "TRANSFER_IN" : "TRANSFER_OUT") : t.category} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-semibold text-stone-800">{t.name}</span>
@@ -199,15 +198,15 @@ export function MoneyDashboard({
                   <span className="shrink-0 text-right">
                     <span className={`block font-bold ${out ? "text-ink" : "text-[var(--color-gain)]"}`}>{out ? "−" : "+"}{money(Math.abs(t.amount))}</span>
                   </span>
-                </div>
+                </li>
               );
             })}
-          </AnimatedList>
+          </ul>
         </Card>
 
         {/* Goals linked to accounts */}
         <Card>
-          <h2 className="flex items-center gap-2 text-lg font-bold text-ink"><Link2 className="h-5 w-5 text-brand-600" aria-hidden="true" /> Your goals</h2>
+          <h2 className="text-lg font-bold text-ink">Your goals</h2>
           {goals.length === 0 ? (
             <Button className="mt-3 w-full" onClick={onNewGoal}>Start a savings goal</Button>
           ) : (
@@ -218,7 +217,7 @@ export function MoneyDashboard({
                   <li key={g.id}>
                     <div className="flex items-baseline justify-between gap-2 text-sm">
                       <button onClick={() => onOpenGoal(g.id)} className="truncate font-bold text-ink hover:underline">{g.name}</button>
-                      <span className="shrink-0 text-stone-600">{formatMoney(g.saved)} / {formatMoney(g.target)}</span>
+                      <span className="shrink-0 text-stone-600">{formatExact(g.saved)} / {formatExact(g.target)}</span>
                     </div>
                     <div className="mt-1 h-2 rounded-full bg-stone-100"><div className="h-full rounded-full bg-emerald-500" style={{ width: `${pct}%` }} /></div>
                     <label className="mt-2 block text-xs font-semibold text-stone-600">
@@ -233,7 +232,7 @@ export function MoneyDashboard({
                       >
                         <option value="">Tracked by hand</option>
                         {data.accounts.filter((a) => a.type === "depository").map((a) => (
-                          <option key={a.id} value={a.id}>{a.name}{a.mask ? ` ••${a.mask}` : ""} ({formatMoney(a.current)})</option>
+                          <option key={a.id} value={a.id}>{a.name}{a.mask ? ` ••${a.mask}` : ""} ({formatExact(a.current)})</option>
                         ))}
                       </select>
                     </label>
@@ -246,7 +245,7 @@ export function MoneyDashboard({
 
         {/* Accounts */}
         <Card className="lg:col-span-3">
-          <h2 className="flex items-center gap-2 text-lg font-bold text-ink"><Landmark className="h-5 w-5 text-brand-600" aria-hidden="true" /> Accounts</h2>
+          <h2 className="text-lg font-bold text-ink">Accounts</h2>
           <div className="mt-3 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {ACCOUNT_GROUPS.map((grp) => {
               const list = data.accounts.filter(grp.match);
@@ -256,13 +255,13 @@ export function MoneyDashboard({
                 <div key={grp.key}>
                   <p className="flex justify-between text-xs font-bold uppercase tracking-wider text-stone-500">
                     <span>{grp.label}</span>
-                    <span className={isLiability(list[0]) ? "text-amber-700" : "text-stone-700"}>{formatMoney(total)}</span>
+                    <span className={isLiability(list[0]) ? "text-amber-700" : "text-stone-700"}>{formatExact(total)}</span>
                   </p>
                   <ul className="mt-1 space-y-1 text-sm">
                     {list.map((a) => (
                       <li key={a.id} className="flex justify-between gap-2">
                         <span className="truncate text-stone-700">{a.name}{a.mask ? <span className="text-stone-400"> ••{a.mask}</span> : null}</span>
-                        <span className="shrink-0 font-semibold text-ink">{formatMoney(a.current)}</span>
+                        <span className="shrink-0 font-semibold text-ink">{formatExact(a.current)}</span>
                       </li>
                     ))}
                   </ul>

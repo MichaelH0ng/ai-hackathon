@@ -100,3 +100,53 @@
 /* Category icons on Activity (replacing emoji). */
 .category-icon { display: inline-grid; place-items: center; width: 36px; height: 36px; flex-shrink: 0; border-radius: var(--ns-radius-control); background: var(--ns-surface-inset); color: var(--ns-accent); }
 .category-icon.is-inline { width: 22px; height: 22px; background: none; vertical-align: -5px; margin-right: 4px; }
+
+/* ---------- Magic UI-inspired touches (kept subtle) ---------- */
+/* Goal progress ring. */
+.progress-ring { position: relative; display: inline-grid; place-items: center; flex-shrink: 0; }
+.progress-ring svg { position: absolute; inset: 0; }
+.progress-ring-track { stroke: var(--ns-surface-inset); }
+:root[data-theme="dark"] .progress-ring-track { stroke: rgb(148 192 243 / 16%); }
+.progress-ring-value { transition: stroke-dashoffset 1s cubic-bezier(.22, 1, .36, 1); }
+.progress-ring-text { position: relative; font-size: 13px; font-weight: 750; font-variant-numeric: tabular-nums; }
+
+/* (Card blur-fade removed: at most 1–2 animations per view; net-worth count-up and goal rings keep theirs.) */
+
+/* Noise texture: a faint grain on the aurora only (never over text), so the gradient feels less flat. */
+.soft-aurora-background::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: .07;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .progress-ring-value { transition: none; }
+}
+
+/* Goal cards: content starts at the top (buttons center it by default) and keeps a gap
+   where the old flat progress bar used to be. */
+.goals-page .wealth-goal { display: flex; flex-direction: column; justify-content: flex-start; text-align: left; }
+.goals-page .wealth-goal .wealth-goal-top { width: 100%; }
+.goals-page .wealth-goal :is(.wealth-goal-detail, .wealth-goal-reached) { margin-top: 14px; }
+
+/* ---------- Overview: plain rows ---------- */
+.overview-row { border-radius: 8px; transition: background-color .15s; }
+.overview-row:hover { background: var(--ns-surface-inset); }
+
+/* Loading placeholders: gray shapes of the cards that are coming. */
+.skeleton { border-radius: var(--ns-radius-card); background: var(--ns-surface-inset); animation: ns-pulse 1.4s ease-in-out infinite; }
+@keyframes ns-pulse { 50% { opacity: .55; } }
+@media (prefers-reduced-motion: reduce) { .skeleton { animation: none; } }
+
+/* My goals: goal cards sit directly on the page (no card around them). */
+.goals-list { display: grid; gap: 16px; }
+.goals-list > .wealth-section-head { margin-bottom: 0; }
+.goals-nudge { margin: 0; }
+
+/* Asset breakdown rows: plain divided rows inside the chart card (no boxes inside the card). */
+.asset-split-row { border-radius: 8px; transition: background-color .15s; }
+.asset-split-row.is-hot { background: var(--ns-surface-inset); }

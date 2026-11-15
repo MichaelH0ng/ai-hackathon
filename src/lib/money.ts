@@ -78,31 +78,37 @@ export const ACCOUNT_GROUPS: { key: string; label: string; match: (a: BankAccoun
  * money moving between your own accounts, even when Plaid's category misses it.
  */
 export function detectTransferIds(transactions: BankTransaction[]): Set<string> {
+  // Only look at transactions Plaid hasn't already labeled as transfers or loan payments:
+  // those are excluded anyway, and letting them pair could hide a real purchase of the same
+  // amount nearby (e.g. a $50 grocery run two days after a $50 savings transfer).
+  const candidates = transactions.filter((t) => !t.category.startsWith("TRANSFER") && t.category !== "LOAN_PAYMENTS");
   const ids = new Set<string>();
   const buckets = new Map<string, BankTransaction[]>();
-  for (const t of transactions) {
+  for (const t of candidates) {
     const key = Math.abs(t.amount).toFixed(2);
     if (!buckets.has(key)) buckets.set(key, []);
     buckets.get(key)!.push(t);
   }
+  const daysApart = (a: BankTransaction, b: BankTransaction) => Math.abs(new Date(a.date).getTime() - new Date(b.date).getTime()) / 86400000;
   for (const group of buckets.values()) {
-    for (let i = 0; i < group.length; i++) {
-      const a = group[i];
+    for (const a of group) {
       if (ids.has(a.id)) continue;
-      for (let j = i + 1; j < group.length; j++) {
-        const b = group[j];
-        if (ids.has(b.id) || a.accountId === b.accountId || Math.sign(a.amount) === Math.sign(b.amount)) continue;
-        if (Math.abs(new Date(a.date).getTime() - new Date(b.date).getTime()) / 86400000 > 3) continue;
+      // Pair with the closest-dated opposite transaction on another account, not just the first one found.
+      let best: BankTransaction | null = null;
+      for (const b of group) {
+        if (b === a || ids.has(b.id) || a.accountId === b.accountId || Math.sign(a.amount) === Math.sign(b.amount)) continue;
+        if (daysApart(a, b) > 3) continue;
+        if (!best || daysApart(a, b) < daysApart(a, best)) best = b;
+      }
+      if (best) {
         ids.add(a.id);
-        ids.add(b.id);
-        break;
+        ids.add(best.id);
       }
     }
   }
   return ids;
 }
 
-/** Transfers between your own accounts and loan/card payments aren't spending or income. */
 export function isTransfer(t: BankTransaction, transferIds: Set<string>): boolean {
   return transferIds.has(t.id) || t.category.startsWith("TRANSFER") || t.category === "LOAN_PAYMENTS";
 }

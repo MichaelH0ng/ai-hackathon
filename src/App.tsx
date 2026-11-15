@@ -14,6 +14,7 @@ import { EMPTY_STATE, type SavedState, demoState, loadState, saveState } from ".
 import type { Goal, MoneyGoal } from "./lib/types";
 import { spendableCash } from "./lib/money";
 import { useBank } from "./lib/useBank";
+import { celebrateNewlyReached } from "./lib/celebrate";
 
 const pageHashes: Record<NavPage, string> = { Overview: "overview", Accounts: "accounts", Goals: "my-goals", Retirement: "retirement", Budget: "budget", "Price check": "price-check", Profile: "profile" };
 const pageFromHash = (): NavPage => (Object.entries(pageHashes).find(([, hash]) => hash === window.location.hash.slice(1))?.[0] as NavPage) ?? "Overview";
@@ -62,6 +63,10 @@ export default function App() {
   useEffect(() => {
     saveState(state);
   }, [state]);
+  // Confetti the first time a goal reaches its target (once per goal; see lib/celebrate).
+  useEffect(() => {
+    celebrateNewlyReached(state.goals);
+  }, [state.goals]);
 
   // Fresh bank data: share spendable cash with Check a price, and sync goals linked to an account.
   useEffect(() => {

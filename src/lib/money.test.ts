@@ -25,6 +25,14 @@ describe("transfers", () => {
     expect(ids.has(a.id) && ids.has(b.id)).toBe(true);
     expect(ids.has(c.id)).toBe(false);
   });
+
+  it("never hides a real purchase behind a transfer Plaid already labeled", () => {
+    // A $50 savings transfer on Sep 30 and a $50 grocery run on Oct 2 are unrelated.
+    const out = tx({ accountId: "chk", amount: 50, date: "2026-09-30", category: "TRANSFER_OUT", name: "Transfer to Savings" });
+    const into = tx({ accountId: "sav", amount: -50, date: "2026-09-30", category: "TRANSFER_IN", name: "Transfer from Checking" });
+    const groceries = tx({ accountId: "chk", amount: 50, date: "2026-10-02", name: "Trader Joe's" });
+    expect(detectTransferIds([into, groceries, out]).has(groceries.id)).toBe(false);
+  });
 });
 
 describe("cash flow", () => {

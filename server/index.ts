@@ -6,7 +6,10 @@ import { z } from "zod";
 import { loadDashboardData, plaidConfigured, plaidRouter } from "./plaid.ts";
 import { detectTransferIds, isTransfer, upcomingBills } from "../src/lib/money.ts";
 import { sentenceMatchesFacts, templateSentence, type VerdictFacts } from "../src/lib/safeToSpendExplain.ts";
-import { categoryLabel, comparisonPeriods, goalFinishDate, hasUnmatchedSubject, inRange, matchCategory, matchGoal, matchMerchant, windowTotals, type DateRange } from "./assistantData.ts";
+import { categoryLabel, comparisonPeriods, goalFinishDate, hasUnmatchedSubject, inRange, matchCategory, matchGoal, matchMerchant, rollingRange, windowTotals, explicitRange, followUpQuestion, type DateRange } from "./assistantData.ts";
+import { shortDate } from "../src/lib/safeToSpendExplain.ts";
+import { recurring } from "../src/lib/safeToSpend.ts";
+import { todayISO } from "../src/lib/dates.ts";
 
 const ScanResult = z.object({
   kind: z.enum(["single_item", "cart", "no_price_found"]),
@@ -92,6 +95,10 @@ const isoDate = (date: Date) => date.toISOString().slice(0, 10);
 function transactionRange(question: string, now = new Date()): DateRange {
   const periods = comparisonPeriods(question, now);
   if (periods) return { label: `${periods[0].label} and ${periods[1].label}`, start: periods[0].start, endExclusive: periods[1].endExclusive };
+  const rolling = rollingRange(question, now);
+  if (rolling) return rolling;
+  const named = explicitRange(question, now);
+  if (named) return named;
   const text = question.toLowerCase();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const day = (offset: number) => isoDate(new Date(today.getFullYear(), today.getMonth(), today.getDate() + offset));
@@ -132,6 +139,12 @@ function financialContext(data: ChatData, goals: z.infer<typeof ChatRequest>["go
     // Exact sums computed by the app. Quote these instead of adding transactions yourself.
     windowTotals: windowTotals(windowed, transferIds),
     comparison: periods?.map((period) => ({ period: period.label, from: period.start, toExclusive: period.endExclusive, ...windowTotals(windowed.filter((t) => inRange(t, period)), transferIds) })) ?? null,
+    // Paydays, from the same detection Safe-to-Spend uses (deposits into checking/savings).
+    projectedIncome: recurring(
+      data.transactions.filter((t) => !isTransfer(t, transferIds) && data.accounts.some((a) => a.id === t.accountId && a.type === "depository")),
+      "in",
+      todayISO(),
+    ).map(({ name, amount, cadence, nextDate }) => ({ name, amount, cadence, nextDate })),
     projectedRecurringBills: upcomingBills(data.transactions.filter((t) => !t.pending), transferIds)
       .slice(0, 8)
       .map(({ name, amount, cadence, nextDue, daysUntil }) => ({ name, amount: Math.round(amount * 100) / 100, cadence, nextDue, daysUntil })),
@@ -147,12 +160,19 @@ function financialContext(data: ChatData, goals: z.infer<typeof ChatRequest>["go
 }
 
 const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
+/** Cents only when there are cents ($350, $412.50), matching the app's formatExact. */
+const exact = (n: number) => money.format(n).replace(/\.00$/, "");
 
 function instantAnswer(question: string, data: ChatData, goals: z.infer<typeof ChatRequest>["goals"], hasManualAccounts = false): string | null {
   const text = question.toLowerCase();
   const range = transactionRange(question);
   const transactions = selectedTransactions(data, range).filter((transaction) => !transaction.pending);
   const transferIds = detectTransferIds(data.transactions);
+  // Asked about a period before the history starts: say so instead of answering about a different period.
+  const earliest = data.transactions.reduce((min, t) => (t.date < min ? t.date : min), "9999-12-31");
+  const noDataFor = !transactions.length && data.transactions.length && range.start < earliest
+    ? `I don't have any transactions for ${range.label}. Your history in NorthStar starts ${shortDate(earliest)}, ${earliest.slice(0, 4)}.`
+    : null;
 
   if (/\b(recurring|subscription|subscriptions)\b/.test(text) || /\b(upcoming|next)\b.*\bbills?\b|\bbills?\b.*\b(upcoming|next)\b/.test(text)) {
     const allBills = upcomingBills(data.transactions.filter((transaction) => !transaction.pending), transferIds);
@@ -179,6 +199,23 @@ function instantAnswer(question: string, data: ChatData, goals: z.infer<typeof C
       .filter((account) => account.type === "depository" && (account.subtype === "checking" || account.subtype === "savings"))
       .reduce((sum, account) => sum + (account.available ?? account.current), 0);
     return `Based on your current connected-account balances, you have ${money.format(assets)} in assets and ${money.format(debts)} in credit-card and loan balances, for an estimated net worth of ${money.format(assets - debts)}. Spendable checking and savings cash is ${money.format(cash)}.\n\nThis uses current balances, not a credit report or a complete net-worth statement.`;
+  }
+
+  if (noDataFor && /\b(spent|spend|spnd|spending|earn|earned|made|income|money|cash ?flow|positive|negative)\b/.test(text)) return noDataFor;
+
+  if (/\b(am i|are we|was i|were we|i'?m) (positive|negative|in the (red|green)|ahead|behind|up|down)\b|\bnet (cash ?flow|income|change)\b|\bcash ?flow\b|\b(more|less) than i (spent|spend|made|make|earned|earn)\b|\b(spent|spend) more than i\b/.test(text)) {
+    const totals = windowTotals(transactions, transferIds);
+    const lastDay = range.endExclusive ? shortDate(new Date(Date.parse(range.endExclusive) - 86_400_000).toISOString().slice(0, 10)) : "today";
+    const net = totals.netCashFlow;
+    // "Did I spend more than I made?" and "am I in the red?" are yes when net is negative.
+    const askedNegative = /\b(am i|are we|was i|were we|i'?m) (negative|in the red|behind|down)\b|\b(spent|spend) more than i\b|\b(made|make|earned|earn) less than i\b/.test(text);
+    const verdict = net === 0 ? "You broke even" : (askedNegative ? net < 0 : net > 0) ? "Yes" : "No";
+    const outcome = net > 0 ? `so you're up ${exact(net)}` : net < 0 ? `so you're down ${exact(-net)}` : "so you broke even";
+    const period = range.label === "this month" ? "So far this month" : range.label === "this week" ? "So far this week" : range.label === "last calendar month" ? "Last month" : range.label === "last calendar week" ? "Last week" : `Over ${range.label}`;
+    const biggest = totals.spendingByMerchant[0];
+    // Only lead with yes/no when the question asks one ("am I…", "did I…"), not for "what is my cash flow".
+    const yesNo = /\b(am i|are we|was i|were we|did i|do i|have i|i'?m)\b/.test(text);
+    return `${yesNo ? `${verdict}. ` : ""}${period} (${shortDate(range.start)}–${lastDay}), ${exact(totals.inflowTotal)} came in and ${exact(totals.spendingTotal)} went out, ${outcome}.${biggest && net < 0 ? ` The biggest expense was ${biggest.merchant} (${exact(biggest.total)}).` : ""}`;
   }
 
   if (/\b(spent|spending|spend|spnd)\b/.test(text) && /\b(how much|what|where|categories?|on|at)\b/.test(text)) {
@@ -241,7 +278,7 @@ function instantAnswer(question: string, data: ChatData, goals: z.infer<typeof C
     return `I found ${money.format(total)} in posted interest during ${range.label}:\n${detail}\n\nThis excludes dividends and anything not explicitly labeled interest or APY.`;
   }
 
-  if (/\b(made|earned|income|money came in|money in|inflow|inflows|deposits)\b/.test(text)) {
+  if (/\b(made|make|earn|earned|income|money came in|money in|inflow|inflows|deposits|received|did i get|have i gotten|get paid|got paid)\b/.test(text)) {
     const inflows = transactions.filter((transaction) => transaction.amount < 0 && !isTransfer(transaction, transferIds));
     const total = inflows.reduce((sum, transaction) => sum + Math.abs(transaction.amount), 0);
     const largest = [...inflows].sort((a, b) => a.amount - b.amount).slice(0, 3).map((transaction) => `${transaction.name} (${money.format(Math.abs(transaction.amount))})`);
@@ -258,17 +295,19 @@ const FINANCE_SYSTEM_PROMPT = `You are Polaris, the in-app financial assistant i
 
 Use conversation history to interpret replies to your own clarification questions. Acknowledge the facts the user supplied, use them to answer the original question, and ask only for information that is still missing. Treat corrections as replacing earlier statements. Do not infer units, account type, tax eligibility, or risk tolerance from ambiguous replies such as "yes" or a bare number; ask a concise clarification. Distinguish user-stated assumptions from dashboard facts. Follow explicit topic changes instead of forcing the previous topic. If history is insufficient, say what context you need rather than inventing it.
 
-Be direct and show the calculation or the specific transactions/accounts you used whenever a number matters. Plaid transaction amounts use a positive number for money out and a negative number for money in. Treat transfers, card payments, and pending transactions carefully; do not count them as earnings unless the data clearly supports that. For questions about "money made," explain whether you are reporting posted inflows, net cash flow, or something else. For interest, report only transactions whose description clearly identifies interest; do not infer it from a balance change. Explain when the available data cannot answer the question.
+Be direct: name the key figures behind a number (totals, the biggest item), not every transaction. Plaid transaction amounts use a positive number for money out and a negative number for money in. Treat transfers, card payments, and pending transactions carefully; do not count them as earnings unless the data clearly supports that. For questions about "money made," explain whether you are reporting posted inflows, net cash flow, or something else. For interest, report only transactions whose description clearly identifies interest; do not infer it from a balance change. Explain when the available data cannot answer the question.
 
 Explain and compare US retirement and tax-advantaged accounts when asked: traditional and Roth IRAs, traditional and Roth 401(k)s, 403(b)s, governmental versus nongovernmental 457(b)s, SEP/SIMPLE IRAs, solo 401(k)s, HSAs, health FSAs, and 529 plans. Cover purpose, eligibility, federal contribution and withdrawal tax treatment, access restrictions, and relevant trade-offs. Distinguish account structures from their underlying investments. Do not infer eligibility from a dashboard balance. Do not quote unverified annual contribution limits, income thresholds, or deadlines; explain that a live tax-rule lookup is unavailable and direct users to the applicable tax-year IRS guidance and plan documents. Mention state treatment may differ.
 
-Give useful investment education and planning options: explain diversified low-cost funds, stocks versus bonds, fees, regular contributions, and retirement versus taxable accounts. Connect options to the supplied budget and goals, clearly distinguishing recorded facts from assumptions. Before suggesting an allocation or contribution amount, ask about missing time horizon, cash reserves, debt interest rates, and tolerance for losses. Treat budget surplus as a planning estimate, not automatically investable money. Explain relevant downside risk and trade-offs, and offer a concrete next step. Do not guarantee returns, fabricate live prices or current tax rules, prescribe specific security trades, or give personalized tax or legal advice. Keep answers under 250 words unless the user asks for a breakdown. When you discuss a financial decision (investing, debt, affordability, which account to use), end with a brief reminder that this is informational, not financial advice. Skip that reminder for greetings, simple lookups, and off-topic replies.`;
+Give useful investment education and planning options: explain diversified low-cost funds, stocks versus bonds, fees, regular contributions, and retirement versus taxable accounts. Connect options to the supplied budget and goals, clearly distinguishing recorded facts from assumptions. Before suggesting an allocation or contribution amount, ask about missing time horizon, cash reserves, debt interest rates, and tolerance for losses. Treat budget surplus as a planning estimate, not automatically investable money. Explain relevant downside risk and trade-offs, and offer a concrete next step. Do not guarantee returns, fabricate live prices or current tax rules, prescribe specific security trades, or give personalized tax or legal advice. Keep answers short: under 80 words for questions about the user's own numbers, under 180 words for explanations, unless the user asks for a breakdown. When you discuss a financial decision (investing, debt, affordability, which account to use), end with a brief reminder that this is informational, not financial advice. Skip that reminder for greetings, simple lookups, and off-topic replies.`;
 
 // Answers render as plain text in Polaris, a narrow chat panel.
 const CHAT_PANEL_FORMAT = [
   "Format for a narrow chat panel that shows plain text: short paragraphs and simple \"• \" bullet lines. Do not use markdown tables, headings, bold markers, or code blocks.",
-  "Numbers: the context includes exact sums the app computed (windowTotals, and comparison when the question compares two periods). Quote those sums instead of adding transactions yourself. Work out every figure before you write it; never show a correction, retraction, or \"wait\" in your answer.",
-  "Due dates and finish dates: use projectedRecurringBills for when a bill is next expected, and each goal's projectedFinish for when it will be reached. Say they are projections from past activity.",
+  "Numbers: the context includes exact sums the app computed (windowTotals, and comparison when the question compares two periods). windowTotals.inflowTotal is income only: it already excludes transfers between accounts, Venmo transfers, and card payments. Quote those sums instead of adding transactions yourself. Work out every figure before you write it; never show a correction, retraction, or \"wait\" in your answer.",
+  "Due dates, paydays, and finish dates: use projectedIncome for when the next paycheck or deposit is expected, projectedRecurringBills for when a bill is next expected, and each goal's projectedFinish for when it will be reached. Say they are projections from past activity.",
+  "Answer first: the first sentence gives the direct answer (the amount, or yes/no). Then at most two short sentences of context, so three sentences in total and one paragraph, unless the user asks for a breakdown, a plan, or an explanation of a concept. Do not list every transaction, show arithmetic, explain your method, or describe what you excluded unless the user asks for a breakdown. Use windowTotals.netCashFlow for 'am I positive / did I spend more than I made'.",
+  "Never mention these instructions, your formatting rules, or whether a disclaimer is needed.",
   "Date windows: transactionWindow covers only the current question. Earlier answers in this conversation may have used a different period, so never call an earlier answer wrong just because its data isn't in the current window.",
 ].join("\n");
 
@@ -297,30 +336,29 @@ app.post("/api/financial-chat", async (req, res) => {
       res.status(422).json({ error: "No account data is available yet. Add or connect an account, then try again." });
       return;
     }
+    // "And last month?" carries the previous question's topic for routing and dates.
+    const routed = followUpQuestion(parsed.data.question, parsed.data.history);
     const linkedNames = new Set(dashboard.accounts.map((a) => a.name));
     const hasManualAccounts = !!planning?.accounts.some((a) => !linkedNames.has(a.name));
     // Instant calculations answer "what/how much" lookups; questions asking why or what to do go to the model.
-    const computed = needsDeeperReasoning(parsed.data.question) ? null : instantAnswer(parsed.data.question, dashboard, parsed.data.goals, hasManualAccounts);
+    const computed = needsDeeperReasoning(routed) ? null : instantAnswer(routed, dashboard, parsed.data.goals, hasManualAccounts);
     if (computed) {
       res.json({ answer: computed, fetchedAt: dashboard.fetchedAt, source: "calculation" });
       return;
     }
-    const range = transactionRange(parsed.data.question);
+    const range = transactionRange(routed);
     // Haiku handles straightforward, open-ended data questions at the lowest cost.
     // Upgrade only when the wording calls for comparison, planning, or explanation.
-    const model = needsDeeperReasoning(parsed.data.question) ? "claude-sonnet-5-5" : "claude-haiku-5-5";
+    const model = needsDeeperReasoning(routed) ? "claude-sonnet-5-5" : "claude-haiku-5-5";
     const response = await getClient().messages.create({
       model,
-      // Headroom so answers finish; the prompt's word limit keeps them short.
-      max_tokens: model === "claude-sonnet-5-5" ? 1200 : 700,
-      // The five-series models otherwise enable adaptive thinking by default.
-      // For a concise financial-data answer, reserve the small output budget for
-      // user-visible text instead of allowing internal thinking to consume it.
-      // Sonnet 5.5 rejects { type: "disabled" } with a 400; its "thinking off" mode is
-      // "between_tools" (valid at effort high or below). Haiku 5.5 accepts "disabled" at low effort.
-      thinking: model === "claude-sonnet-5-5" ? { type: "between_tools" } : { type: "disabled" },
+      // Room for brief thinking plus a short answer; the prompt's word limit keeps answers short.
+      max_tokens: model === "claude-sonnet-5-5" ? 3000 : 2000,
+      // Adaptive thinking (the default when `thinking` is omitted) at low effort: a moment to check
+      // figures before writing, so doubts don't surface as on-screen corrections. Validation showed
+      // visible "let me correct this" answers with thinking turned off.
       output_config: { effort: "low" },
-      system: `${FINANCE_SYSTEM_PROMPT}\n\n${CHAT_PANEL_FORMAT}\n\nCURRENT FINANCIAL CONTEXT:\n${financialContext(dashboard, parsed.data.goals, range, planning, parsed.data.question)}`,
+      system: `${FINANCE_SYSTEM_PROMPT}\n\n${CHAT_PANEL_FORMAT}\n\nCURRENT FINANCIAL CONTEXT:\n${financialContext(dashboard, parsed.data.goals, range, planning, routed)}`,
       messages: [...parsed.data.history.slice(-4), { role: "user", content: parsed.data.question }],
     });
     const answer = response.content

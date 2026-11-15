@@ -120,6 +120,15 @@ export function formatMoney(n: number, cents = false): string {
   });
 }
 
+/**
+ * NorthStar's one rule for exact amounts (balances, bills, transactions, goal amounts):
+ * show cents only when there are cents. $10, $5.99, $742.18, $1,000.
+ * Totals and summaries round to whole dollars with formatMoney(n).
+ */
+export function formatExact(n: number): string {
+  return formatMoney(n, Math.round(Math.abs(n) * 100) % 100 !== 0);
+}
+
 export function formatWeeks(weeks: number): string {
   if (!isFinite(weeks)) return "—";
   return `${weeks.toFixed(1)} weeks`;
