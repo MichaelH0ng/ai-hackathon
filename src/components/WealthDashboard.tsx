@@ -225,7 +225,7 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; priceCh
     retirementAge: retirementPoints.length ? retirementAge : null,
   };
   return <main id="main" className={`wealth-dashboard${tab === "Goals" ? " goals-page" : ""}`}>
-    <div className="wealth-page-head"><div><h1>{tab === "Goals" ? "My goals" : tab === "Activity" ? "Account activity" : tab}</h1>{tab !== "Overview" && <p>{tab === "Accounts" || tab === "Activity" ? "Track your balances and connected accounts." : tab === "Goals" ? "Plan your savings and watch your progress grow." : tab === "Retirement" ? "Explore your long-term savings plan." : "Give your monthly income a plan."}</p>}</div>{tab === "Accounts" && addAccountButton()}</div>
+    <div className="wealth-page-head"><div><h1>{tab === "Goals" ? "My goals" : tab === "Activity" ? "Account activity" : tab}</h1>{tab !== "Overview" && <p>{tab === "Accounts" || tab === "Activity" ? "Track your balances and connected accounts." : tab === "Goals" ? "Plan your savings and watch your progress grow." : tab === "Retirement" ? "Explore your long-term savings plan." : "Give your monthly income a plan."}</p>}</div>{(tab === "Overview" || tab === "Accounts") && addAccountButton()}</div>
     {tab === "Overview" && <>
       {bank.loading && !bank.data && !assets.length ? <section className="wealth-card" role="status">Loading your money overview…</section> : <HomeOverview data={{
         env: bank.data?.env ?? "manual",
@@ -237,7 +237,7 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; priceCh
         }))],
         transactions: bank.data?.transactions ?? [], status: bank.data?.status ?? [],
         fetchedAt: bank.data?.fetchedAt ?? new Date().toISOString(),
-      }} goal={goals.find(g => g.saved < g.target) ?? goals[0]} goals={goals} onCheck={props.onCheck} onMoney={() => setTab("Accounts")} addAccount={addAccountButton("w-full min-w-0 text-center")} onGoals={() => setTab("Goals")} onNewGoal={onNewGoal} onOpenGoal={onOpenGoal} />}
+      }} goal={goals.find(g => g.saved < g.target) ?? goals[0]} goals={goals} onCheck={props.onCheck} onMoney={() => setTab("Accounts")} onGoals={() => setTab("Goals")} onNewGoal={onNewGoal} onOpenGoal={onOpenGoal} />}
       {!assets.length && <div className="wealth-sample"><Sparkles size={18} /><span>Start with your own numbers, or explore with clearly labeled sample accounts.</span><button onClick={sample}>Try sample accounts <ArrowRight size={15} /></button></div>}
       {assets.some(a => a.sample) && <div className="wealth-sample"><Sparkles size={17} /><span>Sample accounts are included in these totals.</span><button onClick={() => update({ assets: plan.assets.filter(a => !a.sample) })}>Remove sample accounts <X size={14} /></button></div>}
 

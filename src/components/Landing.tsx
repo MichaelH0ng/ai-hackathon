@@ -9,7 +9,6 @@ import { AnimatedList } from "./AnimatedList";
 import { ConnectCard } from "./MoneyDashboard";
 import { NetWorthChart } from "./NetWorthChart";
 import { SavingsPlanner } from "./SavingsPlanner";
-import StarBorder from "./StarBorder";
 
 /**
  * Home page = your money dashboard: net worth over time and where it's held.
@@ -118,10 +117,10 @@ export function HomeOverview({ data, goals = [], onCheck, onMoney, addAccount, o
 
           <div className={addAccount ? "grid grid-cols-2 gap-3" : undefined}>
             {addAccount}
-            {/* Same star border as "Add account", started halfway round so the two stars never travel in step. */}
-            <StarBorder onClick={onMoney} startOffset={0.5} className="wealth-add-account w-full min-w-0 justify-center whitespace-normal! text-center leading-tight" backgroundColor="linear-gradient(115deg, #168e90, #4b7fe0 60%, #9e64df)" textColor="#ffffff" borderColor="rgb(223 254 255 / 22%)" color="#dffeff" trailColor="#54e2c2" radius={10} thickness={1.5} duration={5} glow={0.8} hover="none">
+            {/* Secondary on purpose: "Add account" is this view's one primary action. */}
+            <button onClick={onMoney} className="wealth-secondary w-full min-w-0 justify-center whitespace-normal text-center leading-tight">
               View accounts and activity <ArrowRight className="h-4 w-4 shrink-0" aria-hidden="true" />
-            </StarBorder>
+            </button>
           </div>
 
           <div className="clay p-5">

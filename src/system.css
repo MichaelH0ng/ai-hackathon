@@ -1,0 +1,102 @@
+/*
+ * NorthStar design system: the final, shared layer. Loaded last (see main.tsx), so it is
+ * the single source of truth for buttons, surfaces, corners, and form labels across pages.
+ * Rules:
+ *  - One primary button style (the brand gradient), used for the single main action on a view.
+ *  - Everything else is a quiet secondary (outlined) or text button.
+ *  - Two corner sizes: 10px for controls, 16px for cards.
+ * `:root[data-theme]` matches both themes (the app always sets data-theme), which lets these
+ * rules outrank the older per-theme layers in index.css and goals.css without !important.
+ */
+:root {
+  --ns-radius-control: 10px;
+  --ns-radius-card: 16px;
+  /* The signature gradient, deepened a step so white button text meets WCAG AA. */
+  --ns-primary: linear-gradient(115deg, #117275, #3c69c9 60%, #8450c4);
+  --ns-primary-hover: linear-gradient(115deg, #0e6467, #335cb3 60%, #7444ad);
+  --ns-accent: #0f8a73;
+  --ns-secondary-bg: #ffffff;
+  --ns-secondary-hover: #eef3fa;
+  --ns-secondary-text: #193d70;
+  --ns-line: #c5d1e2;
+  --ns-label: #33465f;
+  --ns-surface-inset: #f1f5fb;
+}
+:root[data-theme="dark"] {
+  --ns-accent: #54e2c2;
+  --ns-secondary-bg: #0f213d;
+  --ns-secondary-hover: #163059;
+  --ns-secondary-text: #edf6ff;
+  --ns-line: rgb(160 198 244 / 26%);
+  --ns-label: #d6e2f0;
+  --ns-surface-inset: rgb(148 192 243 / 9%);
+}
+
+/* ---------- Buttons ---------- */
+:root[data-theme] button.ui-button-primary,
+:root[data-theme] button.wealth-primary {
+  background: var(--ns-primary);
+  color: #fff;
+  border: 0;
+  border-radius: var(--ns-radius-control);
+  box-shadow: none;
+}
+:root[data-theme] button.ui-button-primary:hover:not(:disabled),
+:root[data-theme] button.wealth-primary:hover:not(:disabled) { background: var(--ns-primary-hover); color: #fff; }
+
+:root[data-theme] button.ui-button-secondary,
+:root[data-theme] button.wealth-secondary,
+:root[data-theme] .money-assistant-launch {
+  background: var(--ns-secondary-bg);
+  color: var(--ns-secondary-text);
+  border: 1px solid var(--ns-line);
+  border-radius: var(--ns-radius-control);
+  box-shadow: none;
+}
+:root[data-theme] button.ui-button-secondary:hover:not(:disabled),
+:root[data-theme] button.wealth-secondary:hover:not(:disabled),
+:root[data-theme] .money-assistant-launch:hover { background: var(--ns-secondary-hover); color: var(--ns-secondary-text); }
+
+/* Polaris is always available but never the main action: a quiet pill with an accent icon. */
+:root[data-theme] .money-assistant-launch { border-radius: 999px; box-shadow: 0 8px 24px rgb(0 0 0 / 25%); }
+:root[data-theme] .money-assistant-launch svg { color: var(--ns-accent); }
+
+/* Disabled looks clearly disabled in both themes, without a gradient. */
+:root[data-theme] button.ui-button:disabled,
+:root[data-theme] button.wealth-primary:disabled,
+:root[data-theme] button.wealth-secondary:disabled {
+  background: var(--ns-surface-inset);
+  color: var(--ns-label);
+  border: 1px dashed var(--ns-line);
+  opacity: .75;
+}
+
+/* ---------- Surfaces and corners ---------- */
+:root[data-theme] :is(.clay, .wealth-card, .connection-card, .northstar-summary, .money-assistant-panel, .wealth-modal) { border-radius: var(--ns-radius-card); }
+:root[data-theme] .goals-page .wealth-goal { border-radius: var(--ns-radius-card); }
+:root[data-theme] :is(.wealth-field input, .wealth-field select, .wealth-field textarea) { border-radius: var(--ns-radius-control); }
+
+/* Goal tools: keep the teal accent stripe on the left (from goals.css); the arrow already says "open", so no extra button. */
+:root[data-theme] .goals-page .goals-tool { border-radius: var(--ns-radius-card); }
+.goals-page .goals-tool > summary::after { content: none; }
+:root[data-theme] .goals-page .goals-tool > summary { min-height: 84px; border-radius: var(--ns-radius-card); }
+:root[data-theme] .goals-tool-icon { border-radius: var(--ns-radius-control); }
+
+/* ---------- Text ---------- */
+/* Form labels were left in an old low-contrast gray; make them readable everywhere. */
+:root[data-theme] .wealth-field > span { color: var(--ns-label); font-weight: 600; }
+
+/* ---------- Page-specific fixes ---------- */
+/* Budget: the over/under box and divider used light-theme colors in dark mode. */
+:root[data-theme="dark"] .wealth-budget-remainder { background: rgb(84 226 194 / 10%); color: #bffdf1; border: 1px solid rgb(84 226 194 / 30%); }
+:root[data-theme="dark"] .wealth-budget-remainder.over { background: rgb(255 180 122 / 10%); color: #ffcf9e; border-color: rgb(255 180 122 / 35%); }
+:root[data-theme="dark"] .wealth-budget-line { color: var(--ns-label); border-top-color: var(--ns-line); }
+
+/* Retirement: keep the "%" inside its field instead of dropping below it. */
+.wealth-percent { position: relative; display: flex; align-items: center; }
+.wealth-percent input { padding-right: 36px; }
+.wealth-percent > span { position: absolute; right: 14px; font-weight: 600; color: var(--ns-label); pointer-events: none; }
+
+/* Category icons on Activity (replacing emoji). */
+.category-icon { display: inline-grid; place-items: center; width: 36px; height: 36px; flex-shrink: 0; border-radius: var(--ns-radius-control); background: var(--ns-surface-inset); color: var(--ns-accent); }
+.category-icon.is-inline { width: 22px; height: 22px; background: none; vertical-align: -5px; margin-right: 4px; }

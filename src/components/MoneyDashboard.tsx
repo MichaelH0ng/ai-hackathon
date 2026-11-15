@@ -1,3 +1,4 @@
+import { CategoryIcon } from "./CategoryIcon";
 import { ArrowDownLeft, ArrowUpRight, CalendarClock, Landmark, Link2, RefreshCw, Unplug, Wallet } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatedList } from "./AnimatedList";
@@ -7,7 +8,6 @@ import { formatMoney } from "../lib/finance";
 import {
   ACCOUNT_GROUPS,
   type FlowPeriod,
-  categoryEmoji,
   categoryLabel,
   detectTransferIds,
   isLiability,
@@ -146,7 +146,7 @@ export function MoneyDashboard({
               {cats.map((c) => (
                 <li key={c.key}>
                   <div className="flex items-baseline justify-between gap-2 text-sm">
-                    <span className="font-semibold text-stone-800"><span aria-hidden="true">{c.emoji}</span> {c.label}</span>
+                    <span className="font-semibold text-stone-800"><CategoryIcon category={c.key} inline /> {c.label}</span>
                     <span className="shrink-0">
                       <strong className="text-ink">{money(c.value)}</strong>
                     </span>
@@ -189,7 +189,7 @@ export function MoneyDashboard({
               const transfer = isTransfer(t, transferIds);
               return (
                 <div key={t.id} className="flex items-center gap-3 py-2.5 text-sm">
-                  <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-stone-100" aria-hidden="true">{categoryEmoji(t.category)}</span>
+                  <CategoryIcon category={transfer ? (t.amount < 0 ? "TRANSFER_IN" : "TRANSFER_OUT") : t.category} />
                   <span className="min-w-0 flex-1">
                     <span className="block truncate font-semibold text-stone-800">{t.name}</span>
                     <span className="block truncate text-xs text-stone-500">
@@ -293,16 +293,13 @@ export function MoneyDashboard({
 
 function Shell({ children, actions, sub }: { children: React.ReactNode; actions?: React.ReactNode; sub?: string }) {
   return (
-    <main id="main" className="mx-auto max-w-6xl space-y-4 px-4 pb-16 pt-6">
-      <div className="flex flex-wrap items-end justify-between gap-2">
-        <div>
-          <h1 className="text-3xl font-bold text-ink">Money</h1>
-          {sub && <p className="text-sm text-stone-500">{sub}</p>}
-        </div>
+    <div className="space-y-4">
+      {(sub || actions) && <div className="flex flex-wrap items-center justify-between gap-2">
+        {sub && <p className="text-sm text-stone-500">{sub}</p>}
         {actions}
-      </div>
+      </div>}
       {children}
-    </main>
+    </div>
   );
 }
 
