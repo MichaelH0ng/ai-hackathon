@@ -67,6 +67,20 @@ const ChatRequest = z.object({
     )
     .max(30)
     .default([]),
+  // Numbers the app computes in the browser: every account shown (connected + manual),
+  // plus the budget and retirement plan. Plaid alone doesn't know about these.
+  planning: z
+    .object({
+      accounts: z.array(z.object({ name: z.string().trim().min(1).max(100), kind: z.string().max(40), balance: z.number().finite(), isDebt: z.boolean() })).max(60),
+      netWorth: z.number().finite(),
+      monthlyIncome: z.number().finite(),
+      monthlyExpenses: z.number().finite(),
+      monthlyGoalContributions: z.number().finite(),
+      retirementBalance: z.number().finite(),
+      retirementEstimate: z.number().finite().nullable(),
+      retirementAge: z.number().finite().nullable(),
+    })
+    .optional(),
 });
 
 type ChatData = Awaited<ReturnType<typeof loadDashboardData>>;
@@ -97,7 +111,7 @@ function selectedTransactions(data: ChatData, range: DateRange) {
   return data.transactions.filter((transaction) => transaction.date >= range.start && (!range.endExclusive || transaction.date < range.endExclusive)).slice(0, 500);
 }
 
-function financialContext(data: ChatData, goals: z.infer<typeof ChatRequest>["goals"], range: DateRange) {
+function financialContext(data: ChatData, goals: z.infer<typeof ChatRequest>["goals"], range: DateRange, planning?: z.infer<typeof ChatRequest>["planning"]) {
   // Only send fields useful for answering a question. IDs and account masks never
   // need to leave this server, and removing them trims every model request.
   const accountNames = new Map(data.accounts.map((a) => [a.id, `${a.institution} — ${a.name}`]));
@@ -112,6 +126,9 @@ function financialContext(data: ChatData, goals: z.infer<typeof ChatRequest>["go
     conventions: { plaidAmount: "positive means money out; negative means money in" },
     accounts,
     moneyGoals: goals,
+    // Everything the user sees in the app, including manually entered accounts and budget.
+    // Prefer appAccounts/netWorth here for totals; `accounts` above adds Plaid detail for connected ones.
+    appPlan: planning ?? null,
     postedTransactions: transactions,
     dataStatus: data.status,
   });
@@ -119,7 +136,7 @@ function financialContext(data: ChatData, goals: z.infer<typeof ChatRequest>["go
 
 const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
 
-function instantAnswer(question: string, data: ChatData, goals: z.infer<typeof ChatRequest>["goals"]): string | null {
+function instantAnswer(question: string, data: ChatData, goals: z.infer<typeof ChatRequest>["goals"], hasManualAccounts = false): string | null {
   const text = question.toLowerCase();
   const range = transactionRange(question);
   const transactions = selectedTransactions(data, range).filter((transaction) => !transaction.pending);
@@ -137,7 +154,7 @@ function instantAnswer(question: string, data: ChatData, goals: z.infer<typeof C
     return `Here are the recurring charges NorthStar projects${bills === nextThirtyDays ? " in the next 30 days" : " next"}:\n${detail}\n\nExpected next charges total about ${money.format(projected)}. These are projections based on repeated posted transactions, so a merchant's billing date or amount can change. Informational only—not financial advice.`;
   }
 
-  if (/\b(net worth|how much (money|cash).*(have|do i have)|total (balance|balances)|account balances?)\b/.test(text)) {
+  if (!hasManualAccounts && /\b(net worth|how much (money|cash).*(have|do i have)|total (balance|balances)|account balances?)\b/.test(text)) {
     let assets = 0;
     let debts = 0;
     for (const account of data.accounts) {
@@ -209,25 +226,38 @@ Explain and compare US retirement and tax-advantaged accounts when asked: tradit
 
 Give useful investment education and planning options: explain diversified low-cost funds, stocks versus bonds, fees, regular contributions, and retirement versus taxable accounts. Connect options to the supplied budget and goals, clearly distinguishing recorded facts from assumptions. Before suggesting an allocation or contribution amount, ask about missing time horizon, cash reserves, debt interest rates, and tolerance for losses. Treat budget surplus as a planning estimate, not automatically investable money. Explain relevant downside risk and trade-offs, and offer a concrete next step. Do not guarantee returns, fabricate live prices or current tax rules, prescribe specific security trades, or give personalized tax or legal advice. Keep answers under 250 words unless the user asks for a breakdown. End with a brief reminder that this is informational, not financial advice.`;
 
+// Answers render as plain text in Polaris, a narrow chat panel.
+const CHAT_PANEL_FORMAT = "Format for a narrow chat panel that shows plain text: short paragraphs and simple \"• \" bullet lines. Do not use markdown tables, headings, bold markers, or code blocks.";
+
+// Lets the app choose AI answers or on-device answers without exposing the key.
+app.get("/api/assistant/status", (_req, res) => {
+  res.json({ ai: Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN) });
+});
+
 app.post("/api/financial-chat", async (req, res) => {
   const parsed = ChatRequest.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Send a question and valid chat context." });
     return;
   }
-  if (!plaidConfigured) {
+  const planning = parsed.data.planning;
+  if (!plaidConfigured && !planning) {
     res.status(503).json({ error: "Connect Plaid first by adding PLAID_CLIENT_ID and PLAID_SECRET to .env." });
     return;
   }
 
   try {
     // Fresh Plaid data is loaded for every question; credentials and access tokens stay on this server.
-    const dashboard = await loadDashboardData();
-    if (!dashboard.accounts.length && !dashboard.transactions.length) {
-      res.status(422).json({ error: "No connected account data is available yet. Connect a bank, then try again." });
+    // Without Plaid, the app's own numbers (manual accounts, budget, goals) are enough to answer.
+    const dashboard: ChatData = plaidConfigured ? await loadDashboardData() : { env: "manual", accounts: [], transactions: [], status: [], fetchedAt: new Date().toISOString() };
+    if (!dashboard.accounts.length && !dashboard.transactions.length && !planning?.accounts.length && !parsed.data.goals.length) {
+      res.status(422).json({ error: "No account data is available yet. Add or connect an account, then try again." });
       return;
     }
-    const computed = instantAnswer(parsed.data.question, dashboard, parsed.data.goals);
+    const linkedNames = new Set(dashboard.accounts.map((a) => a.name));
+    const hasManualAccounts = !!planning?.accounts.some((a) => !linkedNames.has(a.name));
+    // Instant calculations answer "what/how much" lookups; questions asking why or what to do go to the model.
+    const computed = needsDeeperReasoning(parsed.data.question) ? null : instantAnswer(parsed.data.question, dashboard, parsed.data.goals, hasManualAccounts);
     if (computed) {
       res.json({ answer: computed, fetchedAt: dashboard.fetchedAt, source: "calculation" });
       return;
@@ -238,13 +268,16 @@ app.post("/api/financial-chat", async (req, res) => {
     const model = needsDeeperReasoning(parsed.data.question) ? "claude-sonnet-5-5" : "claude-haiku-5-5";
     const response = await getClient().messages.create({
       model,
-      max_tokens: model === "claude-sonnet-5-5" ? 500 : 350,
+      // Headroom so answers finish; the prompt's word limit keeps them short.
+      max_tokens: model === "claude-sonnet-5-5" ? 1200 : 700,
       // The five-series models otherwise enable adaptive thinking by default.
       // For a concise financial-data answer, reserve the small output budget for
       // user-visible text instead of allowing internal thinking to consume it.
-      thinking: { type: "disabled" },
+      // Sonnet 5.5 rejects { type: "disabled" } with a 400; its "thinking off" mode is
+      // "between_tools" (valid at effort high or below). Haiku 5.5 accepts "disabled" at low effort.
+      thinking: model === "claude-sonnet-5-5" ? { type: "between_tools" } : { type: "disabled" },
       output_config: { effort: "low" },
-      system: `${FINANCE_SYSTEM_PROMPT}\n\nCURRENT FINANCIAL CONTEXT:\n${financialContext(dashboard, parsed.data.goals, range)}`,
+      system: `${FINANCE_SYSTEM_PROMPT}\n\n${CHAT_PANEL_FORMAT}\n\nCURRENT FINANCIAL CONTEXT:\n${financialContext(dashboard, parsed.data.goals, range, planning)}`,
       messages: [...parsed.data.history.slice(-4), { role: "user", content: parsed.data.question }],
     });
     const answer = response.content
