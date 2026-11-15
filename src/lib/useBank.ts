@@ -14,7 +14,9 @@ export interface Bank {
 
 export async function api<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
-  const body = await res.json().catch(() => ({ error: "The server isn't responding. Is `npm run dev` running?" }));
+  const body = await res.json().catch(() => {
+    throw new Error("The API isn't responding. Start the app with `npm run dev` so both the website and API are running.");
+  });
   if (!res.ok) throw new Error(body.error ?? "Something went wrong.");
   return body as T;
 }

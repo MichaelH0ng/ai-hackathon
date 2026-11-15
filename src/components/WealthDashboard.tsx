@@ -79,7 +79,7 @@ function holdingMoney(value: number, currency: string | null) {
   catch { return `${value.toLocaleString()} ${currency}`; }
 }
 
-export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; onUpdateGoal: (g: MoneyGoal) => void; onOpenGoal: (id: string) => void; onNewGoal: () => void; onCheck: () => void; onSettings: () => void; selectedTab: DashboardTab; onTabChange: (tab: DashboardTab) => void }) {
+export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; priceCheck: React.ReactNode; onUpdateGoal: (g: MoneyGoal) => void; onOpenGoal: (id: string) => void; onNewGoal: () => void; onCheck: () => void; onSettings: () => void; selectedTab: DashboardTab; onTabChange: (tab: DashboardTab) => void }) {
   const { bank, goals, onNewGoal, onOpenGoal } = props;
   const [plan, setPlan] = useState<Plan>(readPlan);
   const tab = props.selectedTab;
@@ -245,6 +245,7 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; onUpdat
 
     {tab === "Goals" && <div className="wealth-stack">
       {goalList}
+      <section id="goal-price-check" aria-label="Check a price">{props.priceCheck}</section>
       <h2 className="goals-tools-heading">Plan your next step</h2>
       {goals.length > 0 && <details className="goals-tool"><summary><span className="goals-tool-icon"><SlidersHorizontal size={23} /></span><span className="goals-tool-copy"><strong>Adjust weekly savings</strong><small>Change your weekly amount and see your new finish date.</small></span><ChevronRight className="goals-tool-arrow" size={23} /></summary><div className="goals-tool-body"><SavingsPlanner goals={goals} onUpdate={props.onUpdateGoal} onOpen={onOpenGoal} /></div></details>}
       <details className="goals-tool"><summary><span className="goals-tool-icon"><CircleDollarSign size={23} /></span><span className="goals-tool-copy"><strong>Compare spending with saving</strong><small>See how a purchase or recurring expense affects a goal.</small></span><ChevronRight className="goals-tool-arrow" size={23} /></summary><div className="goals-tool-body"><OpportunityCalculator goals={goals} totalGoalTarget={totalGoalTarget} savedTowardGoals={savedTowardGoals} onNewGoal={onNewGoal} onPreviewProgress={updateNorthStarPreview} /></div></details>
