@@ -1,7 +1,11 @@
 import { Clock, Lightbulb, PiggyBank, RotateCcw, Tag, Wallet } from "lucide-react";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { formatMoney, hoursOfWork, projectedDate, whatIfSpend } from "../lib/finance";
 import type { BankSnapshot, MoneyGoal, Profile } from "../lib/types";
+import type { BankData } from "../lib/money";
+import { buildForecast, cashFromAccounts } from "../lib/safeToSpend";
+import { readPlan } from "./WealthDashboard";
+import { SafeToSpendCard } from "./SafeToSpend";
 import { type LogDecision, MoneyWhatIf, type WhatIfItem } from "./MoneyWhatIf";
 import { Button, Card, NumberField, Notice, TextField } from "./ui";
 
@@ -10,6 +14,7 @@ export function PriceCheck({
   moneyGoals,
   profile,
   bank,
+  bankData,
   onUpdateGoal,
   onLog,
   onNewGoal,
@@ -18,6 +23,8 @@ export function PriceCheck({
   moneyGoals: MoneyGoal[];
   profile: Profile;
   bank?: BankSnapshot;
+  /** Connected-bank accounts and transactions, for the Safe-to-Spend forecast. */
+  bankData?: BankData | null;
   onUpdateGoal: (g: MoneyGoal) => void;
   onLog: (goal: MoneyGoal, d: LogDecision) => void;
   onNewGoal: () => void;
@@ -31,6 +38,28 @@ export function PriceCheck({
   const [version, setVersion] = useState(0); // resets the What-If when the item changes
 
   const goal = moneyGoals.find((g) => g.id === goalId) ?? moneyGoals[0];
+
+  // Safe-to-Spend: a 30-day forecast from connected accounts plus any manual ones.
+  // Keyed on the goals' numbers so a re-render with equal goals doesn't rebuild it.
+  const [plan] = useState(readPlan);
+  const goalsSig = JSON.stringify(moneyGoals.map(({ name, target, saved, weekly, emergency }) => ({ name, target, saved, weekly, emergency })));
+  const forecast = useMemo(() => {
+    const accounts = bankData?.accounts ?? [];
+    const fromBank = cashFromAccounts(accounts);
+    const manualChecking = plan.assets.filter((a) => a.kind === "Checking").reduce((sum, a) => sum + a.balance, 0);
+    const manualSavings = plan.assets.filter((a) => a.kind === "Savings").reduce((sum, a) => sum + a.balance, 0);
+    if (!fromBank.cashAccountIds.length && !manualChecking && !manualSavings) return null;
+    return buildForecast({
+      // Checking and savings are both cash you can reach today, so both count as spendable.
+      cash: fromBank.checking + fromBank.savings + manualChecking + manualSavings,
+      savings: 0,
+      transactions: bankData?.transactions ?? [],
+      cashAccountIds: fromBank.cashAccountIds,
+      goals: JSON.parse(goalsSig),
+      fallbackMonthlySpending: plan.essentials + plan.lifestyle || undefined,
+    });
+  }, [bankData, plan, goalsSig]);
+  const goalNames = useMemo(() => (JSON.parse(goalsSig) as { name: string }[]).map((g) => g.name), [goalsSig]);
 
   function show(next: WhatIfItem) {
     setItem(next);
@@ -106,7 +135,7 @@ export function PriceCheck({
                 </div>
               )}
             </div>
-            {bank && (
+            {bank && !forecast && (
               <div className="mt-2 flex items-center gap-3 rounded-2xl bg-sky-50 p-3">
                 <Wallet className="h-5 w-5 shrink-0 text-sky-600" aria-hidden="true" />
                 <p className="text-sm text-stone-700">
@@ -116,6 +145,8 @@ export function PriceCheck({
               </div>
             )}
           </Card>
+
+          {forecast && <SafeToSpendCard item={item.label} price={item.price} forecast={forecast} goals={goalNames} />}
 
           {message && (
             <Notice tone="good">

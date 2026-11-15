@@ -866,3 +866,24 @@ header.sticky.top-0.z-40::before { content: ""; position: absolute; left: 0; rig
 :root[data-theme="dark"] header.sticky.top-0.z-40 { background: rgb(14 26 46 / 66%); backdrop-filter: blur(14px); }
 :root[data-theme="dark"] { background-color: var(--night-950); }
 html, body { overscroll-behavior-y: none; }
+
+/* Safe-to-Spend verdict card. Each verdict sets --sv (its color); badges also carry an icon
+   and a word, so the meaning never depends on color alone. */
+.safe-verdict { --sv-safe: #0f8a73; --sv-safe-soft: rgb(15 138 115 / 12%); --sv-tight: #a35f0a; --sv-tight-soft: rgb(196 125 20 / 14%); --sv-no: #b4233a; --sv-no-soft: rgb(196 40 64 / 12%); --sv: var(--sv-safe); --sv-soft: var(--sv-safe-soft); border-left: 4px solid var(--sv); }
+/* Dark mode only swaps the palette; which one applies is still chosen by the verdict class below. */
+:root[data-theme="dark"] .safe-verdict { --sv-safe: #54e2c2; --sv-safe-soft: rgb(84 226 194 / 14%); --sv-tight: #ffcf7a; --sv-tight-soft: rgb(255 207 122 / 14%); --sv-no: #ff8a9a; --sv-no-soft: rgb(255 138 154 / 14%); }
+.safe-verdict.is-tight { --sv: var(--sv-tight); --sv-soft: var(--sv-tight-soft); }
+.safe-verdict.is-not-yet { --sv: var(--sv-no); --sv-soft: var(--sv-no-soft); }
+.safe-verdict .safe-verdict-title { font-size: clamp(22px, 3vw, 26px); font-weight: 750; line-height: 1.2; letter-spacing: -0.02em; }
+.safe-verdict-badge { display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px; background: var(--sv-soft); color: var(--sv); font-size: 13px; font-weight: 700; }
+.safe-verdict-ai { display: inline-flex; align-items: center; gap: 4px; margin-right: 8px; padding: 1px 8px; border-radius: 999px; background: var(--sv-soft); color: var(--sv); font-size: 11px; font-weight: 700; vertical-align: 2px; }
+.safe-verdict-numbers { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin: 16px 0 0; }
+.safe-verdict-numbers > div { display: grid; gap: 3px; padding: 10px 12px; border-radius: 12px; background: rgb(127 160 200 / 10%); min-width: 0; }
+.safe-verdict-numbers dt { font-size: 12px; font-weight: 600; opacity: .75; }
+.safe-verdict-numbers dd { margin: 0; font-size: 19px; font-weight: 750; font-variant-numeric: tabular-nums; }
+.safe-verdict-numbers dd.is-after { color: var(--sv); }
+.safe-verdict-next { padding: 10px 12px; border-radius: 12px; background: var(--sv-soft); font-size: 14px; }
+.safe-verdict-next strong { color: var(--sv); }
+.safe-verdict-kept { font-size: 12px; font-weight: 600; opacity: .8; }
+.checkbox-field { display: flex; align-items: flex-start; gap: 12px; min-height: 44px; padding: 10px 0; cursor: pointer; }
+.checkbox-field input { width: 20px; height: 20px; margin-top: 2px; flex-shrink: 0; accent-color: #54e2c2; cursor: pointer; }

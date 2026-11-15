@@ -132,7 +132,7 @@ export default function App() {
       body = (
         <WealthDashboard
           bank={bank}
-          priceCheck={<PriceCheck moneyGoals={moneyGoals} profile={state.profile} bank={state.bank}
+          priceCheck={<PriceCheck moneyGoals={moneyGoals} profile={state.profile} bank={state.bank} bankData={bank.data}
             onUpdateGoal={updateGoal} onLog={(g, d) => logFor(g)(d)}
             onNewGoal={() => setScreen({ name: "new-money" })}
             onSettings={() => setScreen({ name: "settings" })} />}

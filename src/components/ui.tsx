@@ -180,3 +180,16 @@ export function BackButton({ onClick, label = "Back" }: { onClick: () => void; l
     </button>
   );
 }
+
+/** A labelled checkbox with an optional one-line hint underneath. */
+export function CheckboxField({ label, hint, checked, onChange }: { label: string; hint?: string; checked: boolean; onChange: (checked: boolean) => void }) {
+  return (
+    <label className="checkbox-field">
+      <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} />
+      <span>
+        <span className="block font-semibold text-ink">{label}</span>
+        {hint && <span className="mt-0.5 block text-sm text-stone-600">{hint}</span>}
+      </span>
+    </label>
+  );
+}

@@ -5,6 +5,7 @@ import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 import { loadDashboardData, plaidConfigured, plaidRouter } from "./plaid.ts";
 import { detectTransferIds, isTransfer, upcomingBills } from "../src/lib/money.ts";
+import { sentenceMatchesFacts, templateSentence, type VerdictFacts } from "../src/lib/safeToSpendExplain.ts";
 import { categoryLabel, comparisonPeriods, goalFinishDate, hasUnmatchedSubject, inRange, matchCategory, matchGoal, matchMerchant, windowTotals, type DateRange } from "./assistantData.ts";
 
 const ScanResult = z.object({
@@ -357,6 +358,73 @@ app.post("/api/financial-chat", async (req, res) => {
     }
   }
 });
+// ---------- Safe-to-Spend: explain a verdict the app already computed ----------
+const OPTION_IDS = ["buy-now", "wait-until", "use-savings", "cheaper-option", "skip", "save-for-it"] as const;
+const money2 = z.number().finite();
+const VerdictFactsSchema = z.object({
+  item: z.string().trim().min(1).max(80),
+  price: money2.positive(),
+  verdict: z.enum(["safe", "tight", "not-yet"]),
+  cash: money2, savings: money2, cushion: money2,
+  reserved: money2.nonnegative().default(0), reservedName: z.string().max(100).nullable().default(null),
+  lowPointBefore: money2, lowPointAfter: money2, lowPointDate: z.string().max(10),
+  driver: z.object({ name: z.string().max(80), amount: money2, date: z.string().max(10) }).nullable(),
+  nextIncome: z.object({ name: z.string().max(80), amount: money2, date: z.string().max(10) }).nullable(),
+  safeDate: z.object({ date: z.string().max(10), after: z.string().max(80) }).nullable(),
+  comfortableLimit: money2, safeLimit: money2, coveredBySavings: z.boolean(),
+  goalSavingsPerWeek: money2, goals: z.array(z.string().max(100)).max(20),
+  confidence: z.enum(["full", "limited", "estimate"]),
+  options: z.array(z.object({ id: z.enum(OPTION_IDS), label: z.string().max(120) })).min(1).max(6),
+});
+const VerdictExplanation = z.object({
+  sentence: z.string().describe("One or two short sentences explaining the verdict."),
+  recommended: z.enum(OPTION_IDS).describe("The single best next step; must be one of the provided options."),
+  category: z.string().describe("A short purchase category such as electronics, clothing, food, travel, or entertainment."),
+});
+const VERDICT_PROMPT = `You are Polaris, the assistant in NorthStar, a money app for students. The app has already decided whether a purchase is safe ("safe"), tight ("tight"), or not safe yet ("not-yet") from a 30-day cash forecast. You do not change that verdict.
+
+What the facts mean: cash = checking plus savings today; reserved = money in the student's emergency fund (reservedName), which is kept aside and never counted as spendable, so mention that it stays untouched when it helps reassure them; lowPointBefore = the lowest balance in the next 30 days if they don't buy it, on lowPointDate; lowPointAfter = that same lowest balance if they buy it today; cushion = the minimum we try to keep; driver = the bill that pulls the balance down to that low point; nextIncome = the next expected deposit; safeDate = the first date buying it keeps them above the cushion; comfortableLimit / safeLimit = the most they could spend today and stay "safe" / stay above the cushion.
+
+Write one or two short, plain sentences that explain the verdict to the student, naming the main reason: usually the bill that makes money tight (driver) and, if the verdict is "not-yet", when it becomes safe (safeDate) or the next paycheck. Keep it under 40 words. Speak directly ("you"). Never mention field names (like "driver" or "cushion field"); if driver is null, simply don't mention a bill. Use only the numbers and dates in the facts; round dollars to whole numbers; never compute new amounts. Do not lecture or moralize, and do not give investment or credit advice.
+
+Then pick the single best next step from the provided options, considering the student's goals, and give a short category for the item.`;
+
+app.post("/api/safe-to-spend/explain", async (req, res) => {
+  const parsed = VerdictFactsSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Send the verdict facts computed by the app." });
+    return;
+  }
+  const facts = parsed.data as VerdictFacts;
+  const fallback = { sentence: templateSentence(facts), recommended: facts.options[0].id, category: null, source: "template" };
+  try {
+    const response = await getClient().beta.messages.parse({
+      // Fast and inexpensive: the verdict is already decided, this only explains it.
+      model: "claude-haiku-5-5",
+      max_tokens: 400,
+      thinking: { type: "disabled" },
+      output_config: { effort: "low", format: betaZodOutputFormat(VerdictExplanation) },
+      system: VERDICT_PROMPT,
+      messages: [{ role: "user", content: `Facts:\n${JSON.stringify(facts)}` }],
+    });
+    const out = response.parsed_output;
+    if (response.stop_reason === "refusal" || !out) {
+      res.json(fallback);
+      return;
+    }
+    // The model may only pick an option the app offered and only cite numbers from the facts.
+    const recommended = facts.options.some((o) => o.id === out.recommended) ? out.recommended : facts.options[0].id;
+    const honest = sentenceMatchesFacts(out.sentence, facts);
+    if (!honest) console.warn("Safe-to-Spend: AI sentence cited numbers outside the facts; using template");
+    res.json({ sentence: honest ? out.sentence.trim() : fallback.sentence, recommended, category: out.category.trim().toLowerCase().slice(0, 40), source: honest ? "ai" : "template" });
+  } catch (err) {
+    // The verdict never depends on the AI: answer with the template on any failure.
+    if (err instanceof Anthropic.APIError) console.error("Safe-to-Spend explain error", err.status, err.message);
+    else console.error("Safe-to-Spend explain error", err instanceof Error ? err.message : err);
+    res.json(fallback);
+  }
+});
+
 app.post("/api/scan", async (req, res) => {
   const image: unknown = req.body?.image;
   const match = typeof image === "string" ? image.match(/^data:(image\/[a-z]+);base64,(.+)$/) : null;
