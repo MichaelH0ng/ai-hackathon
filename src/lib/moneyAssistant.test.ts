@@ -90,4 +90,18 @@ describe("on-device money assistant", () => {
     expect(answerMoneyQuestion("Explain index funds", context)).toContain("expense ratios");
     expect(answerMoneyQuestion("What stocks should I buy?", context)).toContain("don’t have live prices");
   });
+
+  it("greets, reports card debt, and dates a named goal", () => {
+    const withCard: MoneyAssistantContext = { ...context, accounts: [...context.accounts, { name: "Student Visa", kind: "Credit card", balance: 200, isDebt: true }] };
+    expect(answerMoneyQuestion("hi", withCard)).toContain("I’m Polaris");
+    expect(answerMoneyQuestion("What's my credit card balance?", withCard)).toBe("Student Visa (Credit card): $200.00 owed.");
+    expect(answerMoneyQuestion("When will I reach my emergency fund goal?", withCard)).toMatch(/Emergency fund: \$500\.00 of \$2,000\.00 \(25%\)\. At \$50\.00 per week, you’d reach it around /);
+  });
+
+  it("says plainly when a question needs transaction history", () => {
+    expect(answerMoneyQuestion("How much did I spend on food this month?", context)).toContain("can’t read your transaction history");
+    expect(answerMoneyQuestion("When is my rent due?", context)).toContain("can’t read your transaction history");
+    // Budget questions still use the entered budget.
+    expect(answerMoneyQuestion("What's my monthly income left over?", context)).toContain("$3,000.00 monthly income");
+  });
 });

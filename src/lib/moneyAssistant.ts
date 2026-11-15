@@ -18,9 +18,32 @@ export interface MoneyAssistantContext {
 
 const money = (amount: number) => formatMoney(amount, true);
 
+/** "around Feb 6" for a goal saving `weekly` per week; null when it's funded or has no weekly amount. */
+function finishDate(goal: { target: number; saved: number; weekly: number }, now = new Date()): string | null {
+  const remaining = Math.max(0, goal.target - goal.saved);
+  if (remaining === 0 || goal.weekly <= 0) return null;
+  const finish = new Date(now.getFullYear(), now.getMonth(), now.getDate() + Math.ceil(remaining / goal.weekly) * 7);
+  return finish.toLocaleDateString("en-US", { month: "short", day: "numeric", year: finish.getFullYear() === now.getFullYear() ? undefined : "numeric" });
+}
+
+function describeGoal(goal: { name: string; target: number; saved: number; weekly: number }): string {
+  const percent = goal.target > 0 ? Math.min(100, Math.round(goal.saved / goal.target * 100)) : 0;
+  const finish = finishDate(goal);
+  const timing = goal.saved >= goal.target ? "It’s fully funded." : finish ? `At ${money(goal.weekly)} per week, you’d reach it around ${finish}.` : "Add a weekly amount to estimate a finish date.";
+  return `${goal.name}: ${money(goal.saved)} of ${money(goal.target)} (${percent}%). ${timing}`;
+}
+
 export function answerMoneyQuestion(question: string, context: MoneyAssistantContext, history: AssistantTurn[] = []): string {
   const query = question.trim().toLowerCase();
   if (!query) return "Ask me about your accounts, net worth, goals, budget, or retirement estimate.";
+  if (/^(hi|hello|hey|yo|good (morning|afternoon|evening))\b[\s!.?]*$/.test(query)) {
+    return "Hi! I’m Polaris. Ask me about your balances, debt, savings goals, budget, retirement estimate, or investing basics.";
+  }
+  // Spending, income, and bills need transaction history, which on-device answers don't have.
+  if (/\b(spent|spend|spending|spnd|earn|earned|income|made|paycheck|bills?|subscriptions?|rent|due|transactions?)\b/.test(query)
+    && !/\b(should i|can i afford|afford|invest|budget|monthly income|left over)\b/.test(query)) {
+    return "On-device answers can’t read your transaction history, so I can’t total spending, income, or bills here. Open Account activity to see them, or ask again when AI answers are on.";
+  }
   const followUp = answerInvestingFollowUp(question, history);
   if (followUp) return followUp;
   const accountEducation = answerAccountEducation(query);
@@ -71,6 +94,18 @@ export function answerMoneyQuestion(question: string, context: MoneyAssistantCon
     return `Your dashboard shows ${money(context.assets)} in assets and ${money(context.debt)} in debt.`;
   }
 
+  if (/\b(credit card|card balance|debt|owe|loans?)\b/.test(query) && !/\b(should i|pay off|or)\b/.test(query)) {
+    const debts = context.accounts.filter(account => account.isDebt);
+    return debts.length
+      ? `${debts.map(account => `${account.name} (${account.kind}): ${money(account.balance)} owed.`).join(" ")}${debts.length > 1 ? ` Total debt: ${money(context.debt)}.` : ""}`
+      : "You don’t have any credit card or loan balances on your dashboard.";
+  }
+
+  if (/\bafford\b/.test(query)) {
+    const cash = context.accounts.filter(account => !account.isDebt && /\b(checking|savings)\b/i.test(account.kind)).reduce((sum, account) => sum + account.balance, 0);
+    return `Your checking and savings total ${money(cash)}. Whether a purchase fits depends on your upcoming bills and goals. Price check shows how a specific price affects your goal timeline.`;
+  }
+
   if (/\b(checking|savings|brokerage|roth|ira|401\(k\)|account)\b/.test(query)) {
     const matches = context.accounts.filter(account =>
       `${account.name} ${account.kind}`.toLowerCase().split(/\s+/).some(word => word.length > 2 && query.includes(word)),
@@ -84,10 +119,8 @@ export function answerMoneyQuestion(question: string, context: MoneyAssistantCon
 
   if (/\b(goal|goals|saving|savings|progress)\b/.test(query)) {
     if (!context.goals.length) return "You haven’t added a savings goal yet. Add one to track your progress in NorthStar.";
-    return context.goals.map(goal => {
-      const percent = goal.target > 0 ? Math.min(100, Math.round(goal.saved / goal.target * 100)) : 0;
-      return `${goal.name}: ${money(goal.saved)} of ${money(goal.target)} (${percent}%), saving ${money(goal.weekly)} per week.`;
-    }).join(" ");
+    const named = context.goals.filter(goal => goal.name.toLowerCase().split(/\s+/).some(word => word.length >= 4 && query.includes(word)));
+    return (named.length === 1 ? named : context.goals).map(describeGoal).join(" ");
   }
 
   if (/\b(budget|left over|left to plan|monthly income|essentials|save)\b/.test(query)) {
@@ -105,13 +138,13 @@ export function answerMoneyQuestion(question: string, context: MoneyAssistantCon
 
   if (/\b(spend|purchase|buy|opportunity cost|trade.off)\b/.test(query)) {
     return context.goals.length
-      ? "The Opportunity cost calculator compares a purchase with your savings-goal timeline. Open it on Overview to compare one-time or recurring spending."
-      : "Create a savings goal first, then use the Opportunity cost calculator on Overview to see how a purchase could affect its timeline.";
+      ? "The Opportunity cost calculator compares a purchase with your savings-goal timeline. Open it on My goals to compare one-time or recurring spending."
+      : "Create a savings goal first, then use the Opportunity cost calculator on My goals to see how a purchase could affect its timeline.";
   }
 
   if (/\b(net worth|asset|debt|interest|budget)\b/.test(query)) {
     return "Net worth is what you own minus what you owe. Your dashboard groups balances into assets and debt so you can see both sides.";
   }
 
-  return "I can help with balances, goals, budget, retirement, and investing basics. Try “How do I start investing?”, “Explain index funds”, or “How should I diversify?”";
+  return "I can only help with your money in NorthStar: balances, debt, savings goals, budget, retirement, and investing basics. Try “How close am I to my goals?”, “What’s my credit card balance?”, or “How do I start investing?”";
 }
