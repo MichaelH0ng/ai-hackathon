@@ -838,3 +838,8 @@ body {
 .wealth-add-account { min-height: 44px; padding: 0 18px; font-size: 14px; font-weight: 650; box-shadow: 0 8px 22px rgb(57 116 221 / 27%); }
 .wealth-goal-reached { margin-top: 2px; min-height: 0; font-weight: 650; }
 :where(:root[data-theme="dark"]) .asset-split-tip { background: #050b16; box-shadow: 0 6px 18px rgb(0 0 0 / 40%); }
+
+/* Polaris: keep AI line breaks and bullets, show a waiting state, label offline fallbacks. */
+.money-assistant-message { white-space: pre-wrap; }
+.money-assistant-message.pending { color: var(--night-muted); font-style: italic; }
+.money-assistant-offline { display: block; margin-top: 6px; color: var(--night-muted); font-size: 11px; font-style: normal; }
