@@ -76,7 +76,7 @@ function holdingMoney(value: number, currency: string | null) {
   catch { return `${value.toLocaleString()} ${currency}`; }
 }
 
-export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; onUpdateGoal: (g: MoneyGoal) => void; onOpenGoal: (id: string) => void; onNewGoal: () => void; onCheck: () => void; onSettings: () => void; selectedTab: DashboardTab; onTabChange: (tab: DashboardTab) => void }) {
+export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; onUpdateGoal: (g: MoneyGoal) => void; onOpenGoal: (id: string) => void; onNewGoal: () => void; onCheck: () => void; onSettings: () => void; selectedTab: DashboardTab; onTabChange: (tab: DashboardTab) => void; priceCheck?: React.ReactNode }) {
   const { bank, goals, onNewGoal, onOpenGoal } = props;
   const [plan, setPlan] = useState<Plan>(readPlan);
   const tab = props.selectedTab;
@@ -219,7 +219,7 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; onUpdat
     retirementEstimate: retirementPoints.at(-1)?.balance ?? null,
     retirementAge: retirementPoints.length ? retirementAge : null,
   };
-  return <main id="main" className={`wealth-dashboard${tab === "Goals" ? " goals-page" : ""}`}>
+  return <main id="main" className={`wealth-dashboard${tab === "Goals" ? " goals-page" : tab === "Budget" ? " budget-page" : ""}`}>
     <div className="wealth-page-head"><div><h1>{tab === "Goals" ? "My goals" : tab === "Activity" ? "Account activity" : tab}</h1><p>{tab === "Overview" ? "Your whole financial picture, in one place." : tab === "Accounts" || tab === "Activity" ? "Track your balances and connected accounts." : tab === "Goals" ? "Plan your savings and watch your progress grow." : tab === "Retirement" ? "Explore your long-term savings plan." : "Give your monthly income a plan."}</p></div>{(tab === "Overview" || tab === "Accounts") && <button className="wealth-primary" onClick={addAsset}><Plus size={16} /> Add account</button>}</div>
     {tab === "Overview" && <>
       {bank.loading && !bank.data && !assets.length ? <section className="wealth-card" role="status">Loading your money overview…</section> : <HomeOverview data={{
@@ -240,10 +240,11 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; onUpdat
     {tab === "Accounts" && <div className="wealth-stack">{accountSummary}{accountList}</div>}
 
     {tab === "Goals" && <div className="wealth-stack">
-      <NorthStar progress={goalProgress} previewProgress={northStarPreview} hasGoals={goals.length > 0} onNewGoal={onNewGoal} />
       {goalList}
-      {goals.length > 0 && <SavingsPlanner goals={goals} onUpdate={props.onUpdateGoal} onOpen={onOpenGoal} />}
-      <OpportunityCalculator goals={goals} totalGoalTarget={totalGoalTarget} savedTowardGoals={savedTowardGoals} onNewGoal={onNewGoal} onPreviewProgress={updateNorthStarPreview} />
+      {props.priceCheck}
+      <details className="goals-disclosure"><summary>Adjust my weekly savings</summary><div className="goals-disclosure-body">{goals.length > 0 ? <SavingsPlanner goals={goals} onUpdate={props.onUpdateGoal} onOpen={onOpenGoal} /> : <button className="wealth-secondary" onClick={onNewGoal}>Create a goal first</button>}</div></details>
+      <details className="goals-disclosure"><summary>Compare a recurring expense</summary><div className="goals-disclosure-body"><OpportunityCalculator goals={goals} totalGoalTarget={totalGoalTarget} savedTowardGoals={savedTowardGoals} onNewGoal={onNewGoal} onPreviewProgress={updateNorthStarPreview} /></div></details>
+      <details className="goals-disclosure"><summary>View my constellation</summary><div className="goals-disclosure-body"><NorthStar progress={goalProgress} previewProgress={northStarPreview} hasGoals={goals.length > 0} onNewGoal={onNewGoal} /></div></details>
       <details className="wealth-card wealth-preferences">
         <summary><span>Optional planning preferences</span><small>Risk comfort, timeline, and future priorities</small></summary>
         <div className="wealth-profile-grid">

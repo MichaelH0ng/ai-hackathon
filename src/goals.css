@@ -1,71 +1,146 @@
-/* Explicit Goals palette prevents older light-theme rules from dimming labels. */
-.goals-page { color: #f4f8ff; }
-.goals-page > .wealth-stack { gap: 28px; }
-.goals-page :is(.wealth-card, .northstar-summary, .savings-planner-panel) {
+/* Shared Goals and Budget palette keeps planning labels clear on dark surfaces. */
+.goals-page .goals-disclosure {
+  background: #0d1d35;
+  border: 1px solid #587393;
+  border-radius: 12px;
+  padding: 18px 22px;
+}
+.goals-disclosure > summary { color: #edf6ff; font-size: 16px; font-weight: 650; cursor: pointer; }
+.goals-disclosure-body { padding-top: 20px; }
+.goals-disclosure-body > section { padding-left: 0; padding-right: 0; padding-bottom: 0; }
+.goals-photo-option { margin-bottom: 20px; }
+.goals-photo-option > summary { color: #9bf4df; font-size: 14px; cursor: pointer; }
+.goals-photo-option > summary svg { display: inline-block; vertical-align: middle; margin-right: 6px; }
+.goals-photo-option[open] > summary { margin-bottom: 16px; }
+.goals-page .goal-price-check {
+  background: #122747;
+  border: 1px solid #74b9ff;
+  border-top: 3px solid #74b9ff;
+  border-radius: 16px;
+  padding: clamp(18px, 3vw, 28px);
+}
+.goal-price-check #goal-price-check-title { display: flex; align-items: center; gap: 10px; font-size: 24px; }
+.goal-price-check #goal-price-check-title > svg { color: #9bf4df; flex-shrink: 0; }
+.goals-page .goal-price-check .purchase-check-entry { background: #091426; border-color: #587393; }
+.goal-price-check .purchase-check-compare {
+  background: #9bf4df;
+  color: #092c30;
+  border: 1px solid #b8f4e5;
+  font-size: 16px;
+  min-height: 50px;
+  box-shadow: none;
+}
+.goals-page .goal-price-check button.purchase-check-compare:hover { background: #c4ffef; color: #092c30; }
+.goal-price-check .purchase-check-compare:disabled { background: #243e55; border-color: #718cab; color: #c4d4e8; cursor: not-allowed; }
+.goal-price-check { border-top: 1px solid #587393; padding-top: 28px; }
+.goals-page .goal-price-check .clay { background: #0d1d35; border: 1px solid #587393; }
+.goal-price-check .purchase-verdict { border-left: 4px solid #54e2c2 !important; }
+.goal-price-check .purchase-verdict p { color: #d0def0; font-size: 16px; line-height: 1.7; margin-top: 12px; }
+.goal-price-check .text-brand-100 { color: #edf6ff; }
+.goal-price-check :is(.bg-emerald-50, .bg-sky-50, .bg-amber-50) { background: #193554; }
+.goal-price-check :is(.text-emerald-900, .text-emerald-950, .text-emerald-800, .text-emerald-700) { color: #9bf4df; }
+.goal-price-check :is(.text-amber-900, .text-amber-950, .text-amber-800, .text-amber-700) { color: #ffd29b; }
+.goal-price-check .text-sky-950 { color: #d0eaff; }
+.goal-price-check :is(.text-red-700, .text-red-600) { color: #ffb6bd; }
+.goal-price-check button.bg-brand-600:hover { background: #305da3; color: white; }
+.budget-page .wealth-currency {
+  background: #050b16;
+  border: 1px solid #718cab;
+  color: #d0def0;
+}
+.budget-page .wealth-currency > span { color: #d0def0; }
+.budget-page .wealth-currency input { background: transparent; }
+.budget-page .wealth-budget-line {
+  background: #152c49;
+  border: 1px solid #718cab;
+  border-radius: 10px;
+  color: #d0def0;
+  padding: 18px;
+  font-size: 15px;
+  line-height: 1.6;
+}
+.budget-page .wealth-budget-line strong { color: #f4f8ff; font-size: 19px; }
+.budget-page .wealth-budget-remainder {
+  background: #103435;
+  border: 1px solid #54e2c2;
+  border-left-width: 4px;
+  color: #d3f3ec;
+  padding: 22px;
+  font-size: 16px;
+  flex-wrap: wrap;
+}
+.budget-page .wealth-budget-remainder strong { color: #9bf4df; font-size: clamp(26px, 4vw, 34px); }
+.budget-page .wealth-budget-remainder.over { background: #392719; border-color: #ffb47a; color: #ffe0c7; }
+.budget-page .wealth-budget-remainder.over strong { color: #ffd29b; }
+.budget-page .northstar-progress { height: 12px; background: #334b69; }
+.budget-page .northstar-progress-label strong { font-size: 20px; }
+:is(.goals-page, .budget-page) { color: #f4f8ff; }
+:is(.goals-page, .budget-page) > .wealth-stack { gap: 28px; }
+:is(.goals-page, .budget-page) :is(.wealth-card, .northstar-summary, .savings-planner-panel) {
   background: #0d1d35;
   border: 1px solid #587393;
   box-shadow: 0 12px 32px #0003;
 }
-.goals-page :is(h1, h2, h3) { color: #f4f8ff; }
-.goals-page h2 { font-size: 22px; line-height: 1.4; }
-.goals-page :is(.wealth-page-head p, .wealth-section-head p, .wealth-note,
+:is(.goals-page, .budget-page) :is(h1, h2, h3) { color: #f4f8ff; }
+:is(.goals-page, .budget-page) h2 { font-size: 22px; line-height: 1.4; }
+:is(.goals-page, .budget-page) :is(.wealth-page-head p, .wealth-section-head p, .wealth-note,
   .northstar-copy > p, .northstar-art, .northstar-progress-label) {
   color: #d0def0;
   font-size: 15px;
   line-height: 1.7;
 }
-.goals-page :is(.northstar-kicker, .northstar-progress-label strong) { color: #9bf4df; }
-.goals-page .wealth-goal {
+:is(.goals-page, .budget-page) :is(.northstar-kicker, .northstar-progress-label strong) { color: #9bf4df; }
+:is(.goals-page, .budget-page) .wealth-goal {
   background: #152c49;
   border: 1px solid #718cab;
   padding: 22px;
   color: #f4f8ff;
 }
-.goals-page .wealth-goal:hover { background: #203d5d; border-color: #9bcfff; }
-.goals-page .wealth-goal h3 { font-size: 19px; }
-.goals-page .wealth-goal p { font-size: 17px; line-height: 1.6; }
-.goals-page :is(.wealth-goal p > span, .wealth-goal-top, .wealth-goal-detail,
+:is(.goals-page, .budget-page) .wealth-goal:hover { background: #203d5d; border-color: #9bcfff; }
+:is(.goals-page, .budget-page) .wealth-goal h3 { font-size: 19px; }
+:is(.goals-page, .budget-page) .wealth-goal p { font-size: 17px; line-height: 1.6; }
+:is(.goals-page, .budget-page) :is(.wealth-goal p > span, .wealth-goal-top, .wealth-goal-detail,
   .wealth-goal-deadline, .wealth-goal-placeholder, .wealth-goal-placeholder p) { color: #d0def0; }
-.goals-page :is(.wealth-goal-detail, .wealth-goal-deadline) { font-size: 14px; line-height: 1.7; }
-.goals-page .wealth-goal-detail { flex-wrap: wrap; gap: 8px; }
-.goals-page .wealth-field > span { color: #f4f8ff; font-size: 15px; }
-.goals-page .wealth-field :is(input, select, textarea) {
+:is(.goals-page, .budget-page) :is(.wealth-goal-detail, .wealth-goal-deadline) { font-size: 14px; line-height: 1.7; }
+:is(.goals-page, .budget-page) .wealth-goal-detail { flex-wrap: wrap; gap: 8px; }
+:is(.goals-page, .budget-page) .wealth-field > span { color: #f4f8ff; font-size: 15px; }
+:is(.goals-page, .budget-page) .wealth-field :is(input, select, textarea) {
   color-scheme: dark;
   background: #050b16;
   color: #f4f8ff;
   border-color: #718cab;
 }
-.goals-page .wealth-field :is(input, textarea)::placeholder { color: #b7c9df; opacity: 1; }
-.goals-page :is(button, input, select, textarea, summary):focus-visible { outline: 3px solid #94c9ff; outline-offset: 3px; }
-.goals-page .savings-planner-panel > [aria-hidden="true"] { display: none; }
-.goals-page .savings-planner-panel .text-brand-200 { color: #9bf4df; }
-.goals-page .savings-planner-panel button.bg-white {
+:is(.goals-page, .budget-page) .wealth-field :is(input, textarea)::placeholder { color: #b7c9df; opacity: 1; }
+:is(.goals-page, .budget-page) :is(button, input, select, textarea, summary):focus-visible { outline: 3px solid #94c9ff; outline-offset: 3px; }
+:is(.goals-page, .budget-page) .savings-planner-panel > [aria-hidden="true"] { display: none; }
+:is(.goals-page, .budget-page) .savings-planner-panel .text-brand-200 { color: #9bf4df; }
+:is(.goals-page, .budget-page) .savings-planner-panel button.bg-white {
   background: #b8f4e5 !important;
   color: #092c30 !important;
   border: 1px solid #b8f4e5;
 }
-.goals-page .savings-planner-panel button.bg-white:hover { background: #d8fff4 !important; }
-.goals-page .savings-planner-panel button:disabled { opacity: .7; }
-.goals-page .wealth-opportunity-result { background: #050f20; border: 1px solid #718cab; }
-.goals-page .wealth-opportunity-result > strong { color: #f4f8ff; }
-.goals-page .wealth-opportunity-result :is(.wealth-tag, p) { color: #d0def0; }
-.goals-page .wealth-timeline-compare { border: 0; padding: 0; align-items: stretch; color: #d0def0; }
-.goals-page .wealth-timeline-compare > div { padding: 18px; border: 1px solid #54e2c2; border-top-width: 4px; border-radius: 10px; background: #103435; }
-.goals-page .wealth-timeline-compare > div:last-child { border-color: #c294ff; background: #302443; }
-.goals-page .wealth-timeline-compare span { color: #f4f8ff; font-size: 15px; line-height: 1.5; }
-.goals-page .wealth-timeline-compare strong { color: #9bf4df; font-size: 25px; }
-.goals-page .wealth-timeline-compare > div:last-child strong { color: #e5d1ff; }
-.goals-page .wealth-timeline-compare > svg { align-self: center; flex-shrink: 0; }
-.goals-page .wealth-opportunity-result .wealth-delay { background: #193554; color: #f4f8ff; border-left: 3px solid #94c9ff; border-radius: 8px; padding: 16px; font-size: 16px; }
-.goals-page .wealth-preferences > summary { color: #f4f8ff; font-size: 19px; }
-.goals-page .wealth-preferences > summary small { color: #d0def0; font-size: 15px; margin-left: 0; }
-.goals-page .wealth-risk-options button { background: #050f20; border-color: #718cab; }
-.goals-page .wealth-risk-options button span { color: #f4f8ff; font-size: 16px; }
-.goals-page .wealth-risk-options button small { color: #d0def0; font-size: 15px; }
-.goals-page .wealth-risk-options button:hover { background: #203d5d; }
-.goals-page .wealth-risk-options button.selected { background: #103435; border: 2px solid #54e2c2; padding: 16px; }
-.goals-page .wealth-risk-options button.selected span { color: #9bf4df; }
+:is(.goals-page, .budget-page) .savings-planner-panel button.bg-white:hover { background: #d8fff4 !important; }
+:is(.goals-page, .budget-page) .savings-planner-panel button:disabled { opacity: .7; }
+:is(.goals-page, .budget-page) .wealth-opportunity-result { background: #050f20; border: 1px solid #718cab; }
+:is(.goals-page, .budget-page) .wealth-opportunity-result > strong { color: #f4f8ff; }
+:is(.goals-page, .budget-page) .wealth-opportunity-result :is(.wealth-tag, p) { color: #d0def0; }
+:is(.goals-page, .budget-page) .wealth-timeline-compare { border: 0; padding: 0; align-items: stretch; color: #d0def0; }
+:is(.goals-page, .budget-page) .wealth-timeline-compare > div { padding: 18px; border: 1px solid #54e2c2; border-top-width: 4px; border-radius: 10px; background: #103435; }
+:is(.goals-page, .budget-page) .wealth-timeline-compare > div:last-child { border-color: #c294ff; background: #302443; }
+:is(.goals-page, .budget-page) .wealth-timeline-compare span { color: #f4f8ff; font-size: 15px; line-height: 1.5; }
+:is(.goals-page, .budget-page) .wealth-timeline-compare strong { color: #9bf4df; font-size: 25px; }
+:is(.goals-page, .budget-page) .wealth-timeline-compare > div:last-child strong { color: #e5d1ff; }
+:is(.goals-page, .budget-page) .wealth-timeline-compare > svg { align-self: center; flex-shrink: 0; }
+:is(.goals-page, .budget-page) .wealth-opportunity-result .wealth-delay { background: #193554; color: #f4f8ff; border-left: 3px solid #94c9ff; border-radius: 8px; padding: 16px; font-size: 16px; }
+:is(.goals-page, .budget-page) .wealth-preferences > summary { color: #f4f8ff; font-size: 19px; }
+:is(.goals-page, .budget-page) .wealth-preferences > summary small { color: #d0def0; font-size: 15px; margin-left: 0; }
+:is(.goals-page, .budget-page) .wealth-risk-options button { background: #050f20; border-color: #718cab; }
+:is(.goals-page, .budget-page) .wealth-risk-options button span { color: #f4f8ff; font-size: 16px; }
+:is(.goals-page, .budget-page) .wealth-risk-options button small { color: #d0def0; font-size: 15px; }
+:is(.goals-page, .budget-page) .wealth-risk-options button:hover { background: #203d5d; }
+:is(.goals-page, .budget-page) .wealth-risk-options button.selected { background: #103435; border: 2px solid #54e2c2; padding: 16px; }
+:is(.goals-page, .budget-page) .wealth-risk-options button.selected span { color: #9bf4df; }
 @media (max-width: 520px) {
-  .goals-page .wealth-timeline-compare { flex-direction: column; }
-  .goals-page .wealth-timeline-compare > svg { transform: rotate(90deg); }
+  :is(.goals-page, .budget-page) .wealth-timeline-compare { flex-direction: column; }
+  :is(.goals-page, .budget-page) .wealth-timeline-compare > svg { transform: rotate(90deg); }
 }

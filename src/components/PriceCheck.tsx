@@ -1,6 +1,6 @@
 import { Camera, Clock, ImageUp, Lightbulb, PiggyBank, RotateCcw, Tag, Wallet } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
-import { formatMoney, hoursOfWork, whatIfSpend } from "../lib/finance";
+import { formatMoney, hoursOfWork, projectedDate, whatIfSpend } from "../lib/finance";
 import type { BankSnapshot, MoneyGoal, Profile } from "../lib/types";
 import { type LogDecision, MoneyWhatIf, type WhatIfItem } from "./MoneyWhatIf";
 import { Button, Card, NumberField, Notice, TextField } from "./ui";
@@ -151,14 +151,16 @@ export function PriceCheck({
   const money = (n: number) => formatMoney(n, n % 1 !== 0);
 
   return (
-    <div className="space-y-4">
+    <section id="goal-price-check" className="goal-price-check space-y-4 scroll-mt-28" aria-labelledby="goal-price-check-title">
       <div>
-        <h1 className="text-3xl font-bold text-ink">Check a price</h1>
-        <p className="mt-1 text-stone-600">At the store and tempted? Snap the price tag or type what it costs. See what it does to your goals before you buy.</p>
+        <h2 id="goal-price-check-title" className="text-3xl font-bold text-ink"><Tag aria-hidden="true" /> Check a purchase</h2>
+        <p className="mt-1 text-stone-600">See how a price changes your goal timeline.</p>
       </div>
 
       {/* 1. Capture */}
-      <Card>
+      <Card className="purchase-check-entry">
+        <details className="goals-photo-option">
+        <summary><Camera size={18} aria-hidden="true" /> Use a photo instead</summary>
         <div className="relative w-full rounded-2xl bg-brand-600 px-18 py-4 text-center text-white shadow-[0_5px_0_0_rgb(59_7_100/0.25)]">
           {/* Icon sits on the left edge; the text is centred across the whole box, independent of the icon. */}
           <span className="absolute top-1/2 left-4 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-2xl bg-white/15"><Camera className="h-6 w-6" aria-hidden="true" /></span>
@@ -207,19 +209,17 @@ export function PriceCheck({
           </div>
         )}
 
-        <div className="my-5 flex items-center gap-3 text-xs font-bold uppercase tracking-wider text-stone-400">
-          <span className="h-px flex-1 bg-stone-200" /> or type it in <span className="h-px flex-1 bg-stone-200" />
-        </div>
+        </details>
         <div className="grid grid-cols-[1fr_8rem] gap-2">
           <TextField label="What is it?" value={name} onChange={setName} placeholder="AirPods" />
           <NumberField label="How much?" value={price} onChange={setPrice} />
         </div>
         <Button
-          className="mt-3 w-full"
+          className="purchase-check-compare mt-3 w-full"
           disabled={!price}
           onClick={() => show({ label: name.trim() || "this item", price: Number(price), alternative: item?.label === (name.trim() || "this item") ? item.alternative : null, estimated: false })}
         >
-          <span className="inline-flex items-center gap-2"><Tag className="h-4 w-4" aria-hidden="true" /> See what it really costs</span>
+          <span className="inline-flex items-center gap-2"><Tag className="h-4 w-4" aria-hidden="true" /> Compare with my goals</span>
         </Button>
       </Card>
 
@@ -308,7 +308,7 @@ export function PriceCheck({
             <>
               <Card>
                 <h3 className="text-lg font-bold text-ink">What it costs your goals</h3>
-                <p className="text-sm text-stone-600">How much later each goal arrives if you buy it. Tap one to decide.</p>
+                <p className="text-sm text-stone-600">Choose which goal would fund the purchase. Each row is a separate scenario, not a combined deduction from every goal.</p>
                 <ul className="mt-3 space-y-2" role="radiogroup" aria-label="Choose a goal">
                   {moneyGoals.map((g) => {
                     const w = whatIfSpend(g.target, g.saved, g.weekly, item.price);
@@ -336,6 +336,22 @@ export function PriceCheck({
               </Card>
 
               {goal && (
+                <Card className="purchase-verdict">
+                  <h3>Trade-off for {goal.name}</h3>
+                  <p>{(() => {
+                    const impact = whatIfSpend(goal.target, goal.saved, goal.weekly, item.price);
+                    const finish = projectedDate(impact.newWeeks);
+                    const baseline = projectedDate(impact.originalWeeks);
+                    if (goal.weekly <= 0) return "Set a weekly savings amount before deciding: there isn’t enough information to estimate how long recovery would take.";
+                    if (!Number.isFinite(impact.delayDays)) return "A timeline cannot be calculated with the current goal settings.";
+                    if (goal.deadline && finish && finish > goal.deadline) return `${baseline && baseline > goal.deadline ? "Your plan already misses its target date. This purchase would delay it further" : "This purchase would push your goal past its target date"} to ${finish}. Consider skipping it or choosing a cheaper option if that deadline matters most.`;
+                    if (impact.delayDays <= 0) return "This scenario adds no delay to this goal. That alone doesn’t establish whether the purchase fits your overall budget.";
+                    return `The trade-off is ${impact.delayDays.toFixed(1)} extra days of saving${finish ? `, reaching this goal around ${finish}` : ""}${goal.deadline ? ", still within your target date" : ""}. It may be worth it if the purchase matters more to you than that wait; skipping it protects your current timeline.`;
+                  })()}</p>
+                  <p className="wealth-note">Assumes the full price comes from this goal’s savings and weekly contributions stay unchanged. This is a planning comparison, not a guarantee of affordability.</p>
+                </Card>
+              )}
+              {goal && (
                 <MoneyWhatIf
                   key={`${goal.id}-${version}`}
                   goal={goal}
@@ -355,7 +371,7 @@ export function PriceCheck({
           )}
         </div>
       )}
-    </div>
+    </section>
   );
 }
 

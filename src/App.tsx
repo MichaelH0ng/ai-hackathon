@@ -25,25 +25,25 @@ type Screen =
   | { name: "new-money" }
   | { name: "goal"; id: string }
   | { name: "settings" }
-  | { name: "check" } // snap a price tag / type a price
   | { name: "profile" }
   | { name: "money" }; // bank dashboard (Plaid)
 
 /** Top-nav pages that are their own screen rather than a tab of the money dashboard. */
 const screenForPage = (page: NavPage): Screen =>
-  page === "Price check" ? { name: "check" } : page === "Profile" ? { name: "profile" } : { name: "money" };
+  page === "Profile" ? { name: "profile" } : { name: "money" };
 const isDashboardTab = (page: NavPage): page is Exclude<NavPage, "Price check" | "Profile"> => page !== "Price check" && page !== "Profile";
 
 export default function App() {
   const [state, setState] = useState<SavedState>(loadState);
   const [screen, setScreen] = useState<Screen>(() => screenForPage(pageFromHash()));
 
-  const [dashboardTab, setDashboardTab] = useState<DashboardTab>(() => { const page = pageFromHash(); return isDashboardTab(page) ? page : "Overview"; });
+  const [dashboardTab, setDashboardTab] = useState<DashboardTab>(() => { const page = pageFromHash(); return isDashboardTab(page) ? page : page === "Price check" ? "Goals" : "Overview"; });
   const [theme, setTheme] = useState<Theme>(savedTheme);
   useEffect(() => applyTheme(theme), [theme]);
   const bank = useBank();
   const navigate = (page: NavPage) => {
     if (isDashboardTab(page)) setDashboardTab(page);
+    else if (page === "Price check") setDashboardTab("Goals");
     setScreen(screenForPage(page));
     if (window.location.hash !== "#" + pageHashes[page]) window.location.hash = pageHashes[page];
     window.scrollTo(0, 0);
@@ -52,6 +52,7 @@ export default function App() {
     const syncPage = () => {
       const page = pageFromHash();
       if (isDashboardTab(page)) setDashboardTab(page);
+      else if (page === "Price check") setDashboardTab("Goals");
       setScreen(screenForPage(page));
     };
     window.addEventListener("hashchange", syncPage);
@@ -79,6 +80,12 @@ export default function App() {
   useEffect(() => {
     // Block body on purpose: newer Chrome returns a Promise from scrollTo, which React would treat as a cleanup.
     window.scrollTo(0, 0);
+  }, [screen]);
+
+  useEffect(() => {
+    if (window.location.hash === "#price-check") {
+      document.getElementById("goal-price-check")?.scrollIntoView({ block: "start" });
+    }
   }, [screen]);
 
   const moneyGoals = state.goals.filter((g): g is MoneyGoal => g.kind === "money");
@@ -125,6 +132,10 @@ export default function App() {
       body = (
         <WealthDashboard
           bank={bank}
+          priceCheck={<PriceCheck moneyGoals={moneyGoals} profile={state.profile} bank={state.bank}
+            onUpdateGoal={updateGoal} onLog={(g, d) => logFor(g)(d)}
+            onNewGoal={() => setScreen({ name: "new-money" })}
+            onSettings={() => setScreen({ name: "settings" })} />}
           selectedTab={dashboardTab}
           onTabChange={(page) => { if (page === "Activity") setDashboardTab(page); else navigate(page); }}
           onCheck={() => navigate("Price check")}
@@ -133,19 +144,6 @@ export default function App() {
           onUpdateGoal={updateGoal}
           onOpenGoal={(id) => setScreen({ name: "goal", id })}
           onNewGoal={() => setScreen({ name: "new-money" })}
-        />
-      );
-      break;
-    case "check":
-      body = (
-        <PriceCheck
-          moneyGoals={moneyGoals}
-          profile={state.profile}
-          bank={state.bank}
-          onUpdateGoal={updateGoal}
-          onLog={(g, d) => logFor(g)(d)}
-          onNewGoal={() => setScreen({ name: "new-money" })}
-          onSettings={() => setScreen({ name: "settings" })}
         />
       );
       break;
@@ -219,7 +217,7 @@ export default function App() {
         lightMode={theme === "light"}
         className="soft-aurora-background"
       />
-      <TopNav onNavigate={navigate} active={screen.name === "check" ? "Price check" : screen.name === "profile" ? "Profile" : screen.name === "goal" || screen.name === "new-money" ? "Goals" : screen.name === "settings" ? null : dashboardTab === "Activity" ? "Accounts" : dashboardTab} />
+      <TopNav onNavigate={navigate} active={screen.name === "profile" ? "Profile" : screen.name === "goal" || screen.name === "new-money" ? "Goals" : screen.name === "settings" ? null : dashboardTab === "Activity" ? "Accounts" : dashboardTab} />
       {isLanding ? body : <main id="main" className="mx-auto max-w-md px-4 pb-16 pt-6 sm:max-w-2xl">{body}</main>}
     </div>
   );

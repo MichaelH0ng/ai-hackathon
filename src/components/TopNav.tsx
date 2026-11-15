@@ -1,4 +1,4 @@
-import { Camera, House, Landmark, Target, ChartNoAxesCombined, CircleDollarSign, CircleUserRound } from "lucide-react";
+import { House, Landmark, Target, ChartNoAxesCombined, CircleDollarSign, CircleUserRound } from "lucide-react";
 
 export function Logo({ onClick }: { onClick: () => void }) {
   return (
@@ -33,7 +33,6 @@ export function TopNav({ onNavigate, active }: { onNavigate: (page: NavPage) => 
     { id: "Goals", label: "My goals", Icon: Target },
     { id: "Retirement", label: "Retirement", Icon: ChartNoAxesCombined },
     { id: "Budget", label: "Budget", Icon: CircleDollarSign },
-    { id: "Price check", label: "Price check", Icon: Camera },
   ] as const;
   return <header className="sticky top-0 z-40 border-b border-brand-100 bg-white/85 backdrop-blur-md">
     <nav aria-label="Main" className="mx-auto flex max-w-[1320px] flex-wrap items-center justify-between gap-2 px-4 lg:px-8 py-2">
