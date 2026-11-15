@@ -103,6 +103,7 @@ async function askAI(question: string, history: ChatMessage[], context: MoneyAss
       question,
       history: history.filter(m => m.id !== "welcome" && !m.pending && !m.offline).slice(-4).map(m => ({ role: m.role, content: m.text.slice(0, 2000) })),
       goals: context.goals.map(g => ({ kind: "money", ...g })),
+      excludedAccountIds: context.excludedAccountIds ?? [],
       planning: {
         accounts: context.accounts,
         netWorth: context.netWorth,

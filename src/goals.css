@@ -230,3 +230,16 @@ button.ui-button > span, button.wealth-primary > span, button.wealth-secondary >
 :root[data-theme="dark"] .wealth-dashboard .wealth-accent {
   border-left-color: #54e2c2;
 }
+
+/* Compact goal cards: ring beside the name and amount, then one line of plan details. */
+.goals-page .wealth-goal { display: grid; gap: 14px; align-content: start; }
+.goals-page .wealth-goal-head { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.goals-page .wealth-goal-title { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.goals-page .wealth-goal-title p { display: flex; align-items: baseline; flex-wrap: wrap; gap: 6px; margin-top: 0; }
+.goals-page .wealth-goal-title p > strong { font-size: clamp(22px, 2.4vw, 26px); }
+.goals-page .wealth-goal-arrow { flex-shrink: 0; opacity: .7; }
+.goals-page .wealth-goal-detail { display: block; padding-top: 12px; border-top: 1px solid #899bb54d; }
+.goals-page .wealth-goal .goal-weekly-needed { margin-top: -6px; font-size: 14px; }
+.goals-page .wealth-goal .wealth-goal-reached { padding-top: 12px; border-top: 1px solid #899bb54d; }
+/* Keep "My goals" and its New goal button on one centered row on phones. */
+.goals-page .wealth-page-head { align-items: center; flex-wrap: nowrap; }

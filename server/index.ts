@@ -73,6 +73,9 @@ const ChatRequest = z.object({
     )
     .max(30)
     .default([]),
+  // The user can still view these accounts in Money, but has opted them out of
+  // financial planning and assistant answers.
+  excludedAccountIds: z.array(z.string().trim().min(1).max(200)).max(60).default([]),
   // Numbers the app computes in the browser: every account shown (connected + manual),
   // plus the budget and retirement plan. Plaid alone doesn't know about these.
   planning: z
@@ -376,7 +379,14 @@ app.post("/api/financial-chat", async (req, res) => {
   try {
     // Fresh Plaid data is loaded for every question; credentials and access tokens stay on this server.
     // Without Plaid, the app's own numbers (manual accounts, budget, goals) are enough to answer.
-    const dashboard: ChatData = plaidConfigured ? await loadDashboardData() : { env: "manual", accounts: [], transactions: [], status: [], fetchedAt: new Date().toISOString() };
+    const loaded: ChatData = plaidConfigured ? await loadDashboardData() : { env: "manual", accounts: [], transactions: [], status: [], fetchedAt: new Date().toISOString() };
+    const excluded = new Set(parsed.data.excludedAccountIds);
+    const dashboard: ChatData = {
+      ...loaded,
+      accounts: loaded.accounts.filter((account) => !excluded.has(account.id)),
+      transactions: loaded.transactions.filter((transaction) => !excluded.has(transaction.accountId)),
+      holdings: loaded.holdings?.filter((holding) => !excluded.has(holding.accountId)),
+    };
     if (!dashboard.accounts.length && !dashboard.transactions.length && !planning?.accounts.length && !parsed.data.goals.length) {
       res.status(422).json({ error: "No account data is available yet. Add or connect an account, then try again." });
       return;

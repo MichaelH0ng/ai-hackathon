@@ -16,6 +16,7 @@ import { spendableCash } from "./lib/money";
 import { useBank } from "./lib/useBank";
 import { celebrateNewlyReached } from "./lib/celebrate";
 import { activeGoals, boughtGoals, cashOnHand, envelopes, markBought, unmarkBought } from "./lib/envelopes";
+import { bankDataForPlan, includedItems } from "./lib/planningAccounts";
 import { readPlan } from "./components/WealthDashboard";
 
 const pageHashes: Record<NavPage, string> = { Overview: "overview", Accounts: "accounts", Plan: "plan", Goals: "my-goals", "Price check": "price-check", Profile: "profile" };
@@ -79,11 +80,12 @@ export default function App() {
   useEffect(() => {
     const data = bank.data;
     if (!data) return;
+    const excluded = readPlan().excludedAccountIds;
     setState((s) => ({
       ...s,
-      bank: { cash: spendableCash(data.accounts), fetchedAt: data.fetchedAt },
+      bank: { cash: spendableCash(bankDataForPlan(data, excluded)?.accounts ?? []), fetchedAt: data.fetchedAt },
       goals: s.goals.map((g) => {
-        if (g.kind !== "money" || !g.linkedAccountId) return g;
+        if (g.kind !== "money" || !g.linkedAccountId || excluded.includes(g.linkedAccountId)) return g;
         const a = data.accounts.find((x) => x.id === g.linkedAccountId);
         return a ? { ...g, saved: Math.round(a.current * 100) / 100 } : g;
       }),
@@ -197,8 +199,10 @@ export default function App() {
       if (!g) body = null;
       else {
         const plan = readPlan();
-        const knowsCash = !!bank.data?.accounts.length || plan.assets.some((a) => a.kind === "Checking" || a.kind === "Savings");
-        const free = knowsCash ? envelopes(moneyGoals, cashOnHand(bank.data?.accounts ?? [], plan.assets)).free : null;
+        const planningBankData = bankDataForPlan(bank.data, plan.excludedAccountIds);
+        const planningAssets = includedItems(plan.assets, plan.excludedAccountIds);
+        const knowsCash = !!planningBankData?.accounts.length || planningAssets.some((a) => a.kind === "Checking" || a.kind === "Savings");
+        const free = knowsCash ? envelopes(moneyGoals, cashOnHand(planningBankData?.accounts ?? [], planningAssets)).free : null;
         body = <MoneyGoalView goal={g} onChange={updateGoal} onLog={logFor(g)} {...common} freeCash={free}
           otherGoals={moneyGoals.filter((x) => x.id !== g.id)}
           onBuy={(paid, to) => buyGoal(g, paid, to)}

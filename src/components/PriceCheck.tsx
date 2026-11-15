@@ -6,6 +6,7 @@ import { formatDelay, formatMoney, priceInContext, projectedDate, whatIfSpend } 
 import type { BankSnapshot, MoneyGoal, Profile } from "../lib/types";
 import type { BankData } from "../lib/money";
 import { buildForecast, cashFromAccounts, evaluatePurchase, isEmergencyFund, monthlyIncome } from "../lib/safeToSpend";
+import { bankDataForPlan, includedItems } from "../lib/planningAccounts";
 import { readPlan } from "./WealthDashboard";
 import { SafeToSpendCard } from "./SafeToSpend";
 import { SavingsPlanAgent } from "./SavingsPlanAgent";
@@ -49,29 +50,31 @@ export function PriceCheck({
 
   // Safe-to-Spend: a 30-day forecast from connected accounts plus any manual ones.
   // Keyed on the goals' numbers so a re-render with equal goals doesn't rebuild it.
-  const [plan] = useState(readPlan);
+  const plan = readPlan();
+  const planningBankData = bankDataForPlan(bankData, plan.excludedAccountIds);
   const goalsSig = JSON.stringify(moneyGoals.filter((g) => g.id !== fund?.id).map(({ name, target, saved, weekly, emergency }) => ({ name, target, saved, weekly, emergency })));
   const forecast = useMemo(() => {
-    const accounts = bankData?.accounts ?? [];
+    const accounts = planningBankData?.accounts ?? [];
     const fromBank = cashFromAccounts(accounts);
-    const manualChecking = plan.assets.filter((a) => a.kind === "Checking").reduce((sum, a) => sum + a.balance, 0);
-    const manualSavings = plan.assets.filter((a) => a.kind === "Savings").reduce((sum, a) => sum + a.balance, 0);
+    const includedManualAssets = includedItems(plan.assets, plan.excludedAccountIds);
+    const manualChecking = includedManualAssets.filter((a) => a.kind === "Checking").reduce((sum, a) => sum + a.balance, 0);
+    const manualSavings = includedManualAssets.filter((a) => a.kind === "Savings").reduce((sum, a) => sum + a.balance, 0);
     if (!fromBank.cashAccountIds.length && !manualChecking && !manualSavings) return null;
     return buildForecast({
       // Checking and savings are both cash you can reach today, so both count as spendable.
       cash: fromBank.checking + fromBank.savings + manualChecking + manualSavings,
       savings: 0,
-      transactions: bankData?.transactions ?? [],
+      transactions: planningBankData?.transactions ?? [],
       cashAccountIds: fromBank.cashAccountIds,
       goals: JSON.parse(goalsSig),
       fallbackMonthlySpending: plan.essentials + plan.lifestyle || undefined,
     });
-  }, [bankData, plan, goalsSig]);
+  }, [planningBankData, plan, goalsSig]);
   // Take-home pay per month, to put big prices in perspective: paychecks first, then the Budget.
   const income = useMemo(() => {
-    const fromBank = bankData ? monthlyIncome(bankData.transactions, cashFromAccounts(bankData.accounts).cashAccountIds) : 0;
+    const fromBank = planningBankData ? monthlyIncome(planningBankData.transactions, cashFromAccounts(planningBankData.accounts).cashAccountIds) : 0;
     return fromBank || plan.income || 0;
-  }, [bankData, plan]);
+  }, [planningBankData, plan]);
   const goalNames = useMemo(() => (JSON.parse(goalsSig) as { name: string }[]).map((g) => g.name), [goalsSig]);
 
   function show(next: WhatIfItem) {

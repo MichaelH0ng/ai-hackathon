@@ -237,6 +237,12 @@ button, a, select, input[type="checkbox"], input[type="range"] { cursor: pointer
 .wealth-sample button { min-height: 36px; }
 .wealth-account-name strong { font-size: 15px; }
 .wealth-account-name span { font-size: 12px; color: #4d5651; line-height: 1.6; }
+.wealth-account-plan-toggle { display: inline-flex; width: fit-content; align-items: center; gap: 5px; margin-top: 3px; padding: 3px 7px; border: 1px solid var(--night-border); border-radius: 999px; background: var(--night-inset); color: var(--night-muted); font-size: 11px; font-weight: 700; line-height: 1.35; }
+.wealth-account-plan-toggle:hover { border-color: rgb(84 226 194 / 65%); color: var(--night-text); }
+.wealth-account-plan-toggle:focus-visible { outline: 3px solid rgb(84 226 194 / 55%); outline-offset: 2px; }
+.wealth-account-plan-toggle.is-included { border-color: rgb(84 226 194 / 48%); background: rgb(84 226 194 / 10%); color: #167b6e; }
+:root[data-theme="dark"] .wealth-account-plan-toggle { border-color: var(--night-border); background: rgb(148 192 243 / 8%); color: var(--night-muted); }
+:root[data-theme="dark"] .wealth-account-plan-toggle.is-included { border-color: rgb(84 226 194 / 38%); background: rgb(84 226 194 / 12%); color: #9bf4df; }
 .wealth-balance { font-size: 15px; }
 .wealth-card-foot { font-size: 12px; color: #505954; }
 .wealth-card-foot button { color: #456653; font-size: 12px; min-height: 44px; }

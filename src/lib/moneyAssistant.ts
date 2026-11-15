@@ -14,6 +14,8 @@ export interface MoneyAssistantContext {
   retirementBalance: number;
   retirementEstimate: number | null;
   retirementAge: number | null;
+  /** Connected account IDs deliberately left out of planning and AI calculations. */
+  excludedAccountIds?: string[];
 }
 
 const money = (amount: number) => formatMoney(amount, true);
