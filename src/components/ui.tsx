@@ -7,7 +7,7 @@ export function Card({ children, className = "" }: { children: ReactNode; classN
 }
 
 const inputClass =
-  "w-full min-w-0 rounded-xl bg-stone-50 px-3 py-2.5 text-stone-900 ring-1 ring-stone-300 outline-none focus:ring-2 focus:ring-brand-500";
+  "w-full min-w-0 rounded-xl bg-stone-50 px-3 py-2.5 text-stone-900 outline-none";
 
 function Label({ text, hint, children }: { text?: string; hint?: string; children: ReactNode }) {
   return (
@@ -38,7 +38,7 @@ export function NumberField({
 }) {
   return (
     <Label text={label} hint={hint}>
-      <div className="ui-number-field flex items-center rounded-xl bg-stone-50 ring-1 ring-stone-300 focus-within:ring-2 focus-within:ring-brand-500">
+      <div className="ui-number-field flex items-center rounded-xl bg-stone-50">
         {prefix && <span className="pl-3 text-stone-500">{prefix}</span>}
         <input
           type="number"
