@@ -1,3 +1,17 @@
+/* Keep this action readable in both themes, including hover and disabled states. */
+button.purchase-check-compare {
+  background: #9bf4df;
+  color: #092c30;
+  border: 1px solid #268573;
+  min-height: 50px;
+  font-size: 16px;
+  box-shadow: none;
+}
+button.purchase-check-compare > span { color: inherit; }
+button.purchase-check-compare:hover:not(:disabled) { background: #c4ffef; color: #092c30; }
+button.purchase-check-compare:disabled { background: #d0dce8; color: #34475d; border-color: #71849b; opacity: 1; cursor: not-allowed; }
+button.purchase-check-compare:focus-visible { outline: 3px solid #4c86d9; outline-offset: 3px; }
+
 /* Goals page. Sizing and spacing apply in both themes; the explicit night palette below is
    dark mode only (it stops older light-theme rules from dimming labels on the dark canvas). */
 .goals-page > .wealth-stack { gap: 28px; }
@@ -12,6 +26,30 @@
 .goals-page .wealth-goal p { font-size: 17px; line-height: 1.6; }
 .goals-page :is(.wealth-goal-detail, .wealth-goal-deadline) { font-size: 14px; line-height: 1.7; }
 .goals-page .wealth-goal-detail { flex-wrap: wrap; gap: 8px; }
+/* Keep each card readable at laptop and phone widths instead of squeezing columns. */
+.goals-page { max-width: 1100px; }
+.goals-page .wealth-section-head { align-items: flex-start; gap: 16px; flex-wrap: wrap; }
+.goals-page .wealth-section-head p { max-width: 58ch; margin-top: 6px; }
+.goals-page .wealth-goal-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 18px; }
+.goals-page .wealth-goal { min-width: 0; border-radius: 16px; }
+.goals-page .wealth-goal h3 { line-height: 1.4; overflow-wrap: anywhere; }
+.goals-page .wealth-goal p { display: grid; gap: 2px; margin-top: 16px; }
+.goals-page .wealth-goal p > strong { font-size: clamp(25px, 3vw, 30px); letter-spacing: -.025em; font-variant-numeric: tabular-nums; }
+.goals-page .wealth-goal p > span { font-size: 15px; }
+.goals-page .wealth-goal .wealth-progress { margin: 16px 0; height: 10px; }
+.goals-page .wealth-goal-detail { font-weight: 600; }
+.goals-page .wealth-goal-deadline { margin-top: 14px; padding-top: 12px; border-top: 1px solid #899bb54d; }
+.goals-page :is(.goal-price-check, .goals-disclosure, .wealth-preferences) { line-height: 1.6; }
+.goals-page :is(.goal-price-check, .wealth-preferences) p { max-width: 65ch; }
+.goals-page .goal-price-check input { font-size: 17px; min-height: 48px; }
+.goals-page .goals-disclosure > summary { padding: 4px 0; font-size: 16px; font-weight: 650; cursor: pointer; }
+.goals-page .goals-disclosure-body { padding-top: 20px; }
+@media (max-width: 520px) {
+  .goals-page .wealth-card { padding: 20px; }
+  .goals-page .wealth-goal { padding: 20px; }
+  .goals-page .wealth-section-head { margin-bottom: 20px; }
+  .goals-page .goal-price-check .grid { grid-template-columns: minmax(0, 1fr); }
+}
 .goals-page .wealth-field > span { font-size: 15px; }
 .goals-page :is(button, input, select, textarea, summary):focus-visible { outline-offset: 3px; }
 /* The weekly planner is a dark panel with white text in both themes (dark mode recolours it below). */
@@ -87,4 +125,47 @@
   .goals-page .wealth-risk-options button:hover { background: #203d5d; }
   .goals-page .wealth-risk-options button.selected { background: #103435; border-color: #54e2c2; }
   .goals-page .wealth-risk-options button.selected span { color: #9bf4df; }
+}
+
+/* Prominent tool launchers keep secondary planning tools easy to discover. */
+.goals-page .goals-tools-heading { margin: 8px 0 -8px; font-size: 22px; }
+.goals-page .goals-tool { background: #f1f5fc; border: 1px solid #9eafc7; border-left: 4px solid #286d9b; border-radius: 14px; padding: 0; }
+.goals-page .goals-tool > summary { display: flex; align-items: center; gap: 16px; padding: 22px; min-height: 100px; margin: 0; cursor: pointer; list-style: none; color: #172b45; }
+.goals-tool > summary::-webkit-details-marker { display: none; }
+.goals-page .goals-tool-copy { flex: 1; min-width: 0; display: grid; gap: 5px; }
+.goals-page .goals-tool-copy strong { font-size: 18px; font-weight: 750; line-height: 1.4; }
+.goals-page .goals-tool-copy small { margin: 0; font-size: 14px; line-height: 1.6; font-weight: 400; color: #405772; }
+.goals-tool-icon { display: grid; place-items: center; width: 48px; height: 48px; flex-shrink: 0; border-radius: 12px; background: #d5e7ff; color: #245a95; }
+.goals-tool-arrow { flex-shrink: 0; transition: transform .18s; }
+.goals-page .goals-tool > summary::after {
+  content: "Open";
+  background: #d5e7ff;
+  color: #172b45;
+  border: 1px solid #829fbe;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 14px;
+  font-weight: 750;
+}
+.goals-page .goals-tool[open] > summary::after { content: "Close"; }
+.goals-page .goals-tool[open] > summary { border-bottom: 1px solid #899bb580; }
+.goals-page .goals-tool > summary:focus-visible { outline: 3px solid #4c86d9; outline-offset: 4px; border-radius: 10px; }
+.goals-tool[open] > summary .goals-tool-arrow { transform: rotate(90deg); }
+.goals-tool-body { padding: 20px; border-top: 1px solid #899bb580; }
+.goals-tool-body > section { padding: 0; }
+.goals-page .goals-tool > .wealth-profile-grid { padding: 22px; }
+.goals-page .goals-tool > summary:hover { background: #e4edf9; }
+:root[data-theme="dark"] .goals-page .goals-tool { background: #152c49; border-color: #718cab; border-left-color: #54e2c2; }
+:root[data-theme="dark"] .goals-page .goals-tool > summary { color: #f4f8ff; }
+:root[data-theme="dark"] .goals-page .goals-tool-copy small { color: #d0def0; }
+:root[data-theme="dark"] .goals-tool-icon { background: #25486b; color: #9bf4df; }
+:root[data-theme="dark"] .goals-page .goals-tool > summary:hover { background: #203d5d; }
+:root[data-theme="dark"] .goals-page .goals-tool > summary::after { background: #9bf4df; color: #092c30; border-color: #9bf4df; }
+@media (max-width: 520px) {
+  .goals-page .goals-tool > summary { padding: 18px 14px; gap: 12px; }
+  .goals-tool-icon { width: 40px; height: 40px; }
+  .goals-page .goals-tool > summary { flex-wrap: wrap; }
+  .goals-page .goals-tool-copy { flex-basis: calc(100% - 88px); }
+  .goals-page .goals-tool > summary::after { margin-left: 52px; }
+  .goals-page .goals-tool > summary .goals-tool-arrow { display: none; }
 }
