@@ -18,8 +18,13 @@ import { celebrateNewlyReached } from "./lib/celebrate";
 import { activeGoals, boughtGoals, cashOnHand, envelopes, markBought, unmarkBought } from "./lib/envelopes";
 import { readPlan } from "./components/WealthDashboard";
 
-const pageHashes: Record<NavPage, string> = { Overview: "overview", Accounts: "accounts", Goals: "my-goals", Retirement: "retirement", Budget: "budget", "Price check": "price-check", Profile: "profile" };
-const pageFromHash = (): NavPage => (Object.entries(pageHashes).find(([, hash]) => hash === window.location.hash.slice(1))?.[0] as NavPage) ?? "Overview";
+const pageHashes: Record<NavPage, string> = { Overview: "overview", Accounts: "accounts", Plan: "plan", Goals: "my-goals", "Price check": "price-check", Profile: "profile" };
+const pageFromHash = (): NavPage => {
+  const hash = window.location.hash.slice(1);
+  // Keep previously shared retirement and budget links useful after their merger.
+  if (hash === "retirement" || hash === "budget") return "Plan";
+  return (Object.entries(pageHashes).find(([, value]) => value === hash)?.[0] as NavPage) ?? "Overview";
+};
 
 // Check a price, save for something, and understand your money.
 type Screen =
@@ -90,10 +95,9 @@ export default function App() {
   }, [screen]);
 
   useEffect(() => {
-    if (window.location.hash === "#price-check") {
-      document.getElementById("goal-price-check")?.scrollIntoView({ block: "start" });
-    }
-  }, [screen]);
+    if (window.location.hash !== "#price-check" || dashboardTab !== "Goals") return;
+    requestAnimationFrame(() => document.getElementById("goal-price-check")?.scrollIntoView({ block: "start" }));
+  }, [dashboardTab]);
 
   const allMoneyGoals = state.goals.filter((g): g is MoneyGoal => g.kind === "money");
   // Bought goals leave the envelopes: everything else in the app sees only the goals still being saved for.
@@ -162,6 +166,9 @@ export default function App() {
           goals={moneyGoals}
           completedGoals={completedGoals}
           onUpdateGoal={updateGoal}
+          // Polaris adds and (on undo) removes goals without leaving the page.
+          onAddGoal={(g) => setState((s) => ({ ...s, goals: [...s.goals, g] }))}
+          onRemoveGoal={(id) => setState((s) => ({ ...s, goals: s.goals.filter((g) => g.id !== id) }))}
           onOpenGoal={(id) => setScreen({ name: "goal", id })}
           onNewGoal={() => setScreen({ name: "new-money" })}
         />

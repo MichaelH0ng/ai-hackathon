@@ -1,4 +1,4 @@
-import { ArrowRight, PiggyBank, ShoppingBag, Wallet } from "lucide-react";
+import { ArrowRight, CalendarClock, PiggyBank, Plus, ShoppingBag, Target, Wallet } from "lucide-react";
 import { useMemo } from "react";
 import { formatExact, formatMoney } from "../lib/finance";
 import { assetsByInstitution, detectTransferIds, netWorthSeries, periodFlow, spendableCash, upcomingBills } from "../lib/money";
@@ -86,16 +86,19 @@ export function HomeOverview({ data, goals = [], onCheck, onMoney, addAccount, o
       slices: assetsByInstitution(data.accounts),
       cash: spendableCash(data.accounts),
       flow: periodFlow(data.transactions, transferIds, "month"),
-      bills: upcomingBills(data.transactions, transferIds).slice(0, 3),
+      bills: upcomingBills(data.transactions, transferIds).slice(0, 5),
     };
   }, [data]);
   // Unfinished goals first, so the snapshot shows what still needs saving.
-  const topGoals = [...goals].sort((a, b) => Number(a.saved >= a.target) - Number(b.saved >= b.target)).slice(0, 2);
+  const topGoals = [...goals].sort((a, b) => Number(a.saved >= a.target) - Number(b.saved >= b.target)).slice(0, 4);
+  const billsTotal = view.bills.reduce((sum, b) => sum + b.amount, 0);
   const spent = view.flow.current.out;
 
   return (
     <section className="dashboard-home-overview" aria-label="Money overview">
-      <div className="grid gap-5 lg:grid-cols-[1.75fr_1fr] [&>*]:min-w-0">
+      {/* Wide screens: the chart keeps the left, and the side cards split into two columns
+          instead of stretching, so the page fills the width with more to see at a glance. */}
+      <div className="grid gap-5 lg:grid-cols-[1.75fr_1fr] min-[1600px]:grid-cols-[1.35fr_1.25fr] min-[1600px]:gap-6 [&>*]:min-w-0">
         <div className="clay wealth-accent p-5 sm:p-7">
           <NetWorthChart series={view.series} />
           <div className="mt-6">
@@ -103,7 +106,8 @@ export function HomeOverview({ data, goals = [], onCheck, onMoney, addAccount, o
           </div>
         </div>
 
-        <aside className="space-y-4">
+        <aside className="grid gap-4 min-[1600px]:grid-cols-2 min-[1600px]:gap-5 [&>*]:min-w-0">
+          <div className="flex flex-col gap-4 min-[1600px]:gap-5">
           <div className="clay divide-y divide-stone-100 px-5 py-2">
             <Stat icon={<Wallet className="h-4 w-4 text-sky-300" />} label="Spendable cash" value={formatExact(view.cash)} />
             <Stat
@@ -121,7 +125,8 @@ export function HomeOverview({ data, goals = [], onCheck, onMoney, addAccount, o
             </button>
           </div>
 
-          <div className="clay wealth-accent p-5">
+          {/* Cards grow to line up with the chart; their content fills the extra room instead of stretching. */}
+          <div className="clay wealth-accent flex flex-1 flex-col p-5">
             <CardHead title="Savings goals" action={goals.length && onGoals ? { label: "See all", onClick: onGoals } : undefined} />
             {topGoals.length ? (
               <ul className="mt-1 divide-y divide-stone-100">
@@ -147,14 +152,21 @@ export function HomeOverview({ data, goals = [], onCheck, onMoney, addAccount, o
                 })}
               </ul>
             ) : (
-              <p className="mt-2 text-sm leading-relaxed text-stone-600">
-                No savings goals yet.{" "}
-                {onNewGoal && <button onClick={onNewGoal} className="font-bold text-[var(--aurora-teal)] hover:underline">Create a goal</button>}
-              </p>
+              <div className="flex flex-1 flex-col items-center justify-center gap-3 py-4 text-center">
+                <span className="flex h-12 w-12 items-center justify-center rounded-full border border-[var(--night-border)] text-[var(--aurora-teal)]" aria-hidden="true"><Target className="h-6 w-6" /></span>
+                <span>
+                  <span className="block text-sm font-bold text-ink">No savings goals yet</span>
+                  <span className="mt-1 block text-sm text-stone-600">A laptop, a trip, an emergency fund: give your money a job.</span>
+                </span>
+                {onNewGoal && <button onClick={onNewGoal} className="wealth-secondary inline-flex items-center gap-1.5"><Plus className="h-4 w-4" aria-hidden="true" /> Create a goal</button>}
+              </div>
             )}
           </div>
 
-          <div className="clay wealth-accent p-5">
+          </div>
+
+          <div className="flex flex-col gap-4 min-[1600px]:gap-5">
+          <div className="clay wealth-accent flex flex-1 flex-col p-5">
             <CardHead title="Upcoming bills" />
             {view.bills.length ? (
               <ul className="mt-1 divide-y divide-stone-100">
@@ -176,9 +188,16 @@ export function HomeOverview({ data, goals = [], onCheck, onMoney, addAccount, o
                 {data.transactions.length ? "No repeating bills spotted yet." : "Connect a bank account and recurring bills will show up here."}
               </p>
             )}
+            {view.bills.length > 0 && (
+              <p className="mt-auto flex items-center justify-between gap-3 border-t border-stone-100 pt-3 text-sm">
+                <span className="flex items-center gap-2 text-stone-600"><CalendarClock className="h-4 w-4 text-[var(--aurora-teal)]" aria-hidden="true" /> {view.bills.length} upcoming</span>
+                <span className="font-bold tabular-nums text-ink">{formatExact(billsTotal)}</span>
+              </p>
+            )}
           </div>
 
           <PriceAddon onCheck={onCheck} />
+          </div>
         </aside>
       </div>
     </section>
@@ -225,8 +244,8 @@ function PriceAddon({ onCheck }: { onCheck: () => void }) {
       className="clay group flex w-full items-center justify-between gap-4 p-5 text-left transition-transform duration-200 hover:-translate-y-0.5 active:translate-y-0 motion-reduce:transition-none"
     >
       <span className="min-w-0">
-        <span className="block font-display text-lg font-bold leading-tight text-ink">Check a purchase before you buy</span>
-        <span className="mt-1 block text-sm text-stone-600">See how a purchase affects your savings goals.</span>
+        <span className="block font-display text-lg font-bold leading-tight text-ink">Can I afford it?</span>
+        <span className="mt-1 block text-sm text-stone-600">Check a price against your cash, bills, and goals.</span>
       </span>
       <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[var(--night-border)] text-[var(--aurora-teal)] transition-colors duration-200 group-hover:bg-[rgb(84_226_194/12%)]" aria-hidden="true">
         <ArrowRight className="h-5 w-5" />
@@ -258,10 +277,10 @@ function Welcome({
       <div className="relative mx-auto grid max-w-6xl items-start gap-10 lg:grid-cols-[1.1fr_1fr]">
         <div className="rise">
           <h1 className="text-5xl font-bold leading-[1.05] text-ink sm:text-6xl">
-            All your money, <span className="text-brand-600">in one place.</span>
+            Decide what you can <span className="text-brand-600">spend today.</span>
           </h1>
           <p className="mt-5 max-w-xl text-lg leading-relaxed text-stone-600">
-            Connect your banks and brokerages to see your net worth, where it's held and where it goes. Then see what any purchase costs your goals before you buy.
+            Connect your accounts or enter balances yourself. NorthStar helps you check a purchase against your cash, upcoming bills, and savings goals.
           </p>
           {bank.error && <p className="mt-4 rounded-2xl bg-amber-50 px-4 py-3 text-sm text-amber-900">{bank.error}</p>}
           <div className="mt-6 max-w-md">

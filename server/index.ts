@@ -317,6 +317,50 @@ app.get("/api/assistant/status", (_req, res) => {
   res.json({ ai: Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN) });
 });
 
+// ---------- Polaris goal changes ----------
+// Polaris can propose a change to a savings goal. The server never changes anything: it returns the
+// proposal, and the app shows a confirmation card that the user must accept.
+const GOAL_CHANGE_KINDS = ["add", "withdraw", "set_saved", "set_target", "set_weekly", "create_goal", "mark_bought", "move", "set_budget", "reminder"] as const;
+const GoalChangeInput = z.object({
+  change: z.enum(GOAL_CHANGE_KINDS),
+  goal_name: z.string().trim().min(1).max(100).optional(),
+  to_goal_name: z.string().trim().min(1).max(100).optional(),
+  amount: z.number().finite().nonnegative().max(10_000_000).optional(),
+  new_goal_name: z.string().trim().min(1).max(60).optional(),
+  weekly: z.number().finite().nonnegative().max(1_000_000).optional(),
+  deadline: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  budget_field: z.enum(["income", "essentials", "lifestyle"]).optional(),
+  weekday: z.number().int().min(0).max(7).optional(),
+});
+const GOAL_CHANGE_TOOL = {
+  name: "propose_goal_change",
+  description:
+    "Propose a change to the user's goals or budget when they explicitly ask for one. The app shows a confirmation card; nothing changes until they confirm. Never use this for what-if questions or advice.",
+  input_schema: {
+    type: "object" as const,
+    properties: {
+      change: {
+        type: "string",
+        enum: [...GOAL_CHANGE_KINDS],
+        description:
+          "add = put money into goal_name; withdraw = take money out; set_saved / set_target / set_weekly = set that goal's saved amount, total, or weekly amount; create_goal = new goal (new_goal_name, amount = target, optional weekly and deadline); mark_bought = the user bought goal_name (amount = price paid); move = move amount from goal_name to to_goal_name; set_budget = set budget_field to amount per month; reminder = remind the user weekly (weekday 0=Sunday…6=Saturday, 7=every day) to add amount to goal_name.",
+      },
+      goal_name: { type: "string", description: "An existing goal's name exactly as in the financial context (the source goal for move)." },
+      to_goal_name: { type: "string", description: "For move: the goal receiving the money." },
+      amount: { type: "number", description: "Dollar amount: the change, the new value, the price paid, or the new goal's target." },
+      new_goal_name: { type: "string", description: "For create_goal: a short name like \"Laptop\"." },
+      weekly: { type: "number", description: "For create_goal: optional weekly savings amount." },
+      deadline: { type: "string", description: "For create_goal: optional target date, YYYY-MM-DD." },
+      budget_field: { type: "string", enum: ["income", "essentials", "lifestyle"], description: "For set_budget." },
+      weekday: { type: "integer", description: "For reminder: 0=Sunday … 6=Saturday, 7=every day." },
+    },
+    required: ["change"],
+  },
+};
+const GOAL_CHANGE_INSTRUCTIONS =
+  "Goal and budget changes: when the user asks you to change something (add to or take money out of a goal, set a goal's saved amount, target, or weekly amount, create a goal, mark a goal as bought, move money between goals, change their monthly income/essentials/lifestyle budget, or set a savings reminder), call propose_goal_change. If you also write text, keep it to one short sentence; the app shows the before and after for them to confirm, so never say the change is already done. If something needed is unclear (which goal, how much), ask instead of calling the tool.";
+const GOAL_CHANGE_REQUEST = /\b(add|put|move|deposit|contribute|transfer|throw|stash|withdraw|take out|pull out|remove|subtract|set|change|update|bump|raise|lower|create|make|start|new goal|bought|purchased|remind|budget|income)\b[\s\S]*\d|\b(bought|purchased|remind me)\b/i;
+
 app.post("/api/financial-chat", async (req, res) => {
   const parsed = ChatRequest.safeParse(req.body);
   if (!parsed.success) {
@@ -342,7 +386,9 @@ app.post("/api/financial-chat", async (req, res) => {
     const linkedNames = new Set(dashboard.accounts.map((a) => a.name));
     const hasManualAccounts = !!planning?.accounts.some((a) => !linkedNames.has(a.name));
     // Instant calculations answer "what/how much" lookups; questions asking why or what to do go to the model.
-    const computed = needsDeeperReasoning(routed) ? null : instantAnswer(routed, dashboard, parsed.data.goals, hasManualAccounts);
+    // Requests to change a goal ("put $20 toward the car") go to the model, which proposes the change.
+    const goalChange = GOAL_CHANGE_REQUEST.test(parsed.data.question);
+    const computed = goalChange || needsDeeperReasoning(routed) ? null : instantAnswer(routed, dashboard, parsed.data.goals, hasManualAccounts);
     if (computed) {
       res.json({ answer: computed, fetchedAt: dashboard.fetchedAt, source: "calculation" });
       return;
@@ -359,7 +405,8 @@ app.post("/api/financial-chat", async (req, res) => {
       // figures before writing, so doubts don't surface as on-screen corrections. Validation showed
       // visible "let me correct this" answers with thinking turned off.
       output_config: { effort: "low" },
-      system: `${FINANCE_SYSTEM_PROMPT}\n\n${CHAT_PANEL_FORMAT}\n\nCURRENT FINANCIAL CONTEXT:\n${financialContext(dashboard, parsed.data.goals, range, planning, routed)}`,
+      tools: [GOAL_CHANGE_TOOL],
+      system: `${FINANCE_SYSTEM_PROMPT}\n\n${CHAT_PANEL_FORMAT}\n\n${GOAL_CHANGE_INSTRUCTIONS}\n\nCURRENT FINANCIAL CONTEXT:\n${financialContext(dashboard, parsed.data.goals, range, planning, routed)}`,
       messages: [...parsed.data.history.slice(-4), { role: "user", content: parsed.data.question }],
     });
     const answer = response.content
@@ -367,6 +414,18 @@ app.post("/api/financial-chat", async (req, res) => {
       .map((block) => block.text)
       .join("\n")
       .trim();
+    // A proposed goal change: the app asks the user to confirm before anything is saved.
+    const toolUse = response.content.find((block) => block.type === "tool_use" && block.name === GOAL_CHANGE_TOOL.name);
+    const proposal = toolUse && toolUse.type === "tool_use" ? GoalChangeInput.safeParse(toolUse.input) : null;
+    if (proposal?.success) {
+      const p = proposal.data;
+      res.json({
+        answer,
+        action: { kind: p.change, goalName: p.goal_name, toGoalName: p.to_goal_name, amount: p.amount, name: p.new_goal_name, target: p.change === "create_goal" ? p.amount : undefined, weekly: p.weekly, deadline: p.deadline, field: p.budget_field, weekday: p.weekday },
+        fetchedAt: dashboard.fetchedAt,
+      });
+      return;
+    }
     if (!answer) {
       // Log provider metadata only—never financial context or the user's question.
       console.warn("Financial assistant returned no text", {

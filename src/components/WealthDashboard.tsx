@@ -16,10 +16,11 @@ import { formatExact, formatMoney, weeklyNeededForDeadline } from "../lib/financ
 import { annualSpending, budgetBalanceProgress, opportunityCost, retirementProjection, type RetirementPoint, type SpendingFrequency, type RepeatUnit } from "../lib/planning";
 import { BudgetNorthStar, NorthStar } from "./NorthStar";
 import { MoneyAssistant } from "./MoneyAssistant";
+import { GoalReminders } from "./GoalReminders";
 import type { MoneyAssistantContext } from "../lib/moneyAssistant";
 import { ConnectButton, MoneyDashboard } from "./MoneyDashboard";
 
-export type DashboardTab = "Overview" | "Accounts" | "Goals" | "Retirement" | "Budget" | "Activity";
+export type DashboardTab = "Overview" | "Accounts" | "Plan" | "Goals" | "Activity";
 
 const usd = (value: number) => formatExact(value);
 const kinds = ["Checking", "Savings", "Roth IRA", "Traditional IRA", "401(k)", "Brokerage", "Property", "Other asset", "Credit card", "Loan"];
@@ -83,7 +84,7 @@ function holdingMoney(value: number, currency: string | null) {
   catch { return `${value.toLocaleString()} ${currency}`; }
 }
 
-export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; completedGoals?: MoneyGoal[]; priceCheck: React.ReactNode; onUpdateGoal: (g: MoneyGoal) => void; onOpenGoal: (id: string) => void; onNewGoal: () => void; onCheck: () => void; onSettings: () => void; selectedTab: DashboardTab; onTabChange: (tab: DashboardTab) => void }) {
+export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; completedGoals?: MoneyGoal[]; priceCheck: React.ReactNode; onUpdateGoal: (g: MoneyGoal) => void; onAddGoal?: (g: MoneyGoal) => void; onRemoveGoal?: (id: string) => void; onOpenGoal: (id: string) => void; onNewGoal: () => void; onCheck: () => void; onSettings: () => void; selectedTab: DashboardTab; onTabChange: (tab: DashboardTab) => void }) {
   const { bank, goals, onNewGoal, onOpenGoal } = props;
   const [plan, setPlan] = useState<Plan>(readPlan);
   const tab = props.selectedTab;
@@ -196,7 +197,7 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; complet
       <span><small>Debt</small><strong className={debts > 0 ? "is-debt" : ""}>{debts > 0 ? "−" : ""}{usd(debts)}</strong></span>
     </div>
   </section>;
-  const accountList = <section className="wealth-card wealth-accent"><div className="wealth-section-head"><div><h2>Your accounts</h2></div>{linked.length > 0 && <button className="wealth-text-button" onClick={() => setTab("Activity")}>View all activity <ArrowRight size={15} /></button>}</div>
+  const accountList = <section className="wealth-card"><div className="wealth-section-head"><div><h2>Your accounts</h2></div>{linked.length > 0 && <button className="wealth-text-button" onClick={() => setTab("Activity")}>View all activity <ArrowRight size={15} /></button>}</div>
     {!assets.length ? <div className="wealth-empty"><Landmark size={30} /><h3>Bring your money together</h3><p>Use <strong>Add account</strong> above to connect your bank or enter a balance yourself.</p></div> : <div className="wealth-accounts">{accountGroups.map(group => {
       const list = assets.filter(a => group.match(a.kind));
       if (!list.length) return null;
@@ -211,6 +212,12 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; complet
       </div>;
     })}</div>}
     <div className="wealth-card-foot"><ShieldCheck size={14} /><span>{linked.length ? `${linked.length} connected · ` : ""}Manual accounts are saved in this browser only.</span></div>
+  </section>;
+  const planAhead = <section className="wealth-card wealth-accent wealth-plan-ahead">
+    <div className="wealth-section-head"><div><h2>Plan ahead</h2><p>Bring your monthly choices and long-term goals into one place.</p></div></div>
+    <div className="wealth-plan-ahead-actions">
+      <button className="wealth-secondary" onClick={() => setTab("Plan")}><span><strong>Open my plan</strong><small>Set your monthly plan, then explore investing and retirement.</small></span><ArrowRight size={16} aria-hidden="true" /></button>
+    </div>
   </section>;
   const undatedGoals = goals.filter(g => g.saved < g.target && !g.deadline).length;
   // Goals as envelopes: each goal's savings are a share of your checking + savings.
@@ -256,6 +263,7 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; complet
     {cashSplit}
     {goals.length ? <div className="wealth-goal-grid">{goals.map(g => <button key={g.id} className="wealth-goal" onClick={() => onOpenGoal(g.id)}><span className="wealth-goal-top"><ProgressRing value={g.target > 0 ? g.saved / g.target * 100 : 0} label={`${g.name} funded`} /><ChevronRight size={17} /></span><h3>{g.name}</h3><p><strong>{usd(g.saved)}</strong> <span>of {usd(g.target)}</span></p>{g.target > 0 && g.saved >= g.target ? <SpringCheck readOnly checked label="Goal reached" strike="none" color="#edf6ff" fillColor="#54e2c2" checkColor="#050b16" boxSize={22} boxRadius={7} fontSize={14} doneOpacity={1} className="wealth-goal-reached" /> : <span className="wealth-goal-detail">{usd(g.weekly)}/week <span>{months(g.weekly > 0 ? Math.max(0, g.target - g.saved) / (g.weekly * 52 / 12) : Infinity)} to go</span></span>}{g.saved < g.target && g.deadline && <span className="goal-weekly-needed">{g.deadline > todayISO() ? `Save ${formatMoney(Math.ceil(weeklyNeededForDeadline(g.target, g.saved, g.deadline) * 100) / 100, true)}/week to meet your date` : "Choose a new target date to update your weekly plan"}</span>}{g.deadline && <span className="wealth-goal-deadline">Target date · {formatLongDate(g.deadline)}</span>}</button>)}</div> : <div className="wealth-goal-placeholder"><Target size={25} /><div><h3>What does your money make possible?</h3><p>An emergency fund, a home, a trip. Give your savings a purpose.</p></div><button className="wealth-secondary" onClick={onNewGoal}>Create a goal <ArrowRight size={15} /></button></div>}
     {undatedGoals > 0 && <p className="wealth-note goals-nudge">{undatedGoals === goals.filter(g => g.saved < g.target).length ? "Add a target date to a goal" : `Add a target date to ${undatedGoals} more goal${undatedGoals === 1 ? "" : "s"}`} to see the weekly amount needed to finish on time.</p>}
+  <GoalReminders goals={goals} />
   {completedList}
   </section>;
   const assistantContext: MoneyAssistantContext = {
@@ -274,10 +282,11 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; complet
   // One line of real numbers under each page title (instead of a tagline).
   const pageFact =
     tab === "Accounts" || tab === "Activity" ? (assets.length ? `${assets.length} account${assets.length === 1 ? "" : "s"} · ${formatMoney(total - debts)} net worth` : "No accounts yet")
-        : tab === "Retirement" ? `${formatMoney(retirementBalance)} in retirement accounts${retirementPoints.length && retirementAge !== null ? ` · about ${formatMoney(retirementPoints.at(-1)?.balance ?? 0)} by age ${retirementAge}` : ""}`
+        : tab === "Plan" ? (plan.income > 0 ? `${formatMoney(plan.income)} monthly income · ${available >= 0 ? `${formatMoney(available)} left to plan` : `${formatMoney(-available)} over budget`}` : `${formatMoney(retirementBalance)} in retirement accounts`)
           : plan.income > 0 ? `${formatMoney(plan.income)} monthly income · ${available >= 0 ? `${formatMoney(available)} left to plan` : `${formatMoney(-available)} over budget`}` : "No monthly income entered yet";
-  return <main id="main" className={`wealth-dashboard${tab === "Goals" ? " goals-page" : ""}`}>
-    <div className="wealth-page-head"><div><h1>{tab === "Goals" ? "My goals" : tab === "Activity" ? "Account activity" : tab}</h1>{tab !== "Overview" && tab !== "Goals" && <p>{pageFact}</p>}</div>{(tab === "Overview" || tab === "Accounts") && addAccountButton()}</div>
+  const pageTitle = tab === "Overview" ? "Today" : tab === "Goals" ? "My goals" : tab === "Plan" ? "Plan" : tab === "Activity" ? "Account activity" : tab;
+  return <main id="main" className={`wealth-dashboard${tab === "Goals" ? " goals-page" : tab === "Overview" ? " overview-page" : ""}`}>
+    <div className="wealth-page-head"><div><h1>{pageTitle}</h1>{tab !== "Overview" && tab !== "Goals" && tab !== "Plan" && <p>{pageFact}</p>}</div>{(tab === "Overview" || tab === "Accounts") && addAccountButton()}</div>
     {tab === "Overview" && <>
       {bank.loading && !bank.data && !assets.length ? <OverviewSkeleton /> : <HomeOverview data={{
         env: bank.data?.env ?? "manual",
@@ -294,11 +303,11 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; complet
       {assets.some(a => a.sample) && <div className="wealth-sample"><Sparkles size={17} /><span>Sample accounts are included in these totals.</span><button onClick={() => update({ assets: plan.assets.filter(a => !a.sample) })}>Remove sample accounts <X size={14} /></button></div>}
 
     </>}
-    {tab === "Accounts" && <div className="wealth-stack">{accountSummary}{accountList}</div>}
+    {tab === "Accounts" && <div className="wealth-stack">{accountSummary}{accountList}{planAhead}</div>}
 
     {tab === "Goals" && <div className="wealth-stack">
       {goalList}
-      <section id="goal-price-check" aria-label="Check a price">{props.priceCheck}</section>
+      <section aria-label="Check a price">{props.priceCheck}</section>
       <h2 className="goals-tools-heading">Plan your next step</h2>
       {goals.length > 0 && <details className="goals-tool"><summary><span className="goals-tool-icon"><SlidersHorizontal size={23} /></span><span className="goals-tool-copy"><strong>Adjust weekly savings</strong><small>Change your weekly amount and see your new finish date.</small></span><ChevronRight className="goals-tool-arrow" size={23} /></summary><div className="goals-tool-body"><SavingsPlanner goals={goals} onUpdate={props.onUpdateGoal} onOpen={onOpenGoal} /></div></details>}
       <details className="goals-tool"><summary><span className="goals-tool-icon"><CircleDollarSign size={23} /></span><span className="goals-tool-copy"><strong>Compare spending with saving</strong><small>See how a purchase or recurring expense affects a goal.</small></span><ChevronRight className="goals-tool-arrow" size={23} /></summary><div className="goals-tool-body"><OpportunityCalculator goals={goals} totalGoalTarget={totalGoalTarget} savedTowardGoals={savedTowardGoals} onNewGoal={onNewGoal} onPreviewProgress={updateNorthStarPreview} /></div></details>
@@ -311,8 +320,9 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; complet
         </div>
       </details>
     </div>}
-    {tab === "Retirement" && <section className="wealth-card wealth-retirement wealth-accent">
-      <div className="wealth-section-head"><div><h2>Plan for retirement</h2></div></div>
+    {tab === "Plan" && <div className="wealth-plan-grid">
+    <section className="wealth-card wealth-retirement wealth-accent">
+      <div className="wealth-section-head"><div><h2>Invest & retirement</h2><p>Explore how a current balance and steady monthly savings could grow over time.</p></div></div>
       <div className="wealth-retirement-balance"><span>Retirement accounts you’ve added</span><strong>{usd(retirementBalance)}</strong></div>
       {!retirementBalance && <p className="wealth-note">Add a Roth IRA, traditional IRA, or 401(k) in Accounts to include its current balance.</p>}
       <div className="wealth-two-fields">
@@ -331,13 +341,14 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; complet
           <div className="wealth-chart-legend"><span><i /> Estimated balance</span><span><i /> Contributions only</span></div>
         </div>}
       <p className="wealth-note">This is an illustration, not a guarantee or investment advice. It assumes monthly contributions and a steady return, and excludes taxes, fees, inflation, and changes in investment value.</p>
-    </section>}
-    {tab === "Budget" && <div className="wealth-stack">
+    </section>
+    <div className="wealth-stack">
       <BudgetNorthStar progress={budgetProgress} hasIncome={plan.income > 0} remainder={available} />
-      <section className="wealth-card wealth-accent"><div className="wealth-section-head"><div><h2>Your monthly budget</h2></div></div><div className="wealth-stack"><Amount label="Monthly income (after tax)" value={plan.income} onChange={income => update({ income })} /><Amount label="Monthly essentials · rent, groceries, bills" value={plan.essentials} onChange={essentials => update({ essentials })} /><Amount label="Monthly lifestyle · shopping, dining, fun" value={plan.lifestyle} onChange={lifestyle => update({ lifestyle })} /><div className="wealth-budget-line"><span>Savings goal contributions</span><strong>{usd(monthlyGoals)} / mo</strong></div><p className="wealth-note">Weekly contributions × 52 ÷ 12. Edit contributions in your goals.</p><div className={`wealth-budget-remainder ${available < 0 ? "over" : ""}`}><span>{available < 0 ? "Over budget" : "Left to plan"}</span><strong>{usd(Math.abs(available))}</strong></div>{available < 0 && <p className="wealth-note">Your spending and goal contributions exceed your income. Adjust your plan to close the gap.</p>}</div></section>
+      <section className="wealth-card"><div className="wealth-section-head"><div><h2>Your monthly plan</h2></div></div><div className="wealth-stack"><Amount label="Monthly income (after tax)" value={plan.income} onChange={income => update({ income })} /><Amount label="Monthly essentials · rent, groceries, bills" value={plan.essentials} onChange={essentials => update({ essentials })} /><Amount label="Monthly lifestyle · shopping, dining, fun" value={plan.lifestyle} onChange={lifestyle => update({ lifestyle })} /><div className="wealth-budget-line"><span>Savings goal contributions</span><strong>{usd(monthlyGoals)} / mo</strong></div><p className="wealth-note">Weekly contributions × 52 ÷ 12. Edit contributions in your goals.</p><div className={`wealth-budget-remainder ${available < 0 ? "over" : ""}`}><span>{available < 0 ? "Over budget" : "Left to plan"}</span><strong>{usd(Math.abs(available))}</strong></div>{available < 0 && <p className="wealth-note">Your spending and goal contributions exceed your income. Adjust your plan to close the gap.</p>}</div></section>
+    </div>
     </div>}
     {tab === "Activity" && <div className="wealth-stack"><button className="wealth-text-button" onClick={() => setTab("Accounts")}>← Back to your accounts</button><MoneyDashboard {...props} /></div>}
-    <MoneyAssistant context={assistantContext} />
+    <MoneyAssistant context={assistantContext} goals={goals} budget={{ income: plan.income, essentials: plan.essentials, lifestyle: plan.lifestyle }} plan={plan} bankData={bank.data} onUpdateGoal={props.onUpdateGoal} onAddGoal={props.onAddGoal} onRemoveGoal={props.onRemoveGoal} onUpdateBudget={update} onOpenPriceCheck={props.onCheck} />
     {assetForm && <div className="wealth-modal-backdrop"><section ref={modalRef} className="wealth-modal" role="dialog" aria-modal="true" aria-labelledby="asset-title"><div className="wealth-section-head"><h2 id="asset-title">{plan.assets.some(a => a.id === assetForm.id) ? "Edit account" : "Add an account"}</h2><button className="wealth-icon-button" aria-label="Close account form" onClick={() => setAssetForm(null)}><X size={20} /></button></div>{!plan.assets.some(a => a.id === assetForm.id) && <><div className="add-account-connect"><div><strong>Connect a bank or brokerage</strong><span>Balances and activity update automatically through Plaid.</span></div><ConnectButton label="Connect" kind="all" variant="secondary" onConnected={() => { setAssetForm(null); bank.reload(); }} /></div><p className="add-account-divider"><span>or enter a balance manually</span></p></>}<p className="wealth-note">Manual accounts are saved on this device.</p><form className="wealth-stack" onSubmit={e => { e.preventDefault(); const before = plan.assets.find(a => a.id === assetForm.id); update({ assets: [...plan.assets.filter(a => a.id !== assetForm.id), { ...assetForm, name: assetForm.name.trim(), institution: assetForm.institution.trim(), updatedAt: !before || before.balance !== assetForm.balance || !before.updatedAt ? new Date().toISOString() : before.updatedAt }] }); setAssetForm(null); }}><Field label="Account name"><input autoFocus required maxLength={80} value={assetForm.name} onChange={e => setAssetForm({ ...assetForm, name: e.target.value })} placeholder="My Roth IRA" pattern=".*\S.*" /></Field><Field label="Institution (optional)"><input maxLength={80} value={assetForm.institution} onChange={e => setAssetForm({ ...assetForm, institution: e.target.value })} placeholder="Fidelity" /></Field><Field label="Account type"><select value={assetForm.kind} onChange={e => setAssetForm({ ...assetForm, kind: e.target.value })}>{kinds.map(k => <option key={k}>{k}</option>)}</select></Field><Amount label={debt(assetForm.kind) ? "Amount owed" : "Current balance"} value={assetForm.balance} onChange={balance => setAssetForm({ ...assetForm, balance })} /><div className="wealth-modal-actions">{plan.assets.some(a => a.id === assetForm.id) && <button type="button" className="wealth-delete" onClick={() => { update({ assets: plan.assets.filter(a => a.id !== assetForm.id) }); setAssetForm(null); }}><Trash2 size={16} /> Remove</button>}<button type="button" className="wealth-secondary" onClick={() => setAssetForm(null)}>Cancel</button><button className="wealth-primary" type="submit">Save account <Check size={16} /></button></div></form></section></div>}
   </main>;
 }

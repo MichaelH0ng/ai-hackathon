@@ -129,7 +129,7 @@ button.purchase-check-compare:focus-visible { outline: 3px solid #4c86d9; outlin
 
 /* Prominent tool launchers keep secondary planning tools easy to discover. */
 .goals-page .goals-tools-heading { margin: 8px 0 -8px; font-size: 22px; }
-.goals-page .goals-tool { background: #f1f5fc; border: 1px solid #9eafc7; border-left: 4px solid #286d9b; border-radius: 14px; padding: 0; }
+.goals-page .goals-tool { background: #f1f5fc; border: 1px solid #9eafc7; border-left: 4px solid #54e2c2; border-radius: 14px; padding: 0; }
 .goals-page .goals-tool > summary { display: flex; align-items: center; gap: 16px; padding: 22px; min-height: 100px; margin: 0; cursor: pointer; list-style: none; color: #172b45; }
 .goals-tool > summary::-webkit-details-marker { display: none; }
 .goals-page .goals-tool-copy { flex: 1; min-width: 0; display: grid; gap: 5px; }
