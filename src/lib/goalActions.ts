@@ -15,7 +15,8 @@ export type PolarisAction =
   | { kind: "mark_bought"; goalId: string; amount: number }
   | { kind: "move"; goalId: string; toGoalId: string; amount: number }
   | { kind: "set_budget"; field: BudgetField; amount: number }
-  | { kind: "reminder"; goalId: string; amount: number; weekday: number }; // weekday 0–6 (Sun–Sat), 7 = every day
+  | { kind: "reminder"; goalId: string; amount: number; weekday: number } // weekday 0–6 (Sun–Sat), 7 = every day
+  | { kind: "delete_goals"; goalIds: string[] };
 /** @deprecated kept for older imports; use PolarisAction. */
 export type GoalAction = PolarisAction;
 export type GoalActionKind = PolarisAction["kind"];
@@ -37,10 +38,12 @@ export interface ActionResult {
   newGoal?: MoneyGoal;
   budget?: Partial<Budget>;
   reminder?: Reminder;
+  /** Goals to delete (Undo puts them back). */
+  removedGoalIds?: string[];
   undo: Undo;
   done: string;
 }
-export interface Undo { goals?: MoneyGoal[]; removeGoalId?: string; budget?: Partial<Budget>; removeReminderId?: string; label: string }
+export interface Undo { goals?: MoneyGoal[]; removeGoalId?: string; restoreGoals?: MoneyGoal[]; budget?: Partial<Budget>; removeReminderId?: string; label: string }
 
 const cents = (n: number) => Math.round(n * 100) / 100;
 export const money = (n: number) => formatMoney(n, Math.round(n * 100) % 100 !== 0); // cents only when there are some
@@ -158,6 +161,26 @@ export function parseCommand(text: string, world: World, now = new Date()): Comm
   if (QUESTION.test(text) && !/^\s*(could|would|can)\s+you\b/i.test(text)) return null;
   const amts = amounts(text);
 
+  // Delete: "delete my laptop goal", "remove the car and trip goals", "delete all my goals".
+  // With a dollar amount ("remove $20 from car") it's a withdrawal, handled further down.
+  if (/\b(delete|remove|get rid of|erase|clear out|cancel)\b/i.test(text) && !amts.length) {
+    const active = goals.filter(g => !g.boughtAt);
+    if (!active.length) return { ok: false, message: "You don’t have any goals to delete right now." };
+    const said = words(text);
+    // Every goal named in full, or whose distinctive words were all said ("car and trip").
+    const named = active.filter(g => {
+      const key = words(g.name).filter(w => !STOP.has(w));
+      return text.toLowerCase().includes(g.name.toLowerCase()) || (key.length > 0 && key.every(w => said.some(x => sameWord(x, w))));
+    });
+    const everything = /\b(all|every|everything|each)\b|\b(current|existing)\s+goals\b/i.test(text);
+    if (everything && !named.length) return check({ kind: "delete_goals", goalIds: active.map(g => g.id) }, world);
+    if (named.length) return check({ kind: "delete_goals", goalIds: named.map(g => g.id) }, world);
+    const one = findGoal(text, goals);
+    if (typeof one === "object") return check({ kind: "delete_goals", goalIds: [one.id] }, world);
+    if (/\bgoals\b/i.test(text)) return check({ kind: "delete_goals", goalIds: active.map(g => g.id) }, world);
+    if (/\bgoal\b/i.test(text)) return one === "ambiguous" ? { ok: false, message: "A few goals match that. Say the goal’s full name and I’ll delete it." } : goalNone(goals);
+  }
+
   // Reminders: "remind me to add $20 to car every Friday"
   if (/\bremind\b/i.test(text)) {
     const amount = amts[0]?.value;
@@ -254,6 +277,14 @@ function newGoalName(text: string): string | null {
 
 /** Rejects changes that don't make sense before asking the user to confirm. */
 export function check(action: PolarisAction, world: World): Command {
+  if (action.kind === "delete_goals") {
+    const ids = [...new Set(action.goalIds)];
+    if (!ids.length) return { ok: false, message: "Which goal should I delete?" };
+    const found = ids.map(id => world.goals.find(g => g.id === id));
+    if (found.some(g => !g)) return { ok: false, message: "I couldn’t find that goal anymore." };
+    if (found.some(g => g!.boughtAt)) return { ok: false, message: "Bought goals are already finished, so I left them alone." };
+    return { ok: true, action: { kind: "delete_goals", goalIds: ids } };
+  }
   const goal = "goalId" in action ? world.goals.find(g => g.id === action.goalId) : undefined;
   if ("goalId" in action && !goal) return { ok: false, message: "I couldn’t find that goal anymore." };
   if (goal?.boughtAt) return { ok: false, message: `${goal.name} is already marked as bought, so it can’t be changed here.` };
@@ -292,6 +323,17 @@ export function describe(action: PolarisAction, world: World): ActionSummary {
               : `Save ${money(action.amount)} a week for ${g.name}`;
       const row = action.kind === "set_weekly" ? { before: `${money(g.weekly)}/week`, after: `${money(next.weekly)}/week` } : { before: progress(g), after: progress(next) };
       return { title, rows: [row], note };
+    }
+    case "delete_goals": {
+      const gone = action.goalIds.map(id => world.goals.find(g => g.id === id)!);
+      const saved = gone.reduce((sum, g) => sum + Math.max(0, g.saved), 0);
+      return {
+        title: gone.length === 1 ? `Delete ${gone[0].name}` : `Delete ${gone.length} goals`,
+        rows: gone.map(g => ({ label: g.name, before: progress(g), after: "Deleted" })),
+        note: saved > 0
+          ? `This removes ${gone.length === 1 ? "the goal" : "these goals"} from NorthStar. Your bank balance doesn’t change: the ${money(saved)} set aside becomes free cash again.`
+          : `This removes ${gone.length === 1 ? "the goal" : "these goals"} from NorthStar. Your bank balance doesn’t change.`,
+      };
     }
     case "create_goal":
       return {
@@ -372,6 +414,11 @@ export function apply(action: PolarisAction, world: World, ids: { newId: () => s
     }
     case "set_budget":
       return { updatedGoals: [], budget: { [action.field]: action.amount }, undo: { budget: { [action.field]: world.budget[action.field] }, label: `Undo: back to ${money(world.budget[action.field])}` }, done: `Done! Your ${BUDGET_LABEL[action.field].toLowerCase()} is now **${money(action.amount)}** a month.` };
+    case "delete_goals": {
+      const gone = action.goalIds.map(id => world.goals.find(g => g.id === id)!);
+      const names = gone.length === 1 ? `**${gone[0].name}**` : `**${gone.length} goals** (${gone.map(g => g.name).join(", ")})`;
+      return { updatedGoals: [], removedGoalIds: gone.map(g => g.id), undo: { restoreGoals: gone, label: gone.length === 1 ? `Undo: bring back ${gone[0].name}` : "Undo: bring them back" }, done: `Done! I deleted ${names}.` };
+    }
     case "reminder": {
       const reminder: Reminder = { id: ids.newId(), goalId: action.goalId, amount: action.amount, weekday: action.weekday, lastShown: ids.today ?? todayISO() };
       return { updatedGoals: [], reminder, undo: { removeReminderId: reminder.id, label: "Undo: remove the reminder" }, done: `Done! I’ll remind you **${dayLabel(action.weekday)}** to add **${money(action.amount)}** to ${goal!.name}.` };

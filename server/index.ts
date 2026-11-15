@@ -323,10 +323,11 @@ app.get("/api/assistant/status", (_req, res) => {
 // ---------- Polaris goal changes ----------
 // Polaris can propose a change to a savings goal. The server never changes anything: it returns the
 // proposal, and the app shows a confirmation card that the user must accept.
-const GOAL_CHANGE_KINDS = ["add", "withdraw", "set_saved", "set_target", "set_weekly", "create_goal", "mark_bought", "move", "set_budget", "reminder"] as const;
+const GOAL_CHANGE_KINDS = ["add", "withdraw", "set_saved", "set_target", "set_weekly", "create_goal", "mark_bought", "move", "set_budget", "reminder", "delete_goals"] as const;
 const GoalChangeInput = z.object({
   change: z.enum(GOAL_CHANGE_KINDS),
   goal_name: z.string().trim().min(1).max(100).optional(),
+  goal_names: z.array(z.string().trim().min(1).max(100)).min(1).max(50).optional(),
   to_goal_name: z.string().trim().min(1).max(100).optional(),
   amount: z.number().finite().nonnegative().max(10_000_000).optional(),
   new_goal_name: z.string().trim().min(1).max(60).optional(),
@@ -346,9 +347,10 @@ const GOAL_CHANGE_TOOL = {
         type: "string",
         enum: [...GOAL_CHANGE_KINDS],
         description:
-          "add = put money into goal_name; withdraw = take money out; set_saved / set_target / set_weekly = set that goal's saved amount, total, or weekly amount; create_goal = new goal (new_goal_name, amount = target, optional weekly and deadline); mark_bought = the user bought goal_name (amount = price paid); move = move amount from goal_name to to_goal_name; set_budget = set budget_field to amount per month; reminder = remind the user weekly (weekday 0=Sunday…6=Saturday, 7=every day) to add amount to goal_name.",
+          "add = put money into goal_name; withdraw = take money out; set_saved / set_target / set_weekly = set that goal's saved amount, total, or weekly amount; create_goal = new goal (new_goal_name, amount = target, optional weekly and deadline); mark_bought = the user bought goal_name (amount = price paid); move = move amount from goal_name to to_goal_name; set_budget = set budget_field to amount per month; reminder = remind the user weekly (weekday 0=Sunday…6=Saturday, 7=every day) to add amount to goal_name. delete_goals = delete the goals in goal_names (only when the user asks to delete or remove whole goals, not money).",
       },
       goal_name: { type: "string", description: "An existing goal's name exactly as in the financial context (the source goal for move)." },
+      goal_names: { type: "array", items: { type: "string" }, description: "For delete_goals: every goal to delete, names exactly as in the financial context. For \"delete all my goals\", list every current goal." },
       to_goal_name: { type: "string", description: "For move: the goal receiving the money." },
       amount: { type: "number", description: "Dollar amount: the change, the new value, the price paid, or the new goal's target." },
       new_goal_name: { type: "string", description: "For create_goal: a short name like \"Laptop\"." },
@@ -361,8 +363,8 @@ const GOAL_CHANGE_TOOL = {
   },
 };
 const GOAL_CHANGE_INSTRUCTIONS =
-  "Goal and budget changes: when the user asks you to change something (add to or take money out of a goal, set a goal's saved amount, target, or weekly amount, create a goal, mark a goal as bought, move money between goals, change their monthly income/essentials/lifestyle budget, or set a savings reminder), call propose_goal_change. If you also write text, keep it to one short sentence; the app shows the before and after for them to confirm, so never say the change is already done. If something needed is unclear (which goal, how much), ask instead of calling the tool.";
-const GOAL_CHANGE_REQUEST = /\b(add|put|move|deposit|contribute|transfer|throw|stash|withdraw|take out|pull out|remove|subtract|set|change|update|bump|raise|lower|create|make|start|new goal|bought|purchased|remind|budget|income)\b[\s\S]*\d|\b(bought|purchased|remind me)\b/i;
+  "Goal and budget changes: when the user asks you to change something (add to or take money out of a goal, set a goal's saved amount, target, or weekly amount, create a goal, mark a goal as bought, move money between goals, change their monthly income/essentials/lifestyle budget, or set a savings reminder, or delete goals), call propose_goal_change. If you also write text, keep it to one short sentence; the app shows the before and after for them to confirm, so never say the change is already done. If something needed is unclear (which goal, how much), ask instead of calling the tool.";
+const GOAL_CHANGE_REQUEST = /\b(add|put|move|deposit|contribute|transfer|throw|stash|withdraw|take out|pull out|remove|subtract|set|change|update|bump|raise|lower|create|make|start|new goal|bought|purchased|remind|budget|income)\b[\s\S]*\d|\b(bought|purchased|remind me)\b|\b(delete|remove|get rid of|erase)\b[\s\S]*\bgoals?\b/i;
 
 app.post("/api/financial-chat", async (req, res) => {
   const parsed = ChatRequest.safeParse(req.body);
@@ -431,7 +433,7 @@ app.post("/api/financial-chat", async (req, res) => {
       const p = proposal.data;
       res.json({
         answer,
-        action: { kind: p.change, goalName: p.goal_name, toGoalName: p.to_goal_name, amount: p.amount, name: p.new_goal_name, target: p.change === "create_goal" ? p.amount : undefined, weekly: p.weekly, deadline: p.deadline, field: p.budget_field, weekday: p.weekday },
+        action: { kind: p.change, goalName: p.goal_name, goalNames: p.goal_names, toGoalName: p.to_goal_name, amount: p.amount, name: p.new_goal_name, target: p.change === "create_goal" ? p.amount : undefined, weekly: p.weekly, deadline: p.deadline, field: p.budget_field, weekday: p.weekday },
         fetchedAt: dashboard.fetchedAt,
       });
       return;

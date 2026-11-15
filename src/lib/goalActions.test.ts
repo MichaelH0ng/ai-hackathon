@@ -154,3 +154,35 @@ it("every action has a card description", () => {
   ];
   for (const a of all) expect(describeAction(a, world).title.length).toBeGreaterThan(0);
 });
+
+describe("deleting goals", () => {
+  it("deletes one goal by name", () => {
+    expect(action("delete my car goal")).toEqual({ kind: "delete_goals", goalIds: ["car"] });
+    expect(action("can you remove the spring break trip goal?")).toEqual({ kind: "delete_goals", goalIds: ["trip"] });
+  });
+  it("deletes several named goals", () => {
+    expect(action("delete the car and phone goals")).toEqual({ kind: "delete_goals", goalIds: ["car", "phone"] });
+  });
+  it("deletes every current goal, but never bought ones", () => {
+    const all = { kind: "delete_goals", goalIds: ["car", "trip", "phone"] };
+    expect(action("delete all my goals")).toEqual(all);
+    expect(action("delete the current goals that I have")).toEqual(all);
+  });
+  it("treats a dollar amount as a withdrawal, not a delete", () => {
+    expect(action("remove $20 from car")).toMatchObject({ kind: "withdraw", goalId: "car", amount: 20 });
+  });
+  it("asks which goal when none matches", () => {
+    const c = parse("delete my boat goal");
+    expect(c?.ok).toBe(false);
+  });
+  it("describes, applies, and can be undone", () => {
+    const a: PolarisAction = { kind: "delete_goals", goalIds: ["car", "trip"] };
+    const summary = describeAction(a, world);
+    expect(summary.title).toBe("Delete 2 goals");
+    expect(summary.rows.map(r => r.after)).toEqual(["Deleted", "Deleted"]);
+    expect(summary.note).toContain("$2,300 set aside becomes free cash");
+    const result = apply(a, world, ids);
+    expect(result.removedGoalIds).toEqual(["car", "trip"]);
+    expect(result.undo.restoreGoals?.map(g => g.id)).toEqual(["car", "trip"]);
+  });
+});

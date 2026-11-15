@@ -8,6 +8,7 @@ import SpringCheck from "./SpringCheck";
 import StarBorder from "./StarBorder";
 import { ProgressRing } from "./ProgressRing";
 import { SavingsPlanner } from "./SavingsPlanner";
+import { GoalPathPlanner } from "./GoalPathPlanner";
 import { CashSplitEditor } from "./CashSplitEditor";
 import { isLiability } from "../lib/money";
 import { formatDate, todayISO } from "../lib/dates";
@@ -86,7 +87,7 @@ function holdingMoney(value: number, currency: string | null) {
   catch { return `${value.toLocaleString()} ${currency}`; }
 }
 
-export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; completedGoals?: MoneyGoal[]; priceCheck: React.ReactNode; onUpdateGoal: (g: MoneyGoal) => void; onAddGoal?: (g: MoneyGoal) => void; onRemoveGoal?: (id: string) => void; onOpenGoal: (id: string) => void; onNewGoal: () => void; onCheck: () => void; onSettings: () => void; selectedTab: DashboardTab; onTabChange: (tab: DashboardTab) => void }) {
+export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; completedGoals?: MoneyGoal[]; priceCheck: React.ReactNode; hourlyWage?: number | null; onUpdateGoal: (g: MoneyGoal) => void; onAddGoal?: (g: MoneyGoal) => void; onRemoveGoal?: (id: string) => void; onOpenGoal: (id: string) => void; onNewGoal: () => void; onCheck: () => void; onSettings: () => void; selectedTab: DashboardTab; onTabChange: (tab: DashboardTab) => void }) {
   const { bank, goals, onNewGoal, onOpenGoal } = props;
   const [plan, setPlan] = useState<Plan>(readPlan);
   const tab = props.selectedTab;
@@ -179,6 +180,9 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; complet
   const available = planCapacity.status === "missing-income"
     ? 0
     : planCapacity.monthlyIncome - planCapacity.monthlySpending - planCapacity.monthlyOtherGoals - planCapacity.monthlyBuffer;
+  const weeklyGoalCapacity = planCapacity.status === "missing-income"
+    ? 0
+    : Math.max(0, (planCapacity.monthlyIncome - planCapacity.monthlySpending - planCapacity.monthlyBuffer) * 12 / 52);
   const budgetProgress = budgetBalanceProgress(planCapacity.monthlyIncome, available);
   function sample() {
     update({ assets: [...plan.assets, ...[
@@ -338,6 +342,7 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; complet
       {goalList}
       <section aria-label="Check a price">{props.priceCheck}</section>
       <h2 className="goals-tools-heading">Plan your next step</h2>
+      {goals.length > 0 && <details className="goals-tool"><summary><span className="goals-tool-icon"><Sparkles size={23} /></span><span className="goals-tool-copy"><strong>Build my goal path</strong><small>See whether your deadlines fit, then test spending and income scenarios.</small></span><ChevronRight className="goals-tool-arrow" size={23} /></summary><div className="goals-tool-body"><GoalPathPlanner goals={goals} bankData={planningBankData} weeklyCapacity={weeklyGoalCapacity} incomeKnown={planCapacity.incomeSource !== "none"} hourlyWage={props.hourlyWage ?? null} onUpdateGoal={props.onUpdateGoal} /></div></details>}
       {goals.length > 0 && <details className="goals-tool"><summary><span className="goals-tool-icon"><SlidersHorizontal size={23} /></span><span className="goals-tool-copy"><strong>Adjust weekly savings</strong><small>Choose a sustainable amount and see your new finish date.</small></span><ChevronRight className="goals-tool-arrow" size={23} /></summary><div className="goals-tool-body"><SavingsPlanner goals={goals} financials={{ bankData: planningBankData, manualMonthlyIncome: plan.income, manualMonthlyExpenses: plan.essentials + plan.lifestyle }} onUpdate={props.onUpdateGoal} onOpen={onOpenGoal} onOpenPlan={() => setTab("Plan")} /></div></details>}
       <details className="goals-tool"><summary><span className="goals-tool-icon"><CircleDollarSign size={23} /></span><span className="goals-tool-copy"><strong>Cost of a habit</strong><small>See what a subscription or regular expense costs a goal over a year.</small></span><ChevronRight className="goals-tool-arrow" size={23} /></summary><div className="goals-tool-body"><OpportunityCalculator goals={goals} totalGoalTarget={totalGoalTarget} savedTowardGoals={savedTowardGoals} onNewGoal={onNewGoal} onPreviewProgress={updateNorthStarPreview} /></div></details>
       <details className="goals-tool"><summary><span className="goals-tool-icon"><Sparkles size={23} /></span><span className="goals-tool-copy"><strong>View my constellation</strong><small>Watch your savings milestones light up.</small></span><ChevronRight className="goals-tool-arrow" size={23} /></summary><div className="goals-tool-body"><NorthStar progress={goalProgress} previewProgress={northStarPreview} hasGoals={goals.length > 0} onNewGoal={onNewGoal} /></div></details>
