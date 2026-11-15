@@ -4,7 +4,8 @@ import { formatMoney, formatWeeks, goalPhrase, projectedDate, weeklyNeededForDea
 import type { MoneyGoal } from "../lib/types";
 import { type LogDecision, MoneyWhatIf } from "./MoneyWhatIf";
 import { Timeline } from "./Timeline";
-import { BackButton, Button, Card, DateField, NumberField, Notice, Progress, Stat } from "./ui";
+import { isEmergencyFund } from "../lib/safeToSpend";
+import { BackButton, Button, Card, CheckboxField, DateField, NumberField, Notice, Progress, Stat } from "./ui";
 
 export function MoneyGoalView({
   goal,
@@ -99,6 +100,7 @@ export function MoneyGoalView({
         <div className="mt-2">
           <DateField label="Target date" value={goal.deadline ?? ""} min={todayISO()} onChange={deadline => onChange({ ...goal, deadline: deadline || undefined })} />
           <NumberField label="Weekly savings" value={goal.weekly} onChange={(v) => onChange({ ...goal, weekly: Number(v || 0) })} suffix="/wk" />
+          <CheckboxField label="This is my emergency fund" hint="Safe-to-Spend keeps this money aside and never counts it as spending money." checked={isEmergencyFund(goal)} onChange={(emergency) => onChange({ ...goal, emergency })} />
         </div>
       </Card>
 

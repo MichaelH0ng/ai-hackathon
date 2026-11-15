@@ -2,7 +2,8 @@ import { useState } from "react";
 import { formatDate, todayISO } from "../lib/dates";
 import { formatMoney, formatWeeks, goalPhrase, projectedDate, weeklyNeededForDeadline, weeksToGoal } from "../lib/finance";
 import type { MoneyGoal } from "../lib/types";
-import { BackButton, Button, Card, DateField, NumberField, TextField } from "./ui";
+import { isEmergencyFund } from "../lib/safeToSpend";
+import { BackButton, Button, Card, CheckboxField, DateField, NumberField, TextField } from "./ui";
 
 export function MoneyGoalForm({ onCreate, onBack }: { onCreate: (g: MoneyGoal) => void; onBack: () => void }) {
   const [name, setName] = useState("");
@@ -10,6 +11,9 @@ export function MoneyGoalForm({ onCreate, onBack }: { onCreate: (g: MoneyGoal) =
   const [saved, setSaved] = useState<number | "">("");
   const [weekly, setWeekly] = useState<number | "">("");
   const [deadline, setDeadline] = useState("");
+  // null = follow the name ("Emergency fund" ticks it); a click makes it the user's choice.
+  const [emergencyChoice, setEmergencyChoice] = useState<boolean | null>(null);
+  const emergency = emergencyChoice ?? isEmergencyFund({ name });
 
   const t = Number(target || 0);
   const s = Number(saved || 0);
@@ -32,6 +36,7 @@ export function MoneyGoalForm({ onCreate, onBack }: { onCreate: (g: MoneyGoal) =
           </div>
           <DateField label="Target date" value={deadline} onChange={setDeadline} min={todayISO()} hint="Choose when you want to reach your goal. We’ll calculate your weekly savings." />
           {!deadline && <NumberField label="Or choose your own weekly savings" value={weekly} onChange={setWeekly} suffix="/wk" />}
+          <CheckboxField label="This is my emergency fund" hint="Safe-to-Spend keeps this money aside and never counts it as spending money." checked={emergency} onChange={setEmergencyChoice} />
           {deadline && t > 0 && <div className="weekly-target" aria-live="polite">
             <span>{s >= t ? "Goal already funded" : "Save each week"}</span>
             <strong>{formatMoney(needed, true)}<small> / week</small></strong>
@@ -59,7 +64,7 @@ export function MoneyGoalForm({ onCreate, onBack }: { onCreate: (g: MoneyGoal) =
       <Button
         className="mt-3 w-full"
         disabled={!ready}
-        onClick={() => onCreate({ kind: "money", id: crypto.randomUUID(), name: name.trim(), target: t, saved: s, weekly: w, deadline: deadline || undefined })}
+        onClick={() => onCreate({ kind: "money", id: crypto.randomUUID(), name: name.trim(), target: t, saved: s, weekly: w, deadline: deadline || undefined, emergency })}
       >
         Create my plan
       </Button>

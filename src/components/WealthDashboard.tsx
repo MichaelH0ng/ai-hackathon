@@ -20,11 +20,11 @@ export type DashboardTab = "Overview" | "Accounts" | "Goals" | "Retirement" | "B
 
 const usd = (value: number) => formatMoney(value, true);
 const kinds = ["Checking", "Savings", "Roth IRA", "Traditional IRA", "401(k)", "Brokerage", "Property", "Other asset", "Credit card", "Loan"];
-interface Asset { id: string; name: string; institution: string; kind: string; balance: number; sample?: boolean; updatedAt?: string }
-interface Plan { assets: Asset[]; risk: string; horizon: string; future: string; income: number; essentials: number; lifestyle: number; currentAge: number | null; retirementAge: number | null; retirementMonthly: number; retirementReturn: number }
+export interface Asset { id: string; name: string; institution: string; kind: string; balance: number; sample?: boolean; updatedAt?: string }
+export interface Plan { assets: Asset[]; risk: string; horizon: string; future: string; income: number; essentials: number; lifestyle: number; currentAge: number | null; retirementAge: number | null; retirementMonthly: number; retirementReturn: number }
 const initial: Plan = { assets: [], risk: "", horizon: "", future: "", income: 0, essentials: 0, lifestyle: 0, currentAge: null, retirementAge: null, retirementMonthly: 0, retirementReturn: 5 };
 const KEY = "tradeoff:wealth:v1";
-function readPlan(): Plan { try { return { ...initial, ...JSON.parse(localStorage.getItem(KEY) || "{}") }; } catch { return initial; } }
+export function readPlan(): Plan { try { return { ...initial, ...JSON.parse(localStorage.getItem(KEY) || "{}") }; } catch { return initial; } }
 const debt = (kind: string) => kind === "Credit card" || kind === "Loan";
 const investment = (kind: string) => ["Roth IRA", "Traditional IRA", "401(k)", "Brokerage", "Investment"].includes(kind);
 const retirementAccount = (kind: string) => ["Roth IRA", "Traditional IRA", "401(k)"].includes(kind);
