@@ -5,7 +5,6 @@ import { friendlyName, sentenceMatchesFacts, shortDate, templateSentence, verdic
 // A small hand-made forecast: rent on Dec 12 drives the low point, paycheck on Nov 25.
 const forecast: Forecast = {
   ...buildForecast({ cash: 700, savings: 860, transactions: [], cashAccountIds: [], goals: [], today: "2026-11-14" }),
-  cushion: 63,
   lowPoint: 300,
   lowPointDate: "2026-12-12",
   headroom: 237,
@@ -38,7 +37,7 @@ describe("templateSentence", () => {
   it("names the driver for a tight purchase", () => {
     const facts = verdictFacts("Jacket", forecast, evaluatePurchase(forecast, 200), []);
     expect(facts.verdict).toBe("tight");
-    expect(templateSentence(facts)).toBe("You can cover it, but your balance would dip to about $100 around Dec 12, after Mustang Village, close to your $63 cushion.");
+    expect(templateSentence(facts)).toBe("You can cover it, but your balance would dip to about $100 around Dec 12, after Mustang Village, with little left until your next paycheck.");
   });
 });
 

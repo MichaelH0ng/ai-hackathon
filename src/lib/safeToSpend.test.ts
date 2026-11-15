@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { addDays } from "./dates";
 import type { BankTransaction } from "./money";
-import { buildForecast, cashFromAccounts, emergencyReserve, evaluatePurchase, isEmergencyFund, recurring, type SafeToSpendInputs } from "./safeToSpend";
+import { buildForecast, cashFromAccounts, emergencyReserve, evaluatePurchase, goalReserve, isEmergencyFund, recurring, type SafeToSpendInputs } from "./safeToSpend";
 
 const today = "2026-11-14";
 let n = 0;
@@ -50,9 +50,8 @@ describe("buildForecast", () => {
     expect(forecast.dailySpending).toBeCloseTo(9, 0);
   });
 
-  it("sets the cushion to at least a week of everyday spending", () => {
-    expect(forecast.cushion).toBe(Math.max(50, Math.round(forecast.dailySpending * 7 * 100) / 100));
-    expect(forecast.headroom).toBeCloseTo(forecast.lowPoint - forecast.cushion, 2);
+  it("lets you spend down to the lowest projected balance, no further", () => {
+    expect(forecast.headroom).toBeCloseTo(forecast.lowPoint, 2);
   });
 });
 
@@ -102,12 +101,19 @@ describe("emergency fund", () => {
   it("keeps the fund out of spendable cash, so the same price can turn red", () => {
     const withFund = buildForecast({ ...inputs, goals: [...inputs.goals, { name: "Emergency fund", target: 1000, saved: 400, weekly: 0 }] });
     const without = buildForecast(inputs);
-    expect(withFund.reserved).toBe(400);
+    expect(withFund.reserved).toBe(720); // every goal's savings are set aside: 400 + the trip's 320
     expect(withFund.cash).toBe(without.cash); // cash today is unchanged; the fund is set aside from it
     expect(withFund.lowPoint).toBeCloseTo(without.lowPoint - 400, 2);
     const price = without.headroom - 100; // fits without the fund...
     expect(evaluatePurchase(without, price).verdict).toBe("tight");
     expect(evaluatePurchase(withFund, price).verdict).toBe("not-yet"); // ...but would dip into it
+  });
+});
+
+describe("goalReserve", () => {
+  it("sets aside every goal's savings, naming the goal only when there's one", () => {
+    expect(goalReserve([{ name: "Car", target: 20000, saved: 600, weekly: 50 }, { name: "AirPods", target: 100, saved: 170, weekly: 0 }])).toEqual({ amount: 770, name: null });
+    expect(goalReserve([{ name: "AirPods", target: 100, saved: 170, weekly: 0 }, { name: "Car", target: 20000, saved: 0, weekly: 50 }])).toEqual({ amount: 170, name: "AirPods" });
   });
 });
 
@@ -128,5 +134,19 @@ describe("cashFromAccounts", () => {
       { id: "card", name: "Visa", mask: null, type: "credit", subtype: "credit card", current: 184.62, available: 815.38, institution: "Campus Bank" },
     ];
     expect(cashFromAccounts(accounts)).toEqual({ checking: 742.18, savings: 860, cashAccountIds: ["chk", "sav"] });
+  });
+});
+
+describe("lowPointBreakdown", () => {
+  it("adds up exactly to the lowest point", async () => {
+    const { lowPointBreakdown } = await import("./safeToSpend");
+    const b = lowPointBreakdown(buildForecast(inputs));
+    const total = b.cash - b.reserved + b.income - b.bills.reduce((s, x) => s + x.amount, 0) - b.everyday;
+    expect(total).toBeCloseTo(b.lowPoint, 1);
+  });
+  it("treats weekly goal amounts as targets, not money leaving the account", () => {
+    const big = buildForecast({ ...inputs, goals: [{ name: "Car", target: 20000, saved: 0, weekly: 275 }] });
+    const none = buildForecast({ ...inputs, goals: [] });
+    expect(big.lowPoint).toBe(none.lowPoint);
   });
 });

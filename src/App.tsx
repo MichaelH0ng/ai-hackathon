@@ -15,6 +15,8 @@ import type { Goal, MoneyGoal } from "./lib/types";
 import { spendableCash } from "./lib/money";
 import { useBank } from "./lib/useBank";
 import { celebrateNewlyReached } from "./lib/celebrate";
+import { activeGoals, boughtGoals, cashOnHand, envelopes, markBought, unmarkBought } from "./lib/envelopes";
+import { readPlan } from "./components/WealthDashboard";
 
 const pageHashes: Record<NavPage, string> = { Overview: "overview", Accounts: "accounts", Goals: "my-goals", Retirement: "retirement", Budget: "budget", "Price check": "price-check", Profile: "profile" };
 const pageFromHash = (): NavPage => (Object.entries(pageHashes).find(([, hash]) => hash === window.location.hash.slice(1))?.[0] as NavPage) ?? "Overview";
@@ -93,7 +95,18 @@ export default function App() {
     }
   }, [screen]);
 
-  const moneyGoals = state.goals.filter((g): g is MoneyGoal => g.kind === "money");
+  const allMoneyGoals = state.goals.filter((g): g is MoneyGoal => g.kind === "money");
+  // Bought goals leave the envelopes: everything else in the app sees only the goals still being saved for.
+  const moneyGoals = activeGoals(allMoneyGoals);
+  const completedGoals = boughtGoals(allMoneyGoals);
+  const buyGoal = (goal: MoneyGoal, paid: number, leftoverToId?: string) => {
+    const { bought, receiver } = markBought(goal, paid, todayISO(), moneyGoals.find((g) => g.id === leftoverToId));
+    setState((s) => ({
+      ...s,
+      goals: s.goals.map((g) => (g.id === bought.id ? bought : receiver && g.id === receiver.id ? receiver : g)),
+      history: [...s.history, { id: crypto.randomUUID(), date: todayISO(), goalId: goal.id, goalName: goal.name, kind: "money", label: `Bought ${goal.name}`, amount: -paid }],
+    }));
+  };
   const goHome = () => navigate("Overview");
   const goGoals = () => navigate("Goals");
   const addGoal = (g: Goal) => {
@@ -138,14 +151,16 @@ export default function App() {
         <WealthDashboard
           bank={bank}
           priceCheck={<PriceCheck moneyGoals={moneyGoals} profile={state.profile} bank={state.bank} bankData={bank.data}
-            onUpdateGoal={updateGoal} onLog={(g, d) => logFor(g)(d)}
             onNewGoal={() => setScreen({ name: "new-money" })}
+            onCreateGoal={addGoal}
+            onOpenGoal={(id) => setScreen({ name: "goal", id })}
             onSettings={() => setScreen({ name: "settings" })} />}
           selectedTab={dashboardTab}
           onTabChange={(page) => { if (page === "Activity") setDashboardTab(page); else navigate(page); }}
           onCheck={() => navigate("Price check")}
           onSettings={() => setScreen({ name: "settings" })}
           goals={moneyGoals}
+          completedGoals={completedGoals}
           onUpdateGoal={updateGoal}
           onOpenGoal={(id) => setScreen({ name: "goal", id })}
           onNewGoal={() => setScreen({ name: "new-money" })}
@@ -173,7 +188,16 @@ export default function App() {
       const g = state.goals.find((x) => x.id === screen.id);
       const common = { onDelete: () => g && deleteGoal(g.id), onBack: goGoals };
       if (!g) body = null;
-      else body = <MoneyGoalView goal={g} onChange={updateGoal} onLog={logFor(g)} {...common} />;
+      else {
+        const plan = readPlan();
+        const knowsCash = !!bank.data?.accounts.length || plan.assets.some((a) => a.kind === "Checking" || a.kind === "Savings");
+        const free = knowsCash ? envelopes(moneyGoals, cashOnHand(bank.data?.accounts ?? [], plan.assets)).free : null;
+        body = <MoneyGoalView goal={g} onChange={updateGoal} onLog={logFor(g)} {...common} freeCash={free}
+          otherGoals={moneyGoals.filter((x) => x.id !== g.id)}
+          onBuy={(paid, to) => buyGoal(g, paid, to)}
+          onRestore={() => updateGoal(unmarkBought(g))}
+          linkedAccount={(() => { const a = bank.data?.accounts.find((x) => x.id === g.linkedAccountId); return a ? { name: a.name, balance: a.current } : undefined; })()} />;
+      }
       break;
     }
     case "settings":

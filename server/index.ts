@@ -10,6 +10,7 @@ import { categoryLabel, comparisonPeriods, goalFinishDate, hasUnmatchedSubject, 
 import { shortDate } from "../src/lib/safeToSpendExplain.ts";
 import { recurring } from "../src/lib/safeToSpend.ts";
 import { todayISO } from "../src/lib/dates.ts";
+import { buildPlan, planFacts, templateProposal } from "./savingsPlan.ts";
 
 const ScanResult = z.object({
   kind: z.enum(["single_item", "cart", "no_price_found"]),
@@ -403,14 +404,14 @@ const VerdictFactsSchema = z.object({
   item: z.string().trim().min(1).max(80),
   price: money2.positive(),
   verdict: z.enum(["safe", "tight", "not-yet"]),
-  cash: money2, savings: money2, cushion: money2,
+  cash: money2, savings: money2,
   reserved: money2.nonnegative().default(0), reservedName: z.string().max(100).nullable().default(null),
   lowPointBefore: money2, lowPointAfter: money2, lowPointDate: z.string().max(10),
   driver: z.object({ name: z.string().max(80), amount: money2, date: z.string().max(10) }).nullable(),
   nextIncome: z.object({ name: z.string().max(80), amount: money2, date: z.string().max(10) }).nullable(),
   safeDate: z.object({ date: z.string().max(10), after: z.string().max(80) }).nullable(),
   comfortableLimit: money2, safeLimit: money2, coveredBySavings: z.boolean(),
-  goalSavingsPerWeek: money2, goals: z.array(z.string().max(100)).max(20),
+  goalSavingsPerWeek: money2, mainReason: z.enum(["bills", "spending"]).default("bills"), goals: z.array(z.string().max(100)).max(20),
   confidence: z.enum(["full", "limited", "estimate"]),
   options: z.array(z.object({ id: z.enum(OPTION_IDS), label: z.string().max(120) })).min(1).max(6),
 });
@@ -421,9 +422,11 @@ const VerdictExplanation = z.object({
 });
 const VERDICT_PROMPT = `You are Polaris, the assistant in NorthStar, a money app for students. The app has already decided whether a purchase is safe ("safe"), tight ("tight"), or not safe yet ("not-yet") from a 30-day cash forecast. You do not change that verdict.
 
-What the facts mean: cash = checking plus savings today; reserved = money in the student's emergency fund (reservedName), which is kept aside and never counted as spendable, so mention that it stays untouched when it helps reassure them; lowPointBefore = the lowest balance in the next 30 days if they don't buy it, on lowPointDate; lowPointAfter = that same lowest balance if they buy it today; cushion = the minimum we try to keep; driver = the bill that pulls the balance down to that low point; nextIncome = the next expected deposit; safeDate = the first date buying it keeps them above the cushion; comfortableLimit / safeLimit = the most they could spend today and stay "safe" / stay above the cushion.
+What the facts mean: cash = checking plus savings today (savings are already counted in cash, so never say they have no savings); reserved = money the student has set aside in their savings goals (reservedName names the goal when there's only one; otherwise call it "your goals"), which is never counted as spendable, so mention that it stays untouched when it helps reassure them; lowPointBefore = the lowest balance in the next 30 days if they don't buy it, on lowPointDate; lowPointAfter = that same lowest balance if they buy it today; driver = the bill that pulls the balance down to that low point; nextIncome = the next expected deposit; safeDate = the first date buying it keeps their balance above $0; comfortableLimit / safeLimit = the most they could spend today and stay "safe" / stay above $0.
 
-Write one or two short, plain sentences that explain the verdict to the student, naming the main reason: usually the bill that makes money tight (driver) and, if the verdict is "not-yet", when it becomes safe (safeDate) or the next paycheck. Keep it under 40 words. Speak directly ("you"). Never mention field names (like "driver" or "cushion field"); if driver is null, simply don't mention a bill. Use only the numbers and dates in the facts; round dollars to whole numbers; never compute new amounts. Do not lecture or moralize, and do not give investment or credit advice.
+Write one or two short, plain sentences that explain the verdict to the student, naming the main reason. mainReason says what pulls the balance down most: "bills" means the bill that makes money tight (driver) and, if the verdict is "not-yet", when it becomes safe (safeDate) or the next paycheck. Keep it under 40 words. Speak directly ("you"). Never mention field names (like "driver" or "lowPointAfter"); if driver is null, simply don't mention a bill. Use only the numbers and dates in the facts; round dollars to whole numbers; never compute new amounts. Do not lecture or moralize, and do not give investment or credit advice.
+
+Only mention a cheaper version or the comfortableLimit amount if "cheaper-option" is one of the options; otherwise don't suggest a cheaper version at all.
 
 Then pick the single best next step from the provided options, considering the student's goals, and give a short category for the item.`;
 
@@ -460,6 +463,81 @@ app.post("/api/safe-to-spend/explain", async (req, res) => {
     if (err instanceof Anthropic.APIError) console.error("Safe-to-Spend explain error", err.status, err.message);
     else console.error("Safe-to-Spend explain error", err instanceof Error ? err.message : err);
     res.json(fallback);
+  }
+});
+
+// ---------- Savings plan: Polaris turns real spending into a plan for a purchase ----------
+const PlanRequest = z.object({
+  item: z.string().trim().min(1).max(80),
+  price: z.number().finite().positive().max(10_000_000),
+  hourlyWage: z.number().finite().positive().max(1_000).nullable().default(null),
+  goals: z.array(z.object({ target: z.number().finite().nonnegative(), saved: z.number().finite(), weekly: z.number().finite().nonnegative() })).max(30).default([]),
+  budget: z.object({ monthlyIncome: z.number().finite().nonnegative(), monthlySpending: z.number().finite().nonnegative() }).optional(),
+});
+const PlanProposal = z.object({
+  summary: z.string().describe("One or two plain sentences framing the plan. No dollar amounts or dates."),
+  cuts: z.array(z.object({
+    leverId: z.string().describe("The id of one lever from the facts."),
+    action: z.string().describe("A short, specific action, e.g. 'Make coffee at home on weekdays'. No dollar amounts."),
+    monthlySavings: z.number().describe("Realistic dollars per month this saves; a part of that lever's monthly amount."),
+  })).describe("2 to 4 cuts, each from a different lever."),
+  earn: z.array(z.object({
+    action: z.string().describe("A realistic way for a college student to earn more. No dollar amounts."),
+    monthlyAmount: z.number().describe("Conservative extra dollars per month."),
+  })).describe("1 or 2 ideas."),
+});
+const PLAN_PROMPT = `You are Polaris, the savings coach in NorthStar, a money app for college students. A student wants something they can't afford yet. Build a realistic plan to save for it from their actual spending.
+
+The facts are monthly averages the app measured from their transactions: monthlyIncome (take-home pay), monthlyBills (repeating bills), monthlyEveryday (other spending), monthlyGoalSavings (already promised to other goals), and monthlyLeftover (what's left after all of that). levers are the places money could come from: spending categories, merchants they visit often, and subscriptions, each with its monthly amount.
+
+Choose 2 to 4 cuts from the levers, using their ids, and favor the ones that matter most. Each cut's monthlySavings must be a realistic part of that lever's monthly amount: usually 20 to 50 percent for food, shopping, or rides, and up to 100 percent only for a subscription they could cancel or downgrade. Don't pick a merchant and its whole category together. Make each action specific to how they actually spend (for a coffee shop visited often: "Make coffee at home on weekdays").
+
+Suggest 1 or 2 realistic ways for a student to earn more: an extra shift (based on hourlyWage when given), selling things they no longer use, tutoring, or a campus job. Keep the monthly amounts conservative.
+
+summary: one or two plain, encouraging sentences specific to the item. When there's a realistic way to pay less for the same thing, mention it: student or education pricing and refurbished models for computers and tablets, a used car instead of a new one. Don't suggest a version so cheap it wouldn't do the job. Never shame or lecture.
+
+Never write dollar amounts or dates in the summary or actions: the app shows the checked numbers. No investment or credit advice.`;
+
+app.post("/api/savings-plan", async (req, res) => {
+  const parsed = PlanRequest.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Send the item, its price, and your goals." });
+    return;
+  }
+  const { item, price, hourlyWage, goals, budget } = parsed.data;
+  try {
+    const dashboard = plaidConfigured ? await loadDashboardData() : { accounts: [], transactions: [] };
+    if (!dashboard.transactions.length && !budget?.monthlyIncome) {
+      res.status(422).json({ error: "Connect a bank account or fill in your Budget so Polaris has something to plan from." });
+      return;
+    }
+    const today = todayISO();
+    const facts = planFacts({ item, price, transactions: dashboard.transactions, accounts: dashboard.accounts, goals, hourlyWage, budget, today });
+    const fallback = () => ({ ...buildPlan(facts, templateProposal(facts), today), source: "template" as const });
+    try {
+      const response = await getClient().beta.messages.parse({
+        model: "claude-sonnet-5-5",
+        max_tokens: 4000,
+        output_config: { effort: "low", format: betaZodOutputFormat(PlanProposal) },
+        system: PLAN_PROMPT,
+        messages: [{ role: "user", content: `Facts:\n${JSON.stringify({ ...facts, groupCaps: undefined })}` }],
+      });
+      const out = response.parsed_output;
+      if (response.stop_reason === "refusal" || !out) {
+        res.json(fallback());
+        return;
+      }
+      const plan = buildPlan(facts, out, today);
+      // A plan with no usable moves isn't a plan: fall back to the template's.
+      res.json(plan.cuts.length || plan.earn.length ? { ...plan, source: "ai" } : fallback());
+    } catch (err) {
+      if (err instanceof Anthropic.APIError) console.error("Savings plan error", err.status, err.message);
+      else console.error("Savings plan error", err instanceof Error ? err.message : err);
+      res.json(fallback());
+    }
+  } catch (err) {
+    console.error("Savings plan data error", err instanceof Error ? err.message : err);
+    res.status(502).json({ error: "Couldn't load your transactions. Try again in a moment." });
   }
 });
 

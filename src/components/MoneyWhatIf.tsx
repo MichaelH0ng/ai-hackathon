@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { formatDate } from "../lib/dates";
-import { formatMoney, goalPhrase, projectedDate, recommendation, whatIfSpend } from "../lib/finance";
+import { formatDelay, formatMoney, goalPhrase, projectedDate, recommendation, whatIfSpend } from "../lib/finance";
 import type { Decision, MoneyGoal } from "../lib/types";
 import { Button, Card, NumberField, Notice, TextField } from "./ui";
 
@@ -15,7 +15,7 @@ export interface WhatIfItem {
 
 const round = (n: number) => Math.round(n * 100) / 100;
 const money = (n: number) => formatMoney(n, n % 1 !== 0);
-const days = (d: number) => (!isFinite(d) ? "—" : d > 0.05 ? `+${d.toFixed(1)} days` : "no delay");
+const days = (d: number) => (!isFinite(d) ? "—" : d > 0.05 ? `+${formatDelay(d)}` : "no delay");
 
 /**
  * "What if I buy this?" — how many days a purchase pushes a savings goal back,
@@ -111,7 +111,7 @@ export function MoneyWhatIf({
               <Button
                 variant="secondary"
                 onClick={() =>
-                  onApply({ saved: fromSavings(a!) }, `Nice! ${altName} kept your ${goalName} ${Math.round(buy.delayDays - alt.delayDays)} days closer.`, {
+                  onApply({ saved: fromSavings(a!) }, `Nice! ${altName} kept your ${goalName} ${formatDelay(buy.delayDays - alt.delayDays)} closer.`, {
                     label: `${altName} instead of ${name}`,
                     amount: p - a!,
                     effectDays: buy.delayDays - alt.delayDays,
@@ -124,7 +124,7 @@ export function MoneyWhatIf({
             <Button
               variant="ghost"
               onClick={() =>
-                onApply({ saved: fromSavings(p) }, `Enjoy it! Your ${goalName} is now about ${Math.round(buy.delayDays)} days later.`, {
+                onApply({ saved: fromSavings(p) }, `Enjoy it! Your ${goalName} is now about ${formatDelay(buy.delayDays)} later.`, {
                   label: `Bought ${name}`,
                   amount: -p,
                   effectDays: -buy.delayDays,

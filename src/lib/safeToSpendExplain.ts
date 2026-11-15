@@ -1,18 +1,17 @@
 // The facts behind a Safe-to-Spend verdict, the plain-template explanation, and the
 // check that keeps an AI-written explanation honest. Shared by the browser (template,
 // no-AI fallback) and the server (AI prompt + validation).
-import type { Forecast, OptionId, PurchaseVerdict, Verdict } from "./safeToSpend.ts";
+import { lowPointBreakdown, type Forecast, type OptionId, type PurchaseVerdict, type Verdict } from "./safeToSpend.ts";
 
 export interface VerdictFacts {
   item: string;
   price: number;
   verdict: Verdict;
   cash: number;
-  /** Emergency-fund money kept aside (not spendable). */
+  /** Money set aside in savings goals (not spendable). */
   reserved: number;
   reservedName: string | null;
   savings: number;
-  cushion: number;
   lowPointBefore: number;
   lowPointAfter: number;
   lowPointDate: string; // "Dec 12"
@@ -23,6 +22,8 @@ export interface VerdictFacts {
   safeLimit: number;
   coveredBySavings: boolean;
   goalSavingsPerWeek: number;
+  /** What pulls the balance down most before the low point: bills or everyday spending. */
+  mainReason: "bills" | "spending";
   goals: string[];
   confidence: Forecast["confidence"];
   options: { id: OptionId; label: string }[];
@@ -44,7 +45,6 @@ export function verdictFacts(item: string, forecast: Forecast, result: PurchaseV
     reserved: forecast.reserved,
     reservedName: forecast.reservedName,
     savings: forecast.savings,
-    cushion: forecast.cushion,
     lowPointBefore: forecast.lowPoint,
     lowPointAfter: result.lowPointAfter,
     lowPointDate: shortDate(forecast.lowPointDate),
@@ -55,22 +55,29 @@ export function verdictFacts(item: string, forecast: Forecast, result: PurchaseV
     safeLimit: result.safeLimit,
     coveredBySavings: result.coveredBySavings,
     goalSavingsPerWeek: Math.round(forecast.goalSavingsPerDay * 7 * 100) / 100,
+    mainReason: mainReason(forecast),
     goals,
     confidence: forecast.confidence,
     options: result.options.map(({ id, label }) => ({ id, label: label.replace(/\d{4}-\d{2}-\d{2}/, (d) => shortDate(d)) })),
   };
 }
 
+function mainReason(forecast: Forecast): VerdictFacts["mainReason"] {
+  const b = lowPointBreakdown(forecast);
+  const bills = b.bills.reduce((s, x) => s + x.amount, 0);
+  return bills >= b.everyday ? "bills" : "spending";
+}
+
 /** The no-AI explanation: always available, built only from the facts. */
 export function templateSentence(f: VerdictFacts): string {
   const when = `around ${f.lowPointDate}`;
   const after = f.driver ? `, after ${f.driver.name}` : "";
-  const kept = f.reserved > 0 ? `, and your ${usd(f.reserved)} ${f.reservedName ?? "emergency fund"} stays untouched` : "";
+  const kept = f.reserved > 0 ? `, and the ${usd(f.reserved)} set aside for ${f.reservedName ?? "your goals"} stays untouched` : "";
   if (f.verdict === "safe") {
-    return `After your bills and goal savings, you'd still have about ${usd(f.lowPointAfter)} at your lowest point (${when})${kept}.`;
+    return `After your bills and everyday spending, you'd still have about ${usd(f.lowPointAfter)} at your lowest point (${when})${kept}.`;
   }
   if (f.verdict === "tight") {
-    return `You can cover it, but your balance would dip to about ${usd(f.lowPointAfter)} ${when}${after}, close to your ${usd(f.cushion)} cushion.`;
+    return `You can cover it, but your balance would dip to about ${usd(f.lowPointAfter)} ${when}${after}, with little left until your next paycheck.`;
   }
   const dip = f.lowPointAfter < 0 ? `leave you about ${usd(f.lowPointAfter)} short ${when}` : `leave only about ${usd(f.lowPointAfter)} ${when}`;
   const next = f.safeDate
@@ -83,7 +90,7 @@ export function templateSentence(f: VerdictFacts): string {
 
 /** Every dollar amount and date a sentence may mention. */
 function allowed(f: VerdictFacts) {
-  const amounts = [f.price, f.cash, f.reserved, f.cash - f.reserved, f.savings, f.cushion, f.lowPointBefore, f.lowPointAfter, f.comfortableLimit, f.safeLimit, f.goalSavingsPerWeek, f.driver?.amount, f.nextIncome?.amount, f.price - Math.max(0, f.safeLimit)]
+  const amounts = [f.price, f.cash, f.reserved, f.cash - f.reserved, f.savings, f.lowPointBefore, f.lowPointAfter, f.comfortableLimit, f.safeLimit, f.goalSavingsPerWeek, f.driver?.amount, f.nextIncome?.amount, f.price - Math.max(0, f.safeLimit)]
     .filter((n): n is number => typeof n === "number")
     .map(Math.abs);
   const dates = [f.lowPointDate, f.driver?.date, f.nextIncome?.date, f.safeDate?.date].filter(Boolean) as string[];

@@ -36,7 +36,7 @@ export function MoneyGoalForm({ onCreate, onBack }: { onCreate: (g: MoneyGoal) =
           </div>
           <DateField label="Target date" value={deadline} onChange={setDeadline} min={todayISO()} hint="Choose when you want to reach your goal. We’ll calculate your weekly savings." />
           {!deadline && <NumberField label="Or choose your own weekly savings" value={weekly} onChange={setWeekly} suffix="/wk" />}
-          <CheckboxField label="This is my emergency fund" hint="Safe-to-Spend keeps this money aside and never counts it as spending money." checked={emergency} onChange={setEmergencyChoice} />
+          <CheckboxField label="This is my emergency fund" hint="For emergencies only: NorthStar never suggests spending it on a purchase." checked={emergency} onChange={setEmergencyChoice} />
           {deadline && t > 0 && <div className="weekly-target" aria-live="polite">
             <span>{s >= t ? "Goal already funded" : "Save each week"}</span>
             <strong>{formatMoney(needed, true)}<small> / week</small></strong>

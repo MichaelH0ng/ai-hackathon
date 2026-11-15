@@ -9,7 +9,6 @@ import { detectTransferIds, isTransfer, type BankAccount, type BankTransaction }
 
 export const FORECAST_DAYS = 30;
 const SPENDING_LOOKBACK_DAYS = 60;
-const MIN_CUSHION = 50;
 
 export type Verdict = "safe" | "tight" | "not-yet";
 export type Confidence = "full" | "limited" | "estimate";
@@ -35,6 +34,18 @@ export interface ForecastDay {
   balance: number; // projected end-of-day balance, before any new purchase
 }
 
+/** How the lowest point is reached, step by step, so the number is never a mystery. */
+export interface LowPointBreakdown {
+  cash: number;
+  reserved: number;
+  income: number;
+  bills: { name: string; amount: number }[];
+  everyday: number;
+  days: number;
+  lowPoint: number;
+  lowPointDate: string;
+}
+
 export interface SafeToSpendInputs {
   /** Spendable cash today: checking (and any manual checking balances). */
   cash: number;
@@ -52,13 +63,14 @@ export interface SafeToSpendInputs {
 export interface Forecast {
   today: string;
   cash: number;
-  /** Emergency-fund money kept aside: subtracted from cash before the forecast runs. */
+  /** Money set aside in savings goals: subtracted from cash before the forecast runs. */
   reserved: number;
+  /** The goal's name when one goal holds it all; null means "your goals". */
   reservedName: string | null;
   savings: number;
   dailySpending: number;
+  /** The weekly amounts on goals still being saved for, per day. A target, not a bill: it isn't subtracted. */
   goalSavingsPerDay: number;
-  cushion: number;
   events: ForecastEvent[];
   days: ForecastDay[];
   lowPoint: number;
@@ -66,7 +78,7 @@ export interface Forecast {
   /** The biggest bill on or before the low point: usually the reason money gets tight. */
   driver: ForecastEvent | null;
   nextIncome: ForecastEvent | null;
-  /** How much could be spent today and still stay above the cushion for the whole window. */
+  /** How much could be spent today without the balance dropping below $0 in the window. */
   headroom: number;
   confidence: Confidence;
 }
@@ -83,10 +95,10 @@ export interface PurchaseVerdict {
   price: number;
   /** Lowest projected balance in the window if bought today. */
   lowPointAfter: number;
-  /** Highest price that stays green / that stays above the cushion at all. */
+  /** Highest price that stays green / that keeps the balance above $0 at all. */
   safeLimit: number;
   comfortableLimit: number;
-  /** For "not yet": first date buying keeps the rest of the window above the cushion. */
+  /** For "not yet": first date buying keeps the rest of the window above $0. */
   safeDate: { date: string; after: string } | null;
   coveredBySavings: boolean;
   options: PurchaseOption[];
@@ -102,6 +114,16 @@ export function emergencyReserve(goals: SafeToSpendInputs["goals"]): { amount: n
   const funds = goals.filter(isEmergencyFund);
   const amount = funds.reduce((sum, g) => sum + Math.max(0, g.target > 0 ? Math.min(g.saved, g.target) : g.saved), 0);
   return { amount: Math.round(amount * 100) / 100, name: funds[0]?.name ?? null };
+}
+
+/**
+ * Money set aside in savings goals. Every goal's savings are protected (not just the
+ * emergency fund): goals are envelopes inside your cash, so only the rest is spending money.
+ */
+export function goalReserve(goals: SafeToSpendInputs["goals"]): { amount: number; name: string | null } {
+  const funded = goals.filter((g) => g.saved > 0);
+  const amount = funded.reduce((sum, g) => sum + g.saved, 0);
+  return { amount: Math.round(amount * 100) / 100, name: funded.length === 1 ? funded[0].name : null };
 }
 
 const CADENCE_DAYS: Record<string, number> = { Weekly: 7, "Every 2 weeks": 14, Monthly: 30, Quarterly: 91 };
@@ -138,6 +160,14 @@ export function recurring(transactions: BankTransaction[], direction: "out" | "i
     found.push({ name, amount: round2(avg), cadence, everyDays, nextDate: next });
   }
   return found.sort((a, b) => a.nextDate.localeCompare(b.nextDate));
+}
+
+/** Take-home pay per month from repeating deposits into checking or savings (0 if none found). */
+export function monthlyIncome(transactions: BankTransaction[], cashAccountIds: string[], today = todayISO()): number {
+  const transferIds = detectTransferIds(transactions);
+  const cash = new Set(cashAccountIds);
+  const deposits = transactions.filter((t) => cash.has(t.accountId) && !isTransfer(t, transferIds));
+  return round2(recurring(deposits, "in", today).reduce((sum, r) => sum + (r.amount * 30) / r.everyDays, 0));
 }
 
 /** Average everyday spending per day: money out that isn't a transfer or a recurring bill. */
@@ -183,18 +213,19 @@ export function buildForecast(inputs: SafeToSpendInputs): Forecast {
   const goalSavingsPerDay = round2(inputs.goals.filter((g) => g.saved < g.target).reduce((s, g) => s + Math.max(0, g.weekly), 0) / 7);
 
   const events = [...occurrences(income, "income", today), ...occurrences(bills, "bill", today)].sort((a, b) => a.date.localeCompare(b.date));
-  const reserve = emergencyReserve(inputs.goals);
+  const reserve = goalReserve(inputs.goals);
   const days: ForecastDay[] = [];
   let balance = inputs.cash - reserve.amount;
+  // Only money already in goals is kept out. Weekly goal amounts are targets, not bills: that money
+  // stays in your account, and what a purchase does to a goal's timeline is shown separately.
   for (let i = 0; i < FORECAST_DAYS; i++) {
     const date = addDays(today, i);
     balance += events.filter((e) => e.date === date).reduce((s, e) => s + e.amount, 0);
-    balance -= everyday + goalSavingsPerDay;
+    balance -= everyday;
     days.push({ date, balance: round2(balance) });
   }
   const low = days.reduce((min, d) => (d.balance < min.balance ? d : min), days[0]);
   const driver = events.filter((e) => e.kind === "bill" && e.date <= low.date).sort((a, b) => a.amount - b.amount)[0] ?? null;
-  const cushion = round2(Math.max(MIN_CUSHION, everyday * 7));
 
   const spanDays = hasHistory ? daysApart(inputs.transactions.reduce((m, t) => (t.date < m ? t.date : m), today), today) : 0;
   const confidence: Confidence = !hasHistory ? "estimate" : spanDays >= 45 && income.length > 0 ? "full" : "limited";
@@ -207,15 +238,30 @@ export function buildForecast(inputs: SafeToSpendInputs): Forecast {
     savings: round2(inputs.savings),
     dailySpending: everyday,
     goalSavingsPerDay,
-    cushion,
     events,
     days,
     lowPoint: low.balance,
     lowPointDate: low.date,
     driver,
     nextIncome: events.find((e) => e.kind === "income") ?? null,
-    headroom: round2(low.balance - cushion),
+    headroom: round2(low.balance),
     confidence,
+  };
+}
+
+/** The steps from cash today to the lowest point: what's set aside, what comes in, and what goes out. */
+export function lowPointBreakdown(f: Forecast): LowPointBreakdown {
+  const upTo = f.days.filter((d) => d.date <= f.lowPointDate);
+  const before = f.events.filter((e) => e.date <= f.lowPointDate);
+  return {
+    cash: f.cash,
+    reserved: f.reserved,
+    income: round2(before.filter((e) => e.kind === "income").reduce((s, e) => s + e.amount, 0)),
+    bills: before.filter((e) => e.kind === "bill").map((e) => ({ name: e.name, amount: -e.amount })),
+    everyday: round2(f.dailySpending * upTo.length),
+    days: upTo.length,
+    lowPoint: f.lowPoint,
+    lowPointDate: f.lowPointDate,
   };
 }
 
@@ -234,8 +280,8 @@ export function evaluatePurchase(forecast: Forecast, price: number): PurchaseVer
       if (from < 0) continue;
       const before = forecast.days.slice(0, from);
       const after = forecast.days.slice(from);
-      const okBefore = before.every((d) => d.balance >= forecast.cushion);
-      const okAfter = after.every((d) => d.balance - price >= forecast.cushion);
+      const okBefore = before.every((d) => d.balance >= 0);
+      const okAfter = after.every((d) => d.balance - price >= 0);
       if (okBefore && okAfter) {
         safeDate = { date: income.date, after: income.name };
         break;
@@ -248,7 +294,8 @@ export function evaluatePurchase(forecast: Forecast, price: number): PurchaseVer
   if (verdict === "safe") options.push({ id: "buy-now", label: "Buy it" });
   if (verdict === "tight") options.push({ id: "buy-now", label: "Buy it, but keep an eye on spending until payday" });
   if (safeDate) options.push({ id: "wait-until", label: `Wait until ${safeDate.date}` });
-  if (verdict !== "safe" && comfortableLimit > 0) options.push({ id: "cheaper-option", label: `Find a version under $${comfortableLimit}` });
+  // Only suggest a cheaper version when one is realistic: at least half the price (a $2,000 laptop has no $242 version).
+  if (verdict !== "safe" && comfortableLimit > 0 && comfortableLimit >= price * 0.5) options.push({ id: "cheaper-option", label: `Find a version under $${comfortableLimit}` });
   if (coveredBySavings) options.push({ id: "use-savings", label: "Cover the gap from savings" });
   if (verdict === "not-yet" && !safeDate && !coveredBySavings) options.push({ id: "save-for-it", label: "Start a savings goal for it" });
   if (verdict !== "safe") options.push({ id: "skip", label: "Skip it" });

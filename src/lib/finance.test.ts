@@ -3,6 +3,8 @@ import {
   formatWeeks,
   goalPhrase,
   hoursOfWork,
+  priceInContext,
+  formatDelay,
   projectedDate,
   recommendation,
   weeklyNeededForDeadline,
@@ -84,6 +86,38 @@ describe("hours of work", () => {
 describe("goalPhrase", () => {
   it("drops leading articles so sentences read naturally", () => {
     expect(goalPhrase("A new hoodie")).toBe("new hoodie");
-    expect(goalPhrase("Hoodie")).toBe("hoodie");
+    expect(goalPhrase("Emergency Fund")).toBe("Emergency Fund");
+    expect(goalPhrase("New AirPods")).toBe("New AirPods");
   });
 });
+
+describe("priceInContext", () => {
+  it("uses hours of work for everyday buys", () => {
+    expect(priceInContext(75, { hourlyWage: 18, monthlyIncome: 1788 })).toEqual({ before: "That's ", strong: "4h 10m of work", after: " at $18/hr." });
+  });
+  it("switches to take-home pay for big purchases", () => {
+    expect(priceInContext(20000, { hourlyWage: 18, monthlyIncome: 893.75 })?.strong).toBe("22 months of your take-home pay");
+    expect(priceInContext(1200, { hourlyWage: 18, monthlyIncome: 893.75 })?.strong).toBe("1 month of your take-home pay");
+    expect(priceInContext(800, { hourlyWage: 10, monthlyIncome: 1000 })?.strong).toBe("3 weeks of your take-home pay");
+  });
+  it("falls back to full-time work, then to nothing", () => {
+    expect(priceInContext(20000, { hourlyWage: 18 })?.strong).toBe("28 weeks of full-time work");
+    expect(priceInContext(50000, { hourlyWage: 18 })?.strong).toBe("1.3 years of full-time work");
+    expect(priceInContext(20000, {})).toBeNull();
+  });
+});
+
+describe("formatDelay", () => {
+  it("picks days, weeks, months, or years", () => {
+    expect(formatDelay(0.5)).toBe("0.5 days");
+    expect(formatDelay(1)).toBe("1 day");
+    expect(formatDelay(9.6)).toBe("10 days");
+    expect(formatDelay(35)).toBe("5 weeks");
+    expect(formatDelay(639.9)).toBe("21 months");
+    expect(formatDelay(1813.5)).toBe("5 years");
+    expect(formatDelay(1100)).toBe("3 years");
+    expect(formatDelay(130)).toBe("4 months, 1 week");
+    expect(formatDelay(2812)).toBe("7 years, 8 months");
+  });
+});
+

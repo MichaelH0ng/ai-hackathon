@@ -7,7 +7,9 @@ export interface MoneyGoal {
   weekly: number; // what the user can save each week
   deadline?: string; // YYYY-MM-DD, optional "I want it by"
   linkedAccountId?: string; // Plaid account whose balance counts as "saved"
-  emergency?: boolean; // an emergency fund: Safe-to-Spend keeps its savings out of spending money
+  emergency?: boolean; // an emergency fund: for emergencies only, never offered as a way to pay for a purchase
+  boughtAt?: string; // YYYY-MM-DD the goal was marked as bought: it no longer holds any of your cash
+  boughtFor?: number; // what the purchase actually cost
 }
 
 export type Goal = MoneyGoal;

@@ -221,7 +221,7 @@ export function MoneyDashboard({
                     </div>
                     <div className="mt-1 h-2 rounded-full bg-stone-100"><div className="h-full rounded-full bg-emerald-500" style={{ width: `${pct}%` }} /></div>
                     <label className="mt-2 block text-xs font-semibold text-stone-600">
-                      Savings come from
+                      Follow an account's whole balance
                       <select
                         value={g.linkedAccountId ?? ""}
                         onChange={(e) => {
@@ -230,7 +230,7 @@ export function MoneyDashboard({
                         }}
                         className="mt-1 block min-h-10 w-full rounded-xl bg-stone-50 px-2 text-sm font-medium text-stone-800 ring-1 ring-stone-300"
                       >
-                        <option value="">Tracked by hand</option>
+                        <option value="">No: I'll set the amount</option>
                         {data.accounts.filter((a) => a.type === "depository").map((a) => (
                           <option key={a.id} value={a.id}>{a.name}{a.mask ? ` ••${a.mask}` : ""} ({formatExact(a.current)})</option>
                         ))}

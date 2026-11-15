@@ -27,7 +27,14 @@ export function daysBetween(a: string, b: string): number {
 }
 
 export function formatDate(iso: string): string {
-  return parseISO(iso).toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  // Add the year only when it isn't this year ("Jul 3, 2038").
+  const d = parseISO(iso);
+  return d.toLocaleDateString("en-US", { month: "short", day: "numeric", year: d.getFullYear() === new Date().getFullYear() ? undefined : "numeric" });
+}
+
+/** "2027-01-01" → "January 1, 2027": a target date written out like a calendar. */
+export function formatLongDate(iso: string): string {
+  return parseISO(iso).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 }
 
 export function formatWeekday(iso: string): string {

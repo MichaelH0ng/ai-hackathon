@@ -1,13 +1,16 @@
-import { Clock, Lightbulb, PiggyBank, RotateCcw, Tag, Wallet } from "lucide-react";
+import { ArrowRight, Clock, Lightbulb, PiggyBank, RotateCcw, Tag, Wallet } from "lucide-react";
+import { goalForItem } from "../lib/envelopes";
+import { formatDate } from "../lib/dates";
 import { useMemo, useState } from "react";
-import { formatMoney, hoursOfWork, projectedDate, whatIfSpend } from "../lib/finance";
+import { formatDelay, formatMoney, priceInContext, projectedDate, whatIfSpend } from "../lib/finance";
 import type { BankSnapshot, MoneyGoal, Profile } from "../lib/types";
 import type { BankData } from "../lib/money";
-import { buildForecast, cashFromAccounts } from "../lib/safeToSpend";
+import { buildForecast, cashFromAccounts, evaluatePurchase, isEmergencyFund, monthlyIncome } from "../lib/safeToSpend";
 import { readPlan } from "./WealthDashboard";
 import { SafeToSpendCard } from "./SafeToSpend";
-import { type LogDecision, MoneyWhatIf, type WhatIfItem } from "./MoneyWhatIf";
-import { Button, Card, NumberField, Notice, TextField } from "./ui";
+import { SavingsPlanAgent } from "./SavingsPlanAgent";
+import type { WhatIfItem } from "./MoneyWhatIf";
+import { Button, Card, NumberField, TextField } from "./ui";
 
 /** Compare a typed purchase price with savings goals. */
 export function PriceCheck({
@@ -15,9 +18,9 @@ export function PriceCheck({
   profile,
   bank,
   bankData,
-  onUpdateGoal,
-  onLog,
   onNewGoal,
+  onCreateGoal,
+  onOpenGoal,
   onSettings,
 }: {
   moneyGoals: MoneyGoal[];
@@ -25,24 +28,29 @@ export function PriceCheck({
   bank?: BankSnapshot;
   /** Connected-bank accounts and transactions, for the Safe-to-Spend forecast. */
   bankData?: BankData | null;
-  onUpdateGoal: (g: MoneyGoal) => void;
-  onLog: (goal: MoneyGoal, d: LogDecision) => void;
   onNewGoal: () => void;
+  /** Saves a goal Polaris planned (and opens it). */
+  onCreateGoal: (g: MoneyGoal) => void;
+  onOpenGoal: (id: string) => void;
   onSettings: () => void;
 }) {
   const [name, setName] = useState("");
   const [price, setPrice] = useState<number | "">("");
   const [item, setItem] = useState<WhatIfItem | null>(null);
   const [goalId, setGoalId] = useState(moneyGoals[0]?.id ?? "");
-  const [message, setMessage] = useState<string | null>(null);
-  const [version, setVersion] = useState(0); // resets the What-If when the item changes
 
-  const goal = moneyGoals.find((g) => g.id === goalId) ?? moneyGoals[0];
+  // The emergency fund never pays for a purchase, so it can't be chosen as the goal that funds one.
+  const fundable = moneyGoals.filter((g) => !isEmergencyFund(g));
+  const goal = fundable.find((g) => g.id === goalId) ?? fundable[0];
+  // A purchase with its own goal ("AirPods") is paid from that goal, so its savings count as available.
+  const fund = item ? goalForItem(item.label, moneyGoals) : null;
+  // Fully saved for: the goal pays for it, so there's no cash verdict or goal trade-off to show.
+  const covered = !!fund && !!item && fund.saved >= item.price;
 
   // Safe-to-Spend: a 30-day forecast from connected accounts plus any manual ones.
   // Keyed on the goals' numbers so a re-render with equal goals doesn't rebuild it.
   const [plan] = useState(readPlan);
-  const goalsSig = JSON.stringify(moneyGoals.map(({ name, target, saved, weekly, emergency }) => ({ name, target, saved, weekly, emergency })));
+  const goalsSig = JSON.stringify(moneyGoals.filter((g) => g.id !== fund?.id).map(({ name, target, saved, weekly, emergency }) => ({ name, target, saved, weekly, emergency })));
   const forecast = useMemo(() => {
     const accounts = bankData?.accounts ?? [];
     const fromBank = cashFromAccounts(accounts);
@@ -59,12 +67,15 @@ export function PriceCheck({
       fallbackMonthlySpending: plan.essentials + plan.lifestyle || undefined,
     });
   }, [bankData, plan, goalsSig]);
+  // Take-home pay per month, to put big prices in perspective: paychecks first, then the Budget.
+  const income = useMemo(() => {
+    const fromBank = bankData ? monthlyIncome(bankData.transactions, cashFromAccounts(bankData.accounts).cashAccountIds) : 0;
+    return fromBank || plan.income || 0;
+  }, [bankData, plan]);
   const goalNames = useMemo(() => (JSON.parse(goalsSig) as { name: string }[]).map((g) => g.name), [goalsSig]);
 
   function show(next: WhatIfItem) {
     setItem(next);
-    setMessage(null);
-    setVersion((v) => v + 1);
     setTimeout(() => document.getElementById("price-result")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   }
 
@@ -72,7 +83,6 @@ export function PriceCheck({
     setItem(null);
     setName("");
     setPrice("");
-    setMessage(null);
   }
 
   const money = (n: number) => formatMoney(n, n % 1 !== 0);
@@ -116,11 +126,10 @@ export function PriceCheck({
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
               <div className="flex items-center gap-3 rounded-2xl bg-brand-50 p-3">
                 <Clock className="h-5 w-5 shrink-0 text-brand-600" aria-hidden="true" />
-                {profile.hourlyWage ? (
-                  <p className="text-sm text-stone-700">
-                    That's <strong>{formatHours(hoursOfWork(item.price, profile.hourlyWage))}</strong> of work at {money(profile.hourlyWage)}/hr.
-                  </p>
-                ) : (
+                {(() => {
+                  const context = priceInContext(item.price, { hourlyWage: profile.hourlyWage, monthlyIncome: income });
+                  return context && <p className="text-sm text-stone-700">{context.before}<strong>{context.strong}</strong>{context.after}</p>;
+                })() ?? (
                   <p className="text-sm text-stone-700">
                     <button onClick={onSettings} className="font-bold text-brand-700 underline">Add your pay</button> to see how many hours of work this is.
                   </p>
@@ -146,18 +155,35 @@ export function PriceCheck({
             )}
           </Card>
 
-          {forecast && <SafeToSpendCard item={item.label} price={item.price} forecast={forecast} goals={goalNames} />}
-
-          {message && (
-            <Notice tone="good">
-              <div className="flex items-start justify-between gap-2">
-                <span>{message}</span>
-                <button onClick={() => setMessage(null)} aria-label="Dismiss">✕</button>
-              </div>
-            </Notice>
+          {fund && (
+            <div className={`purchase-fund${covered ? " is-covered" : ""}`}>
+              <PiggyBank className="h-5 w-5 shrink-0" aria-hidden="true" />
+              <p className="min-w-0 flex-1 text-sm">
+                {fund.saved >= item.price
+                  ? <><strong className="block text-base">Covered by your {fund.name} goal</strong>You've saved {money(fund.saved)} for this, so buying it won't touch your spending money or your other goals.</>
+                  : <>Your <strong>{fund.name}</strong> goal has {money(Math.max(0, fund.saved))} saved toward this, and that money counts as available below.</>}
+              </p>
+              {fund.saved >= item.price && <button className="wealth-secondary purchase-fund-button" onClick={() => onOpenGoal(fund.id)}>Mark as bought <ArrowRight size={15} aria-hidden="true" /></button>}
+            </div>
           )}
 
-          {moneyGoals.length === 0 ? (
+          {forecast && !covered && (
+            <SafeToSpendCard item={item.label} price={item.price} forecast={forecast} goals={goalNames}>
+              {evaluatePurchase(forecast, item.price).verdict === "not-yet" && (
+                <SavingsPlanAgent
+                  key={`${item.label}|${item.price}`}
+                  item={item.label}
+                  price={item.price}
+                  hourlyWage={profile.hourlyWage}
+                  goals={moneyGoals}
+                  budget={plan.income ? { monthlyIncome: plan.income, monthlySpending: plan.essentials + plan.lifestyle } : undefined}
+                  onCreateGoal={onCreateGoal}
+                />
+              )}
+            </SafeToSpendCard>
+          )}
+
+          {covered ? null : moneyGoals.length === 0 ? (
             <Card className="text-center">
               <PiggyBank className="mx-auto h-10 w-10 text-emerald-600" aria-hidden="true" />
               <h3 className="mt-2 text-xl font-bold text-ink">See how this moves a goal</h3>
@@ -171,6 +197,12 @@ export function PriceCheck({
                 <p className="text-sm text-stone-600">Choose which goal would fund the purchase. Each row is a separate scenario, not a combined deduction from every goal.</p>
                 <ul className="mt-3 space-y-2" role="radiogroup" aria-label="Choose a goal">
                   {moneyGoals.map((g) => {
+                    if (isEmergencyFund(g)) return (
+                      <li key={g.id} className="flex min-h-14 items-center justify-between gap-3 rounded-2xl px-4 ring-1 ring-stone-200">
+                        <span className="font-semibold text-ink">{g.name}</span>
+                        <span className="text-sm font-semibold text-stone-600">Not affected: never used for purchases</span>
+                      </li>
+                    );
                     const w = whatIfSpend(g.target, g.saved, g.weekly, item.price);
                     const on = g.id === goal?.id;
                     return (
@@ -178,15 +210,19 @@ export function PriceCheck({
                         <button
                           role="radio"
                           aria-checked={on}
-                          onClick={() => {
-                            setGoalId(g.id);
-                            setVersion((v) => v + 1);
-                          }}
+                          onClick={() => setGoalId(g.id)}
                           className={`flex min-h-14 w-full items-center justify-between gap-3 rounded-2xl px-4 text-left ring-1 transition-colors duration-200 ${on ? "bg-brand-50 ring-2 ring-brand-500" : "bg-white ring-stone-200 hover:bg-stone-50"}`}
                         >
-                          <span className="font-semibold text-ink">{g.name}</span>
-                          <span className={`font-display text-lg font-bold ${w.delayDays > 0 ? "text-amber-700" : "text-emerald-700"}`}>
-                            {isFinite(w.delayDays) ? (w.delayDays > 0 ? `+${w.delayDays.toFixed(1)} days` : "no delay") : "—"}
+                          <span className="min-w-0">
+                            <span className="block font-semibold text-ink">{g.name}</span>
+                            {(() => {
+                              const from = projectedDate(w.originalWeeks);
+                              const to = projectedDate(w.newWeeks);
+                              return from && to && w.delayDays > 0 && <span className="block text-sm text-stone-600">{formatDate(from)} → {formatDate(to)}{g.deadline && to > g.deadline && from <= g.deadline && <strong className="text-amber-700"> · past your {formatDate(g.deadline)} target</strong>}</span>;
+                            })()}
+                          </span>
+                          <span className={`shrink-0 text-right font-display text-lg font-bold ${!isFinite(w.delayDays) ? "text-stone-600" : w.delayDays > 0 ? "text-amber-700" : "text-emerald-700"}`}>
+                            {isFinite(w.delayDays) ? (w.delayDays > 0 ? `+${formatDelay(w.delayDays)}` : "no delay") : "Set a weekly amount"}
                           </span>
                         </button>
                       </li>
@@ -200,31 +236,48 @@ export function PriceCheck({
                   <h3>Trade-off for {goal.name}</h3>
                   <p>{(() => {
                     const impact = whatIfSpend(goal.target, goal.saved, goal.weekly, item.price);
-                    const finish = projectedDate(impact.newWeeks);
-                    const baseline = projectedDate(impact.originalWeeks);
+                    const finishISO = projectedDate(impact.newWeeks);
+                    const baselineISO = projectedDate(impact.originalWeeks);
+                    const finish = finishISO && formatDate(finishISO);
                     if (goal.weekly <= 0) return "Set a weekly savings amount before deciding: there isn’t enough information to estimate how long recovery would take.";
                     if (!Number.isFinite(impact.delayDays)) return "A timeline cannot be calculated with the current goal settings.";
-                    if (goal.deadline && finish && finish > goal.deadline) return `${baseline && baseline > goal.deadline ? "Your plan already misses its target date. This purchase would delay it further" : "This purchase would push your goal past its target date"} to ${finish}. Consider skipping it or choosing a cheaper option if that deadline matters most.`;
+                    if (goal.deadline && finishISO && finishISO > goal.deadline) return `${baselineISO && baselineISO > goal.deadline ? "Your plan already misses its target date. This purchase would delay it further" : "This purchase would push your goal past its target date"} to ${finish}. Consider skipping it or choosing a cheaper option if that deadline matters most.`;
                     if (impact.delayDays <= 0) return "This scenario adds no delay to this goal. That alone doesn’t establish whether the purchase fits your overall budget.";
-                    return `The trade-off is ${impact.delayDays.toFixed(1)} extra days of saving${finish ? `, reaching this goal around ${finish}` : ""}${goal.deadline ? ", still within your target date" : ""}. It may be worth it if the purchase matters more to you than that wait; skipping it protects your current timeline.`;
+                    return `The trade-off is ${formatDelay(impact.delayDays)} of extra saving${finish ? `, reaching this goal around ${finish}` : ""}${goal.deadline ? ", still within your target date" : ""}. It may be worth it if the purchase matters more to you than that wait; skipping it protects your current timeline.`;
                   })()}</p>
+                  {(() => {
+                    const impact = whatIfSpend(goal.target, goal.saved, goal.weekly, item.price);
+                    const from = projectedDate(impact.originalWeeks);
+                    const to = projectedDate(impact.newWeeks);
+                    if (!from || !to || impact.delayDays <= 0) return null;
+                    const alt = item.alternative && item.alternative.price < item.price ? item.alternative : null;
+                    const altImpact = alt ? whatIfSpend(goal.target, goal.saved, goal.weekly, alt.price) : null;
+                    const altTo = altImpact ? projectedDate(altImpact.newWeeks) : null;
+                    return (
+                      <div className="goal-shift" aria-label={`${goal.name}: ${formatDate(from)} without it, ${formatDate(to)} if you buy it`}>
+                        <div className="goal-shift-tile">
+                          <small>Without it</small>
+                          <strong>{formatDate(from)}</strong>
+                          {goal.deadline && <span>Target date {formatDate(goal.deadline)}</span>}
+                        </div>
+                        <ArrowRight className="goal-shift-arrow" size={20} aria-hidden="true" />
+                        <div className="goal-shift-tile is-later">
+                          <small>If you buy {item.label}</small>
+                          <strong>{formatDate(to)}</strong>
+                          <span>+{formatDelay(impact.delayDays)}</span>
+                        </div>
+                        {alt && altTo && altImpact && (
+                          <div className="goal-shift-tile is-alt">
+                            <small>{alt.description} ({money(alt.price)})</small>
+                            <strong>{formatDate(altTo)}</strong>
+                            <span>{altImpact.delayDays > 0.05 ? `+${formatDelay(altImpact.delayDays)}` : "No delay"}</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                   <p className="wealth-note">Assumes the full price comes from this goal’s savings and weekly contributions stay unchanged. This is a planning comparison, not a guarantee of affordability.</p>
                 </Card>
-              )}
-              {goal && (
-                <MoneyWhatIf
-                  key={`${goal.id}-${version}`}
-                  goal={goal}
-                  initial={item}
-                  hideInputs
-                  onApply={(changes, msg, decision) => {
-                    onUpdateGoal({ ...goal, ...changes });
-                    if (decision) onLog(goal, decision);
-                    setMessage(msg);
-                    setVersion((v) => v + 1);
-                    document.getElementById("price-result")?.scrollIntoView({ behavior: "smooth" });
-                  }}
-                />
               )}
             </>
           )}
@@ -234,9 +287,3 @@ export function PriceCheck({
   );
 }
 
-function formatHours(h: number): string {
-  if (h < 1) return `${Math.round(h * 60)} minutes`;
-  const whole = Math.floor(h);
-  const mins = Math.round((h - whole) * 60);
-  return mins ? `${whole}h ${mins}m` : `${whole} hour${whole === 1 ? "" : "s"}`;
-}

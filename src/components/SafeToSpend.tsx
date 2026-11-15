@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { type ReactNode, useEffect, useMemo, useState } from "react";
 import { CircleCheck, CircleAlert, Clock, Sparkles } from "lucide-react";
 import { formatMoney } from "../lib/finance";
-import { evaluatePurchase, type Forecast, type OptionId, type Verdict } from "../lib/safeToSpend";
-import { shortDate, templateSentence, verdictFacts } from "../lib/safeToSpendExplain";
+import { evaluatePurchase, lowPointBreakdown, type Forecast, type OptionId, type Verdict } from "../lib/safeToSpend";
+import { friendlyName, shortDate, templateSentence, verdictFacts } from "../lib/safeToSpendExplain";
 
 const LOOK: Record<Verdict, { badge: string; Icon: typeof CircleCheck }> = {
   safe: { badge: "Safe to buy", Icon: CircleCheck },
@@ -15,7 +15,7 @@ const LOOK: Record<Verdict, { badge: string; Icon: typeof CircleCheck }> = {
  * computed instantly in the browser; Polaris then replaces the template sentence with
  * a plain-English explanation (or the template stays if the AI is unavailable).
  */
-export function SafeToSpendCard({ item, price, forecast, goals }: { item: string; price: number; forecast: Forecast; goals: string[] }) {
+export function SafeToSpendCard({ item, price, forecast, goals, children }: { item: string; price: number; forecast: Forecast; goals: string[]; children?: ReactNode }) {
   const result = useMemo(() => evaluatePurchase(forecast, price), [forecast, price]);
   // Depend on the goal names' text, not the array, so a re-render doesn't re-ask the AI.
   const goalsKey = goals.join("\n");
@@ -63,19 +63,51 @@ export function SafeToSpendCard({ item, price, forecast, goals }: { item: string
       </p>
 
       <dl className="safe-verdict-numbers mt-4">
-        <div><dt>Cash today</dt><dd>{money(forecast.cash)}</dd>{forecast.reserved > 0 && <small className="safe-verdict-kept">{money(forecast.reserved)} kept in {forecast.reservedName ?? "emergency fund"}</small>}</div>
+        <div><dt>Cash today</dt><dd>{money(forecast.cash)}</dd>{forecast.reserved > 0 && <small className="safe-verdict-kept">{money(forecast.reserved)} set aside for {forecast.reservedName ?? "your goals"}</small>}</div>
         <div><dt>Lowest point · {shortDate(forecast.lowPointDate)}</dt><dd>{money(forecast.lowPoint)}</dd></div>
         <div><dt>If you buy it</dt><dd className="is-after">{money(result.lowPointAfter)}</dd></div>
-        <div><dt>Cushion</dt><dd>{money(forecast.cushion)}</dd></div>
       </dl>
+
+      <WorkedOut forecast={forecast} />
 
       {recommended && result.verdict !== "safe" && (
         <p className="safe-verdict-next mt-4"><strong>Suggested:</strong> {recommended.label}</p>
       )}
+      {children}
       <p className="mt-3 text-xs leading-relaxed text-stone-500">
-        {basis} {forecast.goalSavingsPerDay > 0 && `Your goal savings (${formatMoney(forecast.goalSavingsPerDay * 7)}/week) are set aside first. `}
-        Cash includes your checking and savings{forecast.reserved > 0 ? `, minus your ${forecast.reservedName ?? "emergency fund"} (${formatMoney(forecast.reserved)}), which is never counted as spending money` : ""}. A projection, not a guarantee.
+        {basis}{" "}
+        Cash includes your checking and savings{forecast.reserved > 0 ? `, minus the ${formatMoney(forecast.reserved)} set aside for ${forecast.reservedName ?? "your goals"}, which is never counted as spending money` : ""}. A projection, not a guarantee.
       </p>
     </section>
+  );
+}
+
+/** "How we got $15": the few steps from cash today to the lowest point. Closed until asked for. */
+function WorkedOut({ forecast }: { forecast: Forecast }) {
+  const b = lowPointBreakdown(forecast);
+  const usd = (n: number) => formatMoney(Math.round(Math.abs(n)));
+  const until = shortDate(b.lowPointDate);
+  const bills = b.bills.reduce((s, x) => s + x.amount, 0);
+  const out = bills + b.everyday;
+  const billNames = b.bills.map((x) => friendlyName(x.name)).filter((n, i, all) => all.indexOf(n) === i).join(", ");
+  const rows: { label: string; detail?: string; amount: string; out?: boolean }[] = [
+    { label: "Cash today", amount: usd(b.cash) },
+    ...(b.reserved > 0 ? [{ label: "Set aside in your goals", amount: `−${usd(b.reserved)}`, out: true }] : []),
+    ...(b.income > 0 ? [{ label: `Paychecks by ${until}`, amount: `+${usd(b.income)}` }] : []),
+    ...(out > 0 ? [{ label: `Bills and spending by ${until}`, detail: [billNames, b.everyday > 0 && `about ${usd(forecast.dailySpending)}/day everyday spending`].filter(Boolean).join(" · "), amount: `−${usd(out)}`, out: true }] : []),
+  ];
+  return (
+    <details className="safe-worked">
+      <summary>How we got {b.lowPoint < 0 ? "−" : ""}{usd(b.lowPoint)}</summary>
+      <ul>
+        {rows.map((r) => (
+          <li key={r.label}>
+            <span><strong>{r.label}</strong>{r.detail && <small>{r.detail}</small>}</span>
+            <span className={r.out ? "is-out" : ""}>{r.amount}</span>
+          </li>
+        ))}
+        <li className="is-total"><span><strong>Lowest point, {until}</strong></span><span>{b.lowPoint < 0 ? "−" : ""}{usd(b.lowPoint)}</span></li>
+      </ul>
+    </details>
   );
 }

@@ -87,7 +87,8 @@ export function recommendation(opts: {
 
 /** "A new hoodie" → "new hoodie", so sentences read "your new hoodie goal". */
 export function goalPhrase(name: string): string {
-  return name.trim().replace(/^(a|an|the|my)\s+/i, "").toLowerCase();
+  // Keep the name exactly as the user wrote it ("Japan trip", "Emergency Fund"); only drop a leading article.
+  return name.trim().replace(/^(a|an|the|my)\s+/i, "");
 }
 
 function capitalize(s: string): string {
@@ -98,8 +99,7 @@ function aboutDays(days: number): string {
   if (!isFinite(days)) return "an unknown amount (set a weekly savings amount)";
   const d = Math.round(days);
   if (d <= 0) return "less than a day";
-  if (d < 14) return `about ${d} day${d === 1 ? "" : "s"}`;
-  return `about ${(days / 7).toFixed(1)} weeks`;
+  return `about ${formatDelay(days)}`;
 }
 
 // ---------- Hours of work ----------
@@ -107,6 +107,60 @@ function aboutDays(days: number): string {
 export function hoursOfWork(price: number, hourlyWage: number): number {
   if (hourlyWage <= 0) return 0;
   return price / hourlyWage;
+}
+
+/** A delay in the unit that reads best: days, then weeks, months, or years ("+1,813.5 days" → "5 years"). */
+export function formatDelay(days: number): string {
+  const d = Math.max(0, days);
+  const unit = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
+  if (d < 14) return unit(Number(d.toFixed(d < 1 ? 1 : 0)), "day");
+  if (d < 60) return unit(Math.round(d / 7), "week");
+  // Two units from here on: "4 months, 1 week", "7 years, 8 months".
+  const pair = (big: number, bigWord: string, small: number, smallWord: string) => (small ? `${unit(big, bigWord)}, ${unit(small, smallWord)}` : unit(big, bigWord));
+  if (d < 730) {
+    let months = Math.floor(d / 30.44);
+    let weeks = Math.round((d - months * 30.44) / 7);
+    if (weeks >= 4) { months += 1; weeks = 0; }
+    return pair(months, "month", weeks, "week");
+  }
+  let years = Math.floor(d / 365.25);
+  let months = Math.round((d - years * 365.25) / 30.44);
+  if (months >= 12) { years += 1; months = 0; }
+  return pair(years, "year", months, "month");
+}
+
+export function formatHours(h: number): string {
+  if (h < 1) return `${Math.max(1, Math.round(h * 60))} minutes`;
+  const whole = Math.floor(h);
+  const mins = Math.round((h - whole) * 60);
+  return mins ? `${whole}h ${mins}m` : `${whole} hour${whole === 1 ? "" : "s"}`;
+}
+
+const plural = (n: number, unit: string) => `${n} ${unit}${n === 1 ? "" : "s"}`;
+
+/**
+ * Puts a price in a unit people can feel: hours of work for everyday buys, then weeks,
+ * months, or years of take-home pay for big ones ("1,111 hours" means nothing; "about
+ * 2 years of your paychecks" does). Returns null when there's no pay to compare with.
+ */
+export function priceInContext(price: number, pay: { hourlyWage?: number | null; monthlyIncome?: number | null }): { before: string; strong: string; after: string } | null {
+  const wage = pay.hourlyWage && pay.hourlyWage > 0 ? pay.hourlyWage : null;
+  const monthly = pay.monthlyIncome && pay.monthlyIncome > 0 ? pay.monthlyIncome : null;
+  const perHour = wage ? ` at ${formatMoney(wage, wage % 1 !== 0)}/hr.` : ".";
+  if (wage && price / wage <= 40) return { before: "That's ", strong: `${formatHours(price / wage)} of work`, after: perHour };
+  if (monthly) {
+    const months = price / monthly;
+    const span = months < 1 ? plural(Math.max(1, Math.round(price / (monthly * 12 / 52))), "week")
+      : months < 24 ? plural(Math.round(months), "month")
+        : `${(months / 12).toFixed(1)} years`;
+    return { before: "That's about ", strong: `${span} of your take-home pay`, after: ` (${formatMoney(Math.round(monthly))}/month).` };
+  }
+  if (wage) {
+    const hours = price / wage;
+    const span = hours < 2080 ? plural(Math.round(hours / 40), "week") : `${(hours / 2080).toFixed(1)} years`;
+    return { before: "That's about ", strong: `${span} of full-time work`, after: perHour };
+  }
+  return null;
 }
 
 // ---------- Formatting ----------

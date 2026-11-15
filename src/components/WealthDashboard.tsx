@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowDownLeft, ArrowRight, ArrowUpRight, Check, ChevronRight, CircleDollarSign, Landmark, Plus, ShieldCheck, SlidersHorizontal, Sparkles, Target, Trash2, X } from "lucide-react";
+import { ArrowDownLeft, ArrowRight, ArrowUpRight, Check, ChevronRight, CircleCheck, CircleDollarSign, Landmark, Plus, ShieldCheck, SlidersHorizontal, Sparkles, Target, Trash2, X } from "lucide-react";
 import type { Bank } from "../lib/useBank";
 import type { MoneyGoal } from "../lib/types";
 import { HomeOverview } from "./Landing";
@@ -8,8 +8,10 @@ import SpringCheck from "./SpringCheck";
 import StarBorder from "./StarBorder";
 import { ProgressRing } from "./ProgressRing";
 import { SavingsPlanner } from "./SavingsPlanner";
+import { CashSplitEditor } from "./CashSplitEditor";
 import { isLiability } from "../lib/money";
-import { todayISO } from "../lib/dates";
+import { formatDate, formatLongDate, todayISO } from "../lib/dates";
+import { cashOnHand, envelopes } from "../lib/envelopes";
 import { formatExact, formatMoney, weeklyNeededForDeadline } from "../lib/finance";
 import { annualSpending, budgetBalanceProgress, opportunityCost, retirementProjection, type RetirementPoint, type SpendingFrequency, type RepeatUnit } from "../lib/planning";
 import { BudgetNorthStar, NorthStar } from "./NorthStar";
@@ -81,12 +83,13 @@ function holdingMoney(value: number, currency: string | null) {
   catch { return `${value.toLocaleString()} ${currency}`; }
 }
 
-export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; priceCheck: React.ReactNode; onUpdateGoal: (g: MoneyGoal) => void; onOpenGoal: (id: string) => void; onNewGoal: () => void; onCheck: () => void; onSettings: () => void; selectedTab: DashboardTab; onTabChange: (tab: DashboardTab) => void }) {
+export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; completedGoals?: MoneyGoal[]; priceCheck: React.ReactNode; onUpdateGoal: (g: MoneyGoal) => void; onOpenGoal: (id: string) => void; onNewGoal: () => void; onCheck: () => void; onSettings: () => void; selectedTab: DashboardTab; onTabChange: (tab: DashboardTab) => void }) {
   const { bank, goals, onNewGoal, onOpenGoal } = props;
   const [plan, setPlan] = useState<Plan>(readPlan);
   const tab = props.selectedTab;
   const setTab = props.onTabChange;
   const [northStarPreview, setNorthStarPreview] = useState<number | null>(null);
+  const [editingSplit, setEditingSplit] = useState(false);
   const [assetForm, setAssetForm] = useState<Asset | null>(null);
   const modalRef = useRef<HTMLElement>(null);
   const modalOpen = !!assetForm;
@@ -210,9 +213,50 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; priceCh
     <div className="wealth-card-foot"><ShieldCheck size={14} /><span>{linked.length ? `${linked.length} connected · ` : ""}Manual accounts are saved in this browser only.</span></div>
   </section>;
   const undatedGoals = goals.filter(g => g.saved < g.target && !g.deadline).length;
+  // Goals as envelopes: each goal's savings are a share of your checking + savings.
+  const knowsCash = (bank.data?.accounts ?? []).some(a => a.type === "depository") || plan.assets.some(a => a.kind === "Checking" || a.kind === "Savings");
+  const pool = envelopes(goals, cashOnHand(bank.data?.accounts ?? [], plan.assets));
+  const poolWidth = Math.max(pool.cash, pool.setAside) || 1;
+  const cashSplit = knowsCash && goals.length > 0 && <div className="wealth-card cash-split">
+    <div className="cash-split-head">
+      <div><h3>Your cash</h3><p>Checking and savings, and how much of it your goals hold.</p></div>
+      {!editingSplit && <button className="wealth-secondary cash-split-edit" onClick={() => setEditingSplit(true)}><SlidersHorizontal size={15} aria-hidden="true" /> Edit split</button>}
+    </div>
+    <dl className="cash-split-sum">
+      <div><dt>Total cash</dt><dd>{usd(pool.cash)}</dd></div>
+      <span className="cash-split-op" aria-hidden="true">−</span>
+      <div><dt>Set aside for goals</dt><dd>{usd(pool.setAside)}</dd></div>
+      <span className="cash-split-op" aria-hidden="true">=</span>
+      <div className={pool.over > 0 ? "is-over" : "is-free"}><dt>{pool.over > 0 ? "Over by" : "Not set aside"}</dt><dd>{usd(pool.over > 0 ? pool.over : pool.free)}</dd></div>
+    </dl>
+    {editingSplit ? <CashSplitEditor goals={goals} cash={pool.cash} accounts={bank.data?.accounts ?? []} onCancel={() => setEditingSplit(false)} onSave={changed => { changed.forEach(props.onUpdateGoal); setEditingSplit(false); }} /> : <>
+    <div className="cash-split-bar" role="img" aria-label={`${pool.goals.map(g => `${g.name} ${usd(g.amount)}`).join(", ")}${pool.goals.length ? ", " : ""}not set aside ${usd(pool.free)}`}>
+      {pool.goals.map((g, i) => <span key={g.id} className={`cash-seg seg-${i % 5}`} style={{ width: `${g.amount / poolWidth * 100}%` }} />)}
+      {pool.free > 0 && <span className="cash-seg seg-free" style={{ width: `${pool.free / poolWidth * 100}%` }} />}
+    </div>
+    <ul className="cash-split-legend">
+      {pool.goals.map((g, i) => <li key={g.id}><i className={`seg-${i % 5}`} aria-hidden="true" />{g.name} <strong>{usd(g.amount)}</strong></li>)}
+      <li><i className="seg-free" aria-hidden="true" />Not set aside <strong>{usd(pool.free)}</strong></li>
+    </ul>
+    {pool.over > 0 && <p className="cash-split-warn" role="status">Your goals add up to {usd(pool.over)} more than your cash. Use <strong>Edit split</strong> to match what you really have.</p>}
+    {pool.goals.some(g => goals.find(x => x.id === g.id)?.linkedAccountId) && <p className="wealth-note">{goals.filter(g => g.linkedAccountId).map(g => g.name).join(", ")} {goals.filter(g => g.linkedAccountId).length === 1 ? "follows" : "follow"} a whole account's balance. Edit the split to choose an amount instead.</p>}
+    </>}
+  </div>;
+  const completed = props.completedGoals ?? [];
+  const completedList = completed.length > 0 && <div className="goals-completed">
+    <h3>Completed</h3>
+    <ul>{completed.map(g => <li key={g.id}><button className="overview-row" onClick={() => onOpenGoal(g.id)}>
+      <CircleCheck size={18} className="goals-completed-icon" aria-hidden="true" />
+      <span className="goals-completed-name">{g.name}</span>
+      <span className="goals-completed-meta">Bought {g.boughtAt ? formatDate(g.boughtAt) : ""} · {usd(g.boughtFor ?? g.target)}</span>
+      <ChevronRight size={16} aria-hidden="true" />
+    </button></li>)}</ul>
+  </div>;
   const goalList = <section className="goals-list"><div className="wealth-section-head"><div><h2>Your savings goals</h2></div><button className="wealth-text-button" onClick={onNewGoal}><Plus size={16} /> New goal</button></div>
-    {goals.length ? <div className="wealth-goal-grid">{goals.map(g => <button key={g.id} className="wealth-goal" onClick={() => onOpenGoal(g.id)}><span className="wealth-goal-top"><ProgressRing value={g.target > 0 ? g.saved / g.target * 100 : 0} label={`${g.name} funded`} /><ChevronRight size={17} /></span><h3>{g.name}</h3><p><strong>{usd(g.saved)}</strong> <span>of {usd(g.target)}</span></p>{g.target > 0 && g.saved >= g.target ? <SpringCheck readOnly checked label="Goal reached" strike="none" color="#edf6ff" fillColor="#54e2c2" checkColor="#050b16" boxSize={22} boxRadius={7} fontSize={14} doneOpacity={1} className="wealth-goal-reached" /> : <span className="wealth-goal-detail">{usd(g.weekly)}/week <span>{months(g.weekly > 0 ? Math.max(0, g.target - g.saved) / (g.weekly * 52 / 12) : Infinity)} to go</span></span>}{g.saved < g.target && g.deadline && <span className="goal-weekly-needed">{g.deadline > todayISO() ? `Save ${formatMoney(Math.ceil(weeklyNeededForDeadline(g.target, g.saved, g.deadline) * 100) / 100, true)}/week to meet your date` : "Choose a new target date to update your weekly plan"}</span>}{g.deadline && <span className="wealth-goal-deadline">Target date · {g.deadline}</span>}</button>)}</div> : <div className="wealth-goal-placeholder"><Target size={25} /><div><h3>What does your money make possible?</h3><p>An emergency fund, a home, a trip. Give your savings a purpose.</p></div><button className="wealth-secondary" onClick={onNewGoal}>Create a goal <ArrowRight size={15} /></button></div>}
+    {cashSplit}
+    {goals.length ? <div className="wealth-goal-grid">{goals.map(g => <button key={g.id} className="wealth-goal" onClick={() => onOpenGoal(g.id)}><span className="wealth-goal-top"><ProgressRing value={g.target > 0 ? g.saved / g.target * 100 : 0} label={`${g.name} funded`} /><ChevronRight size={17} /></span><h3>{g.name}</h3><p><strong>{usd(g.saved)}</strong> <span>of {usd(g.target)}</span></p>{g.target > 0 && g.saved >= g.target ? <SpringCheck readOnly checked label="Goal reached" strike="none" color="#edf6ff" fillColor="#54e2c2" checkColor="#050b16" boxSize={22} boxRadius={7} fontSize={14} doneOpacity={1} className="wealth-goal-reached" /> : <span className="wealth-goal-detail">{usd(g.weekly)}/week <span>{months(g.weekly > 0 ? Math.max(0, g.target - g.saved) / (g.weekly * 52 / 12) : Infinity)} to go</span></span>}{g.saved < g.target && g.deadline && <span className="goal-weekly-needed">{g.deadline > todayISO() ? `Save ${formatMoney(Math.ceil(weeklyNeededForDeadline(g.target, g.saved, g.deadline) * 100) / 100, true)}/week to meet your date` : "Choose a new target date to update your weekly plan"}</span>}{g.deadline && <span className="wealth-goal-deadline">Target date · {formatLongDate(g.deadline)}</span>}</button>)}</div> : <div className="wealth-goal-placeholder"><Target size={25} /><div><h3>What does your money make possible?</h3><p>An emergency fund, a home, a trip. Give your savings a purpose.</p></div><button className="wealth-secondary" onClick={onNewGoal}>Create a goal <ArrowRight size={15} /></button></div>}
     {undatedGoals > 0 && <p className="wealth-note goals-nudge">{undatedGoals === goals.filter(g => g.saved < g.target).length ? "Add a target date to a goal" : `Add a target date to ${undatedGoals} more goal${undatedGoals === 1 ? "" : "s"}`} to see the weekly amount needed to finish on time.</p>}
+  {completedList}
   </section>;
   const assistantContext: MoneyAssistantContext = {
     accounts: assets.map(account => ({ name: account.name, kind: account.kind, balance: account.balance, isDebt: debt(account.kind) })),

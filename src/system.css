@@ -150,3 +150,121 @@
 /* Asset breakdown rows: plain divided rows inside the chart card (no boxes inside the card). */
 .asset-split-row { border-radius: 8px; transition: background-color .15s; }
 .asset-split-row.is-hot { background: var(--ns-surface-inset); }
+
+/* ---------- Polaris savings plan (inside a "Not yet" verdict) ---------- */
+.savings-plan-start { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px 16px; margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--ns-line); }
+.savings-plan-start > div { flex: 1 1 260px; min-width: 0; }
+.savings-plan { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--ns-line); }
+:root[data-theme] button.savings-plan-button { display: inline-flex; align-items: center; gap: 8px; min-height: 44px; padding: 0 18px; font-weight: 700; }
+.savings-plan-headline { margin: 14px 0 0; padding: 12px 14px; border-radius: 12px; background: var(--ns-surface-inset); font-size: 15px; line-height: 1.5; }
+.savings-plan-rows { display: grid; margin: 12px 0 0; padding: 0; list-style: none; }
+.savings-plan-rows li { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--ns-line); }
+.savings-plan-rows li:last-child { border-bottom: 0; }
+.savings-plan-amount { flex-shrink: 0; font-weight: 750; font-variant-numeric: tabular-nums; color: var(--ns-accent); }
+.savings-plan-amount.is-negative { color: var(--sv-no, #b4233a); }
+
+/* ---------- Goals as envelopes: how your cash splits across goals ---------- */
+.cash-split { display: grid; gap: 14px; padding: 20px; }
+.cash-split-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 8px 16px; }
+.cash-split-head h3 { margin: 0; font-size: 17px; font-weight: 750; }
+.cash-split-head p { margin: 2px 0 0; font-size: 14px; color: var(--ns-label); }
+.cash-split-free { display: grid; text-align: right; }
+.cash-split-free small { font-size: 12px; font-weight: 600; color: var(--ns-label); }
+.cash-split-free strong { font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--ns-accent); }
+.cash-split-bar { display: flex; gap: 3px; height: 14px; border-radius: 999px; overflow: hidden; background: var(--ns-surface-inset); }
+.cash-seg { min-width: 4px; height: 100%; }
+.cash-split-legend { display: flex; flex-wrap: wrap; gap: 6px 18px; margin: 0; padding: 0; list-style: none; font-size: 14px; }
+.cash-split-legend li { display: inline-flex; align-items: center; gap: 7px; }
+.cash-split-legend i { width: 10px; height: 10px; border-radius: 3px; }
+.cash-split-legend strong { font-variant-numeric: tabular-nums; }
+.seg-0 { background: #0f8a73; } .seg-1 { background: #3c69c9; } .seg-2 { background: #8450c4; } .seg-3 { background: #b7791f; } .seg-4 { background: #c0487a; }
+.seg-free { background: transparent; box-shadow: inset 0 0 0 1.5px var(--ns-line); }
+:root[data-theme="dark"] .seg-0 { background: #54e2c2; }
+:root[data-theme="dark"] .seg-1 { background: #7aa2ff; }
+:root[data-theme="dark"] .seg-2 { background: #c294ff; }
+:root[data-theme="dark"] .seg-3 { background: #ffcf7a; }
+:root[data-theme="dark"] .seg-4 { background: #ff8ab4; }
+.cash-split-warn { margin: 0; padding: 10px 12px; border-radius: 12px; background: rgb(196 125 20 / 14%); color: #8a4f06; font-size: 14px; font-weight: 600; }
+:root[data-theme="dark"] .cash-split-warn { background: rgb(255 207 122 / 12%); color: #ffcf7a; }
+
+.goals-completed h3 { margin: 4px 0 6px; font-size: 15px; font-weight: 750; color: var(--ns-label); }
+.goals-completed ul { margin: 0; padding: 0; list-style: none; }
+.goals-completed button { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 48px; padding: 8px 10px; border-bottom: 1px solid var(--ns-line); text-align: left; }
+.goals-completed li:last-child button { border-bottom: 0; }
+.goals-completed-icon { color: var(--ns-accent); flex-shrink: 0; }
+.goals-completed-name { flex: 1; min-width: 0; font-weight: 650; text-decoration: line-through; text-decoration-color: var(--ns-line); }
+.goals-completed-meta { font-size: 14px; color: var(--ns-label); font-variant-numeric: tabular-nums; }
+
+/* Mark a goal as bought; a purchase that has its own goal. */
+.goal-bought-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; background: rgb(15 138 115 / 12%); color: var(--ns-accent); font-size: 13px; font-weight: 700; }
+.goal-buy { margin-top: 14px; padding: 16px; border-radius: 12px; border: 1px solid var(--ns-line); }
+.purchase-fund { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; padding: 14px 16px; border-radius: var(--ns-radius-card); border: 1px solid var(--ns-line); border-left: 4px solid var(--ns-accent); background: var(--ns-secondary-bg); color: var(--ns-secondary-text); }
+.purchase-fund > svg { color: var(--ns-accent); }
+:root[data-theme] button.purchase-fund-button { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px; font-weight: 700; }
+.purchase-fund.is-covered { padding: 18px 20px; }
+
+/* Edit how cash splits across goals. */
+.cash-split-side { display: flex; align-items: center; gap: 14px; }
+:root[data-theme] button.cash-split-edit { display: inline-flex; align-items: center; gap: 6px; min-height: 40px; padding: 0 14px; font-weight: 700; }
+.cash-split-editor { display: grid; gap: 12px; }
+.cash-split-editor ul { display: grid; margin: 0; padding: 0; list-style: none; }
+.cash-split-editor li { display: grid; grid-template-columns: 1fr minmax(120px, 180px); align-items: center; gap: 4px 16px; padding: 10px 0; border-bottom: 1px solid var(--ns-line); }
+.cash-split-editor-name { display: grid; }
+.cash-split-editor-name small { font-size: 13px; color: var(--ns-label); }
+.cash-split-editor-input { display: flex; align-items: center; gap: 6px; padding: 0 12px; min-height: 44px; border-radius: var(--ns-radius-control); border: 1px solid var(--ns-line); background: var(--ns-surface-inset); }
+.cash-split-editor-input:focus-within { outline: 2px solid var(--ns-accent); outline-offset: 1px; }
+.cash-split-editor-input input { flex: 1; min-width: 0; border: 0; background: transparent; color: inherit; font: inherit; font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; outline: none; }
+.cash-split-editor-note { grid-column: 1 / -1; margin: 0; font-size: 13px; color: var(--ns-label); }
+.cash-split-editor-total { margin: 0; font-size: 15px; }
+.cash-split-editor-total strong { color: var(--ns-accent); font-variant-numeric: tabular-nums; }
+.cash-split-editor-total.is-over strong { color: #b4233a; }
+:root[data-theme="dark"] .cash-split-editor-total.is-over strong { color: #ff8a9a; }
+.cash-split-editor-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+:root[data-theme] .cash-split-editor-actions button { min-height: 44px; padding: 0 18px; font-weight: 700; }
+.goal-linked { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; margin-top: 10px; padding: 10px 12px; border-radius: 12px; background: var(--ns-surface-inset); font-size: 14px; }
+.goal-linked p { margin: 0; flex: 1 1 260px; }
+.goal-saved-edit > button, .goal-saved-edit > :is(.ui-button) { margin-top: 26px; }
+/* "Add to savings": the Add button matches the input's height and lines up with it. */
+.goal-deposit .ui-button { height: var(--goal-input-h, 46px); min-height: 0; padding-block: 0; display: inline-flex; align-items: center; justify-content: center; }
+.goal-deposit-hint { margin: 6px 0 0; font-size: 12px; color: var(--ns-label); }
+/* Rename a goal: Save and Cancel line up with the name field. */
+.goal-rename .ui-button, :root[data-theme] button.goal-rename-button { height: 46px; min-height: 0; padding: 0 18px; font-weight: 700; display: inline-flex; align-items: center; }
+
+/* Before → after finish dates for the goal a purchase would come from. */
+.goal-shift { display: flex; flex-wrap: wrap; align-items: stretch; gap: 10px; margin-top: 14px; }
+.goal-shift-tile { flex: 1 1 160px; display: grid; gap: 2px; padding: 12px 14px; border-radius: 12px; background: var(--ns-surface-inset); border: 1px solid var(--ns-line); min-width: 0; }
+.goal-shift-tile small { font-size: 12px; font-weight: 600; color: var(--ns-label); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.goal-shift-tile strong { font-size: 20px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.goal-shift-tile span { font-size: 13px; font-weight: 650; color: var(--ns-label); }
+.goal-shift-tile.is-later span { color: #a35f0a; }
+:root[data-theme="dark"] .goal-shift-tile.is-later span { color: #ffcf7a; }
+.goal-shift-tile.is-alt span { color: var(--ns-accent); }
+.goal-shift-arrow { align-self: center; flex-shrink: 0; color: var(--ns-label); }
+@media (max-width: 520px) { .goal-shift-arrow { transform: rotate(90deg); margin-inline: auto; } .goal-shift { flex-direction: column; } }
+/* Your cash: Total − Set aside = Not set aside, as three clear numbers. */
+.cash-split-sum { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; margin: 0; }
+.cash-split-sum > div { flex: 1 1 150px; display: grid; gap: 2px; padding: 12px 14px; border-radius: 12px; background: var(--ns-surface-inset); min-width: 0; }
+.cash-split-sum dt { font-size: 13px; font-weight: 600; color: var(--ns-label); }
+.cash-split-sum dd { margin: 0; font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.cash-split-sum > .is-free dd { color: var(--ns-accent); }
+.cash-split-sum > .is-over dd { color: #b4233a; }
+:root[data-theme="dark"] .cash-split-sum > .is-over dd { color: #ff8a9a; }
+.cash-split-op { align-self: center; font-size: 22px; font-weight: 700; color: var(--ns-label); }
+@media (max-width: 560px) { .cash-split-op { display: none; } }
+
+/* Safe-to-Spend: "How we got $15" */
+.safe-worked { margin-top: 14px; border-top: 1px solid var(--ns-line); padding-top: 12px; }
+.safe-worked > summary { cursor: pointer; font-size: 14px; font-weight: 700; color: var(--sv); list-style-position: inside; }
+.safe-worked ul { margin: 10px 0 0; padding: 0; list-style: none; display: grid; }
+.safe-worked li { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 7px 0; font-size: 14px; border-bottom: 1px dashed var(--ns-line); }
+.safe-worked li > span:first-child { display: grid; min-width: 0; }
+.safe-worked li small { font-size: 12px; color: var(--ns-label); }
+.safe-worked li > span:last-child { flex-shrink: 0; font-weight: 700; font-variant-numeric: tabular-nums; }
+.safe-worked li > span.is-out { color: var(--sv-no); }
+.safe-worked li.is-total { border-bottom: 1px solid var(--ns-line); }
+.safe-worked li.is-total > span:last-child { font-size: 16px; font-weight: 800; }
+.safe-worked-hint { margin: 10px 0 0; padding: 10px 12px; border-radius: 12px; background: var(--sv-soft); font-size: 13px; line-height: 1.5; }
+
+/* My goals: text inside any box runs the full width of that box (goals.css and older rules
+   capped paragraphs at 65ch / 540px, so lines broke well before the edge). */
+:root[data-theme] .goals-page :is(.clay, .wealth-card, .wealth-goal, .goals-tool, .purchase-fund, .safe-verdict, .wealth-preferences) :is(p, small) { max-width: none; }
