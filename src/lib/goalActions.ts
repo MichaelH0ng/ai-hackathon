@@ -136,14 +136,18 @@ const pickGoal = (text: string, goals: MoneyGoal[]): MoneyGoal | Command => {
 };
 const isCommand = (x: MoneyGoal | Command): x is Command => "ok" in x;
 
+// "Can I afford/buy/get/order $80 shoes?", "should I order…", "is it ok to buy…", "I want to get…", "spend $50 on…".
+const BUY = String.raw`(?:afford|buy|get|order|purchase|grab|pick up|splurge on|spend)`;
+const AFFORD_QUESTION = new RegExp(String.raw`\b(?:can|could|should|may)\s+i\s+${BUY}\b|\bafford\b|\b(?:is it|would it be)\s+(?:ok|okay|fine|smart|safe|worth it)\s+to\s+${BUY}\b|\b(?:thinking (?:of|about)|want to|wanna)\s+(?:buying|getting|ordering|purchasing|buy|get|order|purchase)\b`, "i");
+
 /** "Can I afford $80 shoes?" → { item: "shoes", price: 80 }. */
 export function parseAffordQuestion(text: string): { item: string; price: number } | null {
-  if (!/\b(can|could)\s+i\s+(afford|buy|get)\b|\bshould\s+i\s+(buy|get)\b|\bafford\b/i.test(text)) return null;
+  if (!AFFORD_QUESTION.test(text)) return null;
   const price = parseAmount(text);
   if (!price) return null;
   const item = text
     .replace(new RegExp(AMOUNT_SOURCE, "gi"), " ")
-    .replace(/\b(can|could|should|i|afford|buy|get|to|a|an|the|some|new|for|right|now|today|this|week|month|it|is|that|ok|okay|please|polaris|hey)\b/gi, " ")
+    .replace(/\b(can|could|should|may|would|i|me|my|afford|buy|buying|get|getting|order|ordering|purchase|purchasing|grab|pick|up|splurge|spend|spending|on|want|wanna|thinking|of|about|be|fine|smart|safe|worth|to|a|an|the|some|new|for|right|now|today|this|week|month|it|is|that|ok|okay|please|polaris|hey)\b/gi, " ")
     .replace(/[?!.,]/g, " ")
     .replace(/\s+/g, " ")
     .trim();

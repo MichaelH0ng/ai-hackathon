@@ -1,8 +1,8 @@
 // Goals as envelopes: your cash (checking + savings) is one pool, and each savings goal
 // claims part of it. Whatever no goal claims is free money; Safe-to-Spend only uses that.
-import type { BankAccount } from "./money.ts";
-import { cashFromAccounts, isEmergencyFund } from "./safeToSpend.ts";
-import type { MoneyGoal } from "./types.ts";
+import type { BankAccount } from "./money.js";
+import { cashFromAccounts, isEmergencyFund } from "./safeToSpend.js";
+import type { MoneyGoal } from "./types.js";
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 

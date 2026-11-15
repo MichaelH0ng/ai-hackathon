@@ -1,7 +1,8 @@
 import { ArrowRight, Check, Clock, Lightbulb, PiggyBank, RotateCcw, Tag, Wallet } from "lucide-react";
 import { goalForItem } from "../lib/envelopes";
 import { formatDate, todayISO } from "../lib/dates";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { onPriceCheckRequest, takePriceCheckRequest } from "../lib/priceCheckRequest";
 import { formatDelay, formatMoney, priceInContext, projectedDate, weeklyNeededForDeadline, whatIfSpend } from "../lib/finance";
 import type { BankSnapshot, MoneyGoal, Profile } from "../lib/types";
 import type { BankData } from "../lib/money";
@@ -86,6 +87,20 @@ export function PriceCheck({
     setItem(next);
     setTimeout(() => document.getElementById("price-result")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   }
+
+  // Polaris "Open the full check": fill in the item and price and run it, whether this was just
+  // opened (the request waits) or was already on screen (the event).
+  useEffect(() => {
+    const run = () => {
+      const request = takePriceCheckRequest();
+      if (!request) return;
+      setName(request.item);
+      setPrice(request.price);
+      show({ label: request.item, price: request.price, alternative: null });
+    };
+    run();
+    return onPriceCheckRequest(run);
+  }, []);
 
   function reset() {
     setItem(null);

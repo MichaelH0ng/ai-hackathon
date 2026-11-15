@@ -4,8 +4,8 @@
 // is testable and identical everywhere it appears. The AI only explains a result
 // computed here; it never decides it. Kept free of React so it can also serve as an
 // agent tool later.
-import { addDays, todayISO } from "./dates.ts";
-import { detectTransferIds, isTransfer, type BankAccount, type BankTransaction } from "./money.ts";
+import { addDays, todayISO } from "./dates.js";
+import { detectTransferIds, isTransfer, type BankAccount, type BankTransaction } from "./money.js";
 
 export const FORECAST_DAYS = 30;
 const SPENDING_LOOKBACK_DAYS = 60;

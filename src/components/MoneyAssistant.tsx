@@ -8,6 +8,7 @@ import { canSpeak, speakAsPolaris } from "../lib/polarisVoice";
 import { answerMoneyQuestion, type MoneyAssistantContext } from "../lib/moneyAssistant";
 import { apply, check, describe, dueReminders, findGoal, money, parseAffordQuestion, parseCommand, WEEKDAYS, type ActionSummary, type Budget, type BudgetField, type Command, type PolarisAction, type Reminder, type Undo, type World } from "../lib/goalActions";
 import { checkAffordability, type AffordResult } from "../lib/polarisAfford";
+import { requestPriceCheck } from "../lib/priceCheckRequest";
 import { useReminders } from "../lib/polarisReminders";
 import type { BankData } from "../lib/money";
 import type { MoneyGoal } from "../lib/types";
@@ -27,6 +28,8 @@ interface ChatMessage {
   undone?: boolean;
   // "Can I afford…?" answers carry the verdict for a small card.
   afford?: AffordResult;
+  /** A purchase question: the item and price to open Check a purchase with. */
+  checkItem?: { item: string; price: number };
 }
 
 // Remembered per browser; storage can be unavailable (private mode), so every access is guarded.
@@ -403,9 +406,10 @@ export function MoneyAssistant({ context, goals = [], budget = { income: 0, esse
     const affordQ = plan ? parseAffordQuestion(text) : null;
     if (affordQ && plan) {
       const result = checkAffordability(affordQ.item, affordQ.price, goals, bankData, plan);
+      const checkItem = { item: affordQ.item, price: affordQ.price };
       say(result
-        ? { text: `**${AFFORD_HEADLINE[result.verdict]}** ${result.sentence}`, afford: result }
-        : { text: "I need a checking or savings balance to check that. Add or connect an account on **Money**, then ask again." });
+        ? { text: `**${AFFORD_HEADLINE[result.verdict]}** ${result.sentence}`, afford: result, checkItem }
+        : { text: "I can’t see a checking or savings balance yet, so I can’t say if it’s safe to spend. Check a purchase can still show what it does to your goals.", checkItem });
       return;
     }
     // "Add $20 to my car goal", "Make a laptop goal", "Move $100 from trip to car"…: understood on this
@@ -556,8 +560,8 @@ export function MoneyAssistant({ context, goals = [], budget = { income: 0, esse
                 <span className="polaris-afford-badge">{message.afford.verdict === "safe" || message.afford.verdict === "covered" ? "Safe" : message.afford.verdict === "tight" ? "Tight" : "Not yet"}</span>
                 <span className="polaris-afford-item">{message.afford.item} · {money(message.afford.price)}</span>
                 {message.afford.comfortableLimit !== undefined && message.afford.verdict !== "safe" && message.afford.comfortableLimit > 0 && <small>You could comfortably spend up to {money(Math.floor(message.afford.comfortableLimit))} today.</small>}
-                {onOpenPriceCheck && <button type="button" className="polaris-afford-open" onClick={() => { setOpen(false); onOpenPriceCheck(); }}>See the full check <ArrowRight size={14} aria-hidden="true" /></button>}
               </div>}
+              {message.checkItem && onOpenPriceCheck && <button type="button" className="polaris-afford-open" onClick={() => { requestPriceCheck(message.checkItem!); setOpen(false); onOpenPriceCheck(); }}>Open the full check for {message.checkItem.item} <ArrowRight size={14} aria-hidden="true" /></button>}
               {message.undo && !message.undone && <button type="button" className="polaris-undo" onClick={() => undoAction(message)}><Undo2 size={14} aria-hidden="true" /> {message.undo.label}</button>}
               {message.offline && <small className="money-assistant-offline">Answered on this device. The AI assistant was unavailable.</small>}
               {canSpeak && message.role === "assistant" && <button type="button" className={`money-assistant-speak${speakingId === message.id ? " speaking" : ""}`} aria-pressed={speakingId === message.id} aria-label={speakingId === message.id ? "Stop reading aloud" : "Read this answer aloud"} title={speakingId === message.id ? "Stop" : "Read aloud"} onClick={() => toggleSpeak(message)}>

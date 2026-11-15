@@ -1,7 +1,7 @@
 // The facts behind a Safe-to-Spend verdict, the plain-template explanation, and the
 // check that keeps an AI-written explanation honest. Shared by the browser (template,
 // no-AI fallback) and the server (AI prompt + validation).
-import { lowPointBreakdown, type Forecast, type OptionId, type PurchaseVerdict, type Verdict } from "./safeToSpend.ts";
+import { lowPointBreakdown, type Forecast, type OptionId, type PurchaseVerdict, type Verdict } from "./safeToSpend.js";
 
 export interface VerdictFacts {
   item: string;

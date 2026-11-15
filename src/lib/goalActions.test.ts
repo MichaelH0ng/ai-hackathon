@@ -186,3 +186,19 @@ describe("deleting goals", () => {
     expect(result.undo.restoreGoals?.map(g => g.id)).toEqual(["car", "trip"]);
   });
 });
+
+describe("purchase questions", () => {
+  it("understands the ways people ask about buying something", () => {
+    expect(parseAffordQuestion("can I order $80 shoes")).toEqual({ item: "shoes", price: 80 });
+    expect(parseAffordQuestion("Can I afford $80 shoes?")).toEqual({ item: "shoes", price: 80 });
+    expect(parseAffordQuestion("should I purchase a $1,200 laptop?")).toEqual({ item: "laptop", price: 1200 });
+    expect(parseAffordQuestion("is it ok to buy $45 concert tickets")).toEqual({ item: "concert tickets", price: 45 });
+    expect(parseAffordQuestion("I want to get $30 headphones")).toEqual({ item: "headphones", price: 30 });
+    expect(parseAffordQuestion("can I spend $60 on dinner")).toEqual({ item: "dinner", price: 60 });
+  });
+  it("leaves other questions alone", () => {
+    expect(parseAffordQuestion("how do I start investing $500")).toBeNull();
+    expect(parseAffordQuestion("can I order shoes")).toBeNull(); // no price
+    expect(parseAffordQuestion("add $20 to my car goal")).toBeNull();
+  });
+});

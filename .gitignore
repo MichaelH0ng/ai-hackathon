@@ -33,3 +33,6 @@ dist-ssr
 
 # Saved Plaid bank connections (access tokens)
 server/data/
+
+# Vercel CLI project link
+.vercel

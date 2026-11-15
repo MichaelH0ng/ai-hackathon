@@ -1,6 +1,6 @@
 // Pure helpers behind Polaris's answers. Everything here is exact arithmetic over
 // Plaid-shaped data, so the model reads totals instead of adding transactions itself.
-import { isTransfer, type BankTransaction } from "../src/lib/money.ts";
+import { isTransfer, type BankTransaction } from "../src/lib/money.js";
 
 export type DateRange = { label: string; start: string; endExclusive?: string };
 

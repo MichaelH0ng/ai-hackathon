@@ -3,14 +3,14 @@ import express from "express";
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
-import { loadDashboardData, plaidConfigured, plaidRouter } from "./plaid.ts";
-import { detectTransferIds, isTransfer, upcomingBills } from "../src/lib/money.ts";
-import { sentenceMatchesFacts, templateSentence, type VerdictFacts } from "../src/lib/safeToSpendExplain.ts";
-import { categoryLabel, comparisonPeriods, goalFinishDate, hasUnmatchedSubject, inRange, matchCategory, matchGoal, matchMerchant, rollingRange, windowTotals, explicitRange, followUpQuestion, type DateRange } from "./assistantData.ts";
-import { shortDate } from "../src/lib/safeToSpendExplain.ts";
-import { recurring } from "../src/lib/safeToSpend.ts";
-import { todayISO } from "../src/lib/dates.ts";
-import { buildPlan, planFacts, templateProposal } from "./savingsPlan.ts";
+import { loadDashboardData, plaidConfigured, plaidRouter } from "./plaid.js";
+import { detectTransferIds, isTransfer, upcomingBills } from "../src/lib/money.js";
+import { sentenceMatchesFacts, templateSentence, type VerdictFacts } from "../src/lib/safeToSpendExplain.js";
+import { categoryLabel, comparisonPeriods, goalFinishDate, hasUnmatchedSubject, inRange, matchCategory, matchGoal, matchMerchant, rollingRange, windowTotals, explicitRange, followUpQuestion, type DateRange } from "./assistantData.js";
+import { shortDate } from "../src/lib/safeToSpendExplain.js";
+import { recurring } from "../src/lib/safeToSpend.js";
+import { todayISO } from "../src/lib/dates.js";
+import { buildPlan, planFacts, templateProposal } from "./savingsPlan.js";
 
 const ScanResult = z.object({
   kind: z.enum(["single_item", "cart", "no_price_found"]),
@@ -662,5 +662,10 @@ app.post("/api/scan", async (req, res) => {
   }
 });
 
-const PORT = Number(process.env.PORT ?? 8787);
-app.listen(PORT, () => console.log(`Scan API on http://localhost:${PORT}`));
+// On Vercel the app runs as a serverless function (api/index.ts imports it); locally it listens on a port.
+if (!process.env.VERCEL) {
+  const PORT = Number(process.env.PORT ?? 8787);
+  app.listen(PORT, () => console.log(`Scan API on http://localhost:${PORT}`));
+}
+
+export default app;

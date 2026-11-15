@@ -6,8 +6,8 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { Router } from "express";
 import { Configuration, CountryCode, PlaidApi, PlaidEnvironments, Products } from "plaid";
-import type { BankData } from "../src/lib/money.ts";
-import { studentBanks } from "./sandboxStudent.ts";
+import type { BankData } from "../src/lib/money.js";
+import { studentBanks } from "./sandboxStudent.js";
 
 const ENV = process.env.PLAID_ENV || "sandbox";
 export const plaidConfigured = Boolean(process.env.PLAID_CLIENT_ID && process.env.PLAID_SECRET);
@@ -27,7 +27,9 @@ interface Item {
   institution: string;
   kind?: "bank" | "investments";
 }
-const DATA_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "data");
+// Vercel's file system is read-only except /tmp, which lasts only while a function instance is warm,
+// so sandbox connections made on the live site are temporary there.
+const DATA_DIR = process.env.VERCEL ? path.join("/tmp", "northstar-data") : path.join(path.dirname(fileURLToPath(import.meta.url)), "data");
 const FILE = path.join(DATA_DIR, ENV === "sandbox" ? "plaid-items.json" : `plaid-items-${ENV}.json`);
 
 function getItems(): Item[] {
