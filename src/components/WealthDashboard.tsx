@@ -184,7 +184,7 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; priceCh
     </div>;
   };
   const accountSummary = assets.length > 0 && <section className="wealth-card accounts-summary" aria-label="Account totals">
-    <div className="accounts-summary-main"><span>Net worth</span><strong><CountUp value={total - debts} format={n => `${n < 0 ? "−" : ""}${usd(Math.abs(n))}`} /></strong></div>
+    <div className="accounts-summary-main"><span>Net worth</span><strong className={total - debts > 0 ? "is-gain" : total - debts < 0 ? "is-debt" : ""}><CountUp value={total - debts} format={n => `${n < 0 ? "−" : ""}${usd(Math.abs(n))}`} /></strong></div>
     <div className="accounts-summary-split">
       <span><small>Cash</small><strong>{usd(groupTotal(accountGroups[0].match))}</strong></span>
       <span><small>Investments</small><strong>{usd(groupTotal(investment))}</strong></span>

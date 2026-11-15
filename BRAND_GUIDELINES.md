@@ -37,15 +37,24 @@ Use the NorthStar compass/star mark as the primary brand signature. Prefer it on
 
 ## Typography
 
-Use the system stack already in the app: `-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif` for both display and body text. It should feel fast, legible, and native.
+**Typeface: Plus Jakarta Sans** for everything: headings, body, labels, buttons, and numbers. It is friendly and modern with crisp, even numerals, which keeps NorthStar calm and optimistic without looking like a default system app. One family keeps the type consistent across every screen.
 
-- Page title: 27–34px, 650–750 weight, tight tracking (about `-0.03em`).
-- Section title: 18–21px, 650–750 weight.
-- Body: 14–16px, regular weight, 1.5–1.7 line height.
-- Labels/metadata: 10–12px, medium/semibold; use sentence case.
-- Financial values: bold with tabular numerals; round only when precision would not help.
+- **In the app:** bundled with the `@fontsource-variable/plus-jakarta-sans` package (variable weights 200–800), so it works offline. Both `--font-sans` and `--font-display` in `src/index.css` point to it.
+- **Fallback stack:** `"Plus Jakarta Sans Variable", "Plus Jakarta Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`.
+- **Outside the app** (slides, social posts, documents): use Plus Jakarta Sans from Google Fonts.
 
-Avoid all-caps paragraphs, decorative display fonts, and more than three type sizes in a single card.
+| Role | Size | Weight | Tracking |
+|---|---|---|---|
+| Hero numbers (net worth) | 38–60px | 750–800 | `-0.035em` |
+| Page title | 27–34px | 700–800 | `-0.03em` |
+| Section / card title | 17–21px | 650–700 | `-0.01em` |
+| Body | 14–16px | 400–500, line height 1.5–1.7 | normal |
+| Labels / metadata | 11–13px | 500–600, sentence case | normal (uppercase labels `+0.06em`) |
+| Buttons | 14px | 650 | normal |
+
+- Financial values: bold with tabular numerals (`font-variant-numeric: tabular-nums`) so columns line up; round only when precision would not help.
+
+Avoid all-caps paragraphs, mixing in other typefaces, decorative display fonts, and more than three type sizes in a single card.
 
 ## Layout and components
 
