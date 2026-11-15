@@ -1,4 +1,5 @@
 // From React Bits (Star Border), see SoftAurora.LICENSE.md for the React Bits license.
+// Change: `startOffset` prop so several borders on one page don't run in step.
 
 import React, { useEffect, useRef } from 'react';
 
@@ -26,6 +27,8 @@ type StarBorderOwnProps = {
   backgroundColor?: string;
   textColor?: string;
   borderColor?: string;
+  /** Where the star starts, as a fraction (0–1) of the way around the border. */
+  startOffset?: number;
 };
 
 export type StarBorderProps<T extends React.ElementType = 'button'> = StarBorderOwnProps & {
@@ -215,6 +218,7 @@ const StarBorder = <T extends React.ElementType = 'button'>({
   backgroundColor,
   textColor,
   borderColor,
+  startOffset = 0,
   ...rest
 }: StarBorderProps<T>) => {
   const tag = as || 'button';
@@ -239,6 +243,7 @@ const StarBorder = <T extends React.ElementType = 'button'>({
     hover: HOVERS.includes(hover) ? hover : 'lap',
     clickPulse
   };
+  const startRef = useRef(startOffset);
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
 
@@ -277,6 +282,7 @@ const StarBorder = <T extends React.ElementType = 'button'>({
     let alive = true;
 
     let resizePending = false;
+    let placed = false;
     const applyMeasure = () => {
       state.width = root.offsetWidth;
       state.height = root.offsetHeight;
@@ -479,6 +485,11 @@ const StarBorder = <T extends React.ElementType = 'button'>({
       }
       if (!alive) return;
       const s = settingsRef.current;
+      // Once the size is known, move the star to its starting point around the border.
+      if (!placed && state.width > 0) {
+        placed = true;
+        state.phase = wrap(clamp(startRef.current, 0, 1) * shapeFor(s).total, shapeFor(s).total);
+      }
       const dt = Math.min(0.05, Math.max(0.001, (now - last) / 1000));
       last = now;
       state.time += dt;

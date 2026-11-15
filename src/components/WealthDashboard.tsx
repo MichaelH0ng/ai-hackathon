@@ -167,7 +167,7 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; priceCh
   }
   const addAsset = () => setAssetForm({ id: crypto.randomUUID(), name: "", institution: "", kind: "Checking", balance: 0 });
   /** Animated "Add account" button: in the Accounts header, and beside "View accounts and activity" on Overview. */
-  const addAccountButton = (extraClass = "") => <StarBorder onClick={addAsset} className={`wealth-add-account ${extraClass}`} backgroundColor="linear-gradient(115deg, #168e90, #4b7fe0 60%, #9e64df)" textColor="#ffffff" borderColor="rgb(223 254 255 / 22%)" color="#dffeff" trailColor="#54e2c2" radius={10} thickness={1.5} duration={5} glow={0.8}><Plus size={16} aria-hidden="true" /> Add account</StarBorder>;
+  const addAccountButton = (extraClass = "") => <StarBorder onClick={addAsset} className={`wealth-add-account ${extraClass}`} backgroundColor="linear-gradient(115deg, #168e90, #4b7fe0 60%, #9e64df)" textColor="#ffffff" borderColor="rgb(223 254 255 / 22%)" color="#dffeff" trailColor="#54e2c2" radius={10} thickness={1.5} duration={5} glow={0.8} hover="none"><Plus size={16} aria-hidden="true" /> Add account</StarBorder>;
   const groupTotal = (kind: (k: string) => boolean) => assets.filter(a => kind(a.kind)).reduce((sum, a) => sum + a.balance, 0);
   const accountRow = (a: Asset) => {
     const isLinked = linked.some(account => account.id === a.id);
