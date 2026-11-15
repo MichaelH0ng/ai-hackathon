@@ -156,15 +156,17 @@ export default function App() {
       body = (
         <WealthDashboard
           bank={bank}
-          priceCheck={<PriceCheck onUpdateGoal={updateGoal} moneyGoals={moneyGoals} profile={state.profile} bank={state.bank} bankData={bank.data}
+          priceCheck={<PriceCheck moneyGoals={moneyGoals} profile={state.profile} bank={state.bank} bankData={bank.data}
             onNewGoal={() => setScreen({ name: "new-money" })}
             onCreateGoal={addGoal}
+            onUpdateGoal={updateGoal}
             onOpenGoal={(id) => setScreen({ name: "goal", id })}
             onSettings={() => setScreen({ name: "settings" })} />}
           selectedTab={dashboardTab}
           onTabChange={(page) => { if (page === "Activity") setDashboardTab(page); else navigate(page); }}
           onCheck={() => navigate("Price check")}
           onSettings={() => setScreen({ name: "settings" })}
+          hourlyWage={state.profile.hourlyWage}
           goals={moneyGoals}
           completedGoals={completedGoals}
           onUpdateGoal={updateGoal}

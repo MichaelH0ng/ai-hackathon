@@ -1,8 +1,8 @@
 import { ArrowRight, Check, Clock, Lightbulb, PiggyBank, RotateCcw, Tag, Wallet } from "lucide-react";
 import { goalForItem } from "../lib/envelopes";
-import { formatDate } from "../lib/dates";
+import { formatDate, todayISO } from "../lib/dates";
 import { useMemo, useState } from "react";
-import { formatDelay, formatMoney, priceInContext, projectedDate, whatIfSpend } from "../lib/finance";
+import { formatDelay, formatMoney, priceInContext, projectedDate, weeklyNeededForDeadline, whatIfSpend } from "../lib/finance";
 import type { BankSnapshot, MoneyGoal, Profile } from "../lib/types";
 import type { BankData } from "../lib/money";
 import { buildForecast, cashFromAccounts, evaluatePurchase, isEmergencyFund, monthlyIncome } from "../lib/safeToSpend";
@@ -21,6 +21,7 @@ export function PriceCheck({
   bankData,
   onNewGoal,
   onCreateGoal,
+  onUpdateGoal,
   onOpenGoal,
   onSettings,
 }: {
@@ -32,6 +33,7 @@ export function PriceCheck({
   onNewGoal: () => void;
   /** Saves a goal Polaris planned (and opens it). */
   onCreateGoal: (g: MoneyGoal) => void;
+  onUpdateGoal: (g: MoneyGoal) => void;
   onOpenGoal: (id: string) => void;
   onSettings: () => void;
 }) {
@@ -76,6 +78,9 @@ export function PriceCheck({
     return fromBank || plan.income || 0;
   }, [planningBankData, plan]);
   const goalNames = useMemo(() => (JSON.parse(goalsSig) as { name: string }[]).map((g) => g.name), [goalsSig]);
+  const purchaseVerdict = item && forecast && !covered ? evaluatePurchase(forecast, item.price) : null;
+  // A safe purchase is paid from forecasted, unassigned cash—not from every goal.
+  const purchaseIsSafe = purchaseVerdict?.verdict === "safe";
 
   function show(next: WhatIfItem) {
     setItem(next);
@@ -172,7 +177,7 @@ export function PriceCheck({
 
           {forecast && !covered && (
             <SafeToSpendCard item={item.label} price={item.price} forecast={forecast} goals={goalNames}>
-              {evaluatePurchase(forecast, item.price).verdict === "not-yet" && (
+              {purchaseVerdict?.verdict === "not-yet" && (
                 <SavingsPlanAgent
                   key={`${item.label}|${item.price}`}
                   item={item.label}
@@ -193,11 +198,17 @@ export function PriceCheck({
               <p className="mx-auto mt-1 max-w-sm text-sm text-stone-600">Add something you're saving for, and NorthStar will show how many days this purchase pushes it back.</p>
               <Button className="mt-4" onClick={onNewGoal}>Start a savings goal</Button>
             </Card>
+          ) : purchaseIsSafe ? (
+            <Card className="purchase-goal-impact is-clear">
+              <h3><Check size={20} aria-hidden="true" /> Your goals stay on track</h3>
+              <p><strong>{money(item.price)} fits in your forecasted available cash.</strong> NorthStar is not taking it from your goal savings, so your weekly contributions and target dates stay unchanged.</p>
+              <p className="wealth-note">This means the next 30-day cash forecast stays comfortable after the purchase. It does not spend or move any goal money.</p>
+            </Card>
           ) : (
             <>
               <Card>
-                <h3 className="text-lg font-bold text-ink">What it costs your goals</h3>
-                <p className="text-sm text-stone-600">Choose which goal would fund the purchase. Each row is a separate scenario, not a combined deduction from every goal.</p>
+                <h3 className="text-lg font-bold text-ink">If a goal pays for this</h3>
+                <p className="text-sm text-stone-600">NorthStar cannot confirm this purchase fits unassigned cash. Choose a goal only to see the hypothetical impact if you take the price from that goal’s savings.</p>
                 <ul className="mt-3 space-y-2" role="radiogroup" aria-label="Choose a goal">
                   {moneyGoals.map((g) => {
                     if (isEmergencyFund(g)) return (
@@ -248,6 +259,13 @@ export function PriceCheck({
                     if (impact.delayDays <= 0) return "This scenario adds no delay to this goal. That alone doesn’t establish whether the purchase fits your overall budget.";
                     return `The trade-off is ${formatDelay(impact.delayDays)} of extra saving${finish ? `, reaching this goal around ${finish}` : ""}${goal.deadline ? ", still within your target date" : ""}. It may be worth it if the purchase matters more to you than that wait; skipping it protects your current timeline.`;
                   })()}</p>
+                  {(() => {
+                    if (!goal.deadline || goal.deadline <= todayISO() || goal.weekly <= 0) return null;
+                    const weeklyToKeepDate = Math.ceil(weeklyNeededForDeadline(goal.target, goal.saved - item.price, goal.deadline) * 100) / 100;
+                    if (weeklyToKeepDate <= goal.weekly) return <p className="purchase-recovery">Your current {money(goal.weekly)}/week plan already has enough room to keep {formatDate(goal.deadline)} on track.</p>;
+                    const extra = weeklyToKeepDate - goal.weekly;
+                    return <div className="purchase-recovery"><p><strong>Keep {formatDate(goal.deadline)} on track:</strong> if this purchase comes from {goal.name}, add {money(extra)}/week to save {money(weeklyToKeepDate)}/week.</p><button className="wealth-secondary" onClick={() => onUpdateGoal({ ...goal, weekly: weeklyToKeepDate })}>Keep my date on track <ArrowRight size={15} aria-hidden="true" /></button></div>;
+                  })()}
                   {(() => {
                     const impact = whatIfSpend(goal.target, goal.saved, goal.weekly, item.price);
                     const from = projectedDate(impact.originalWeeks);

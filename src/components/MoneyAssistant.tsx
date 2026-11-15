@@ -80,6 +80,8 @@ const prompts = ["Can I afford $80 shoes?", "Make a $500 trip goal by June", "Ho
 interface AIAction {
   kind: PolarisAction["kind"];
   goalName?: string;
+  /** For delete_goals: every goal to delete. */
+  goalNames?: string[];
   toGoalName?: string;
   amount?: number;
   name?: string;
@@ -156,6 +158,14 @@ function fromAI(ai: AIAction, goals: MoneyGoal[]): Command {
       const goal = goalNamed(ai.goalName);
       if (!goal) return missing(ai.goalName);
       return { ok: true, action: { kind: "reminder", goalId: goal.id, amount, weekday: ai.weekday ?? new Date().getDay() } };
+    }
+    case "delete_goals": {
+      const names = ai.goalNames?.length ? ai.goalNames : ai.goalName ? [ai.goalName] : [];
+      const found = names.map(goalNamed);
+      const lost = names.find((_, i) => !found[i]);
+      if (!names.length) return { ok: false, message: "Which goal should I delete?" };
+      if (lost !== undefined) return missing(lost);
+      return { ok: true, action: { kind: "delete_goals", goalIds: found.map(g => g!.id) } };
     }
     case "mark_bought": {
       const goal = goalNamed(ai.goalName);
@@ -436,8 +446,9 @@ export function MoneyAssistant({ context, goals = [], budget = { income: 0, esse
   }
 
   /** Saves everything a confirmed change does: goals, a new goal, budget lines, a reminder. */
-  function commit(result: { updatedGoals: MoneyGoal[]; newGoal?: MoneyGoal; budget?: Partial<Budget>; reminder?: Reminder }) {
+  function commit(result: { updatedGoals: MoneyGoal[]; newGoal?: MoneyGoal; budget?: Partial<Budget>; reminder?: Reminder; removedGoalIds?: string[] }) {
     result.updatedGoals.forEach(g => onUpdateGoal?.(g));
+    result.removedGoalIds?.forEach(id => onRemoveGoal?.(id));
     if (result.newGoal) onAddGoal?.(result.newGoal);
     if (result.budget) onUpdateBudget?.(result.budget);
     if (result.reminder) setReminders([...reminders, result.reminder]);
@@ -473,6 +484,7 @@ export function MoneyAssistant({ context, goals = [], budget = { income: 0, esse
     if (!undo || message.undone) return;
     undo.goals?.forEach(g => onUpdateGoal?.(g));
     if (undo.removeGoalId) onRemoveGoal?.(undo.removeGoalId);
+    undo.restoreGoals?.forEach(g => onAddGoal?.(g));
     if (undo.budget) onUpdateBudget?.(undo.budget);
     if (undo.removeReminderId) setReminders(reminders.filter(r => r.id !== undo.removeReminderId));
     setMessages(current => [
