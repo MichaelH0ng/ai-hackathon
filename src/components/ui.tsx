@@ -11,7 +11,7 @@ const inputClass =
 
 function Label({ text, hint, children }: { text?: string; hint?: string; children: ReactNode }) {
   return (
-    <label className="block min-w-0">
+    <label className="ui-field block min-w-0">
       {text && <span className="mb-1 block text-sm font-medium text-stone-700">{text}</span>}
       {children}
       {hint && <span className="mt-1 block text-xs text-stone-500">{hint}</span>}
@@ -38,7 +38,7 @@ export function NumberField({
 }) {
   return (
     <Label text={label} hint={hint}>
-      <div className="flex items-center rounded-xl bg-stone-50 ring-1 ring-stone-300 focus-within:ring-2 focus-within:ring-brand-500">
+      <div className="ui-number-field flex items-center rounded-xl bg-stone-50 ring-1 ring-stone-300 focus-within:ring-2 focus-within:ring-brand-500">
         {prefix && <span className="pl-3 text-stone-500">{prefix}</span>}
         <input
           type="number"

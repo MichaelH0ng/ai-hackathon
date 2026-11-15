@@ -238,9 +238,14 @@ export function MoneyAssistant({ context, goals = [], budget = { income: 0, esse
   function toggleSpeak(message: ChatMessage) {
     if (!canSpeak) return;
     if (speakingId === message.id) { stopSpeaking(); return; }
-    const utterance = speakAsPolaris(message.text);
-    utterance.onend = utterance.onerror = () => setSpeakingId(current => (current === message.id ? null : current));
-    setSpeakingId(message.id);
+    try {
+      const utterance = speakAsPolaris(message.text);
+      utterance.onend = utterance.onerror = () => setSpeakingId(current => (current === message.id ? null : current));
+      setSpeakingId(message.id);
+      setVoiceError("");
+    } catch (error) {
+      setVoiceError(error instanceof Error ? error.message : "This voice is unavailable. Choose another in Settings.");
+    }
   }
   useEffect(() => () => { if (canSpeak) window.speechSynthesis.cancel(); }, []);
 

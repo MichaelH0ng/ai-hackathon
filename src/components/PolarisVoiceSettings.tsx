@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Square, Volume2 } from "lucide-react";
-import { canSpeak, readVoicePreference, saveVoicePreference, speakAsPolaris, useVoices } from "../lib/polarisVoice";
+import { canSpeak, readVoicePreference, saveVoicePreference, speakAsPolaris, useVoices, personaVoices, voiceLabels, type VoicePersona } from "../lib/polarisVoice";
 import { Card } from "./ui";
 import { PolarisAvatar } from "./PolarisAvatar";
 
@@ -20,21 +20,22 @@ export function PolarisVoiceSettings() {
     </Card>;
   }
 
-  // A saved voice that's no longer installed falls back to automatic.
-  const saved = voices.some(v => v.voiceURI === choice) ? choice : "";
-  const best = voices[0];
+  const assigned = personaVoices(voices);
+  const options = (["Astra", "Riya", "Kayla", "Michael", "Nick"] as const).map(name => ({ name, voice: assigned[name] }));
+  const legacyName = voiceLabels(voices).get(choice);
+  const saved = options.find(option => option.name === choice || option.name === legacyName)?.name ?? "Astra";
 
-  function choose(voiceURI: string) {
-    setChoice(voiceURI);
-    saveVoicePreference(voiceURI || null);
-    preview(voiceURI);
+  function choose(persona: VoicePersona) {
+    setChoice(persona);
+    saveVoicePreference(persona);
+    preview(persona);
   }
-  function preview(voiceURI = saved) {
-    const voice = voices.find(v => v.voiceURI === voiceURI) ?? best ?? null;
-    const utterance = speakAsPolaris(SAMPLE, voice);
+  function preview(persona: VoicePersona = saved) {
+    const utterance = speakAsPolaris(SAMPLE, persona);
     setPlaying(true);
     utterance.onend = utterance.onerror = () => setPlaying(false);
   }
+
   function stop() {
     window.speechSynthesis.cancel();
     setPlaying(false);
@@ -54,16 +55,15 @@ export function PolarisVoiceSettings() {
         id="polaris-voice"
         className="min-h-12 min-w-0 flex-1 rounded-xl bg-stone-50 px-3 text-sm text-stone-900 ring-1 ring-stone-300 focus:outline-none focus:ring-2 focus:ring-brand-500"
         value={saved}
-        onChange={e => choose(e.target.value)}
-        disabled={!voices.length}
+        onChange={e => choose(e.target.value as VoicePersona)}
+        disabled={!options.some(option => option.voice)}
       >
-        <option value="">{best ? `Automatic (${best.name})` : "Loading voices…"}</option>
-        {voices.map(v => <option key={v.voiceURI} value={v.voiceURI}>{v.name}</option>)}
+        {options.map(({ name, voice }) => <option key={name} value={name} disabled={!voice}>{name}{voice ? "" : " (unavailable)"}</option>)}
       </select>
       <button
         type="button"
         onClick={() => (playing ? stop() : preview())}
-        disabled={!voices.length}
+        disabled={!assigned[saved]}
         aria-label={playing ? "Stop the sample" : "Hear a sample"}
         className="inline-flex min-h-12 items-center gap-2 rounded-xl bg-stone-100 px-4 text-sm font-bold text-stone-800 ring-1 ring-stone-300 hover:bg-stone-200 disabled:opacity-50"
       >
@@ -72,7 +72,7 @@ export function PolarisVoiceSettings() {
       </button>
     </div>
     <p className="mt-2 text-xs text-stone-600">
-      Friendliest voices are listed first. Microsoft Edge has the most natural ones. On a Mac, you can download better voices in System Settings → Accessibility → Spoken Content → System voice → Manage Voices.
+      Astra is calm, Riya is bright, Kayla is relaxed, Michael is deep, and Nick is lively. Available device voices are paired with distinct pitch and pace settings. Female and male options require a matching installed voice.
     </p>
   </Card>;
 }
