@@ -183,7 +183,7 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; priceCh
       {holdings.length > 0 && <details className="wealth-account-holdings"><summary>{holdings.length} investment holding{holdings.length === 1 ? "" : "s"}</summary><ul>{holdings.map(holding => <li key={holding.id}><span><strong>{holding.ticker || holding.name}</strong><small>{holding.quantity.toLocaleString(undefined, { maximumFractionDigits: 6 })} shares</small></span><strong>{holdingMoney(holding.value, holding.currency)}</strong></li>)}</ul></details>}
     </div>;
   };
-  const accountSummary = assets.length > 0 && <section className="wealth-card accounts-summary" aria-label="Account totals">
+  const accountSummary = assets.length > 0 && <section className="wealth-card accounts-summary wealth-accent" aria-label="Account totals">
     <div className="accounts-summary-main"><span>Net worth</span><strong className={total - debts > 0 ? "is-gain" : total - debts < 0 ? "is-debt" : ""}><CountUp value={total - debts} format={n => `${n < 0 ? "−" : ""}${usd(Math.abs(n))}`} /></strong></div>
     <div className="accounts-summary-split">
       <span><small>Cash</small><strong>{usd(groupTotal(accountGroups[0].match))}</strong></span>
@@ -192,7 +192,7 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; priceCh
       <span><small>Debt</small><strong className={debts > 0 ? "is-debt" : ""}>{debts > 0 ? "−" : ""}{usd(debts)}</strong></span>
     </div>
   </section>;
-  const accountList = <section className="wealth-card"><div className="wealth-section-head"><div><h2>Your accounts</h2><p>Every account. One clear picture.</p></div>{linked.length > 0 && <button className="wealth-text-button" onClick={() => setTab("Activity")}>View all activity <ArrowRight size={15} /></button>}</div>
+  const accountList = <section className="wealth-card wealth-accent"><div className="wealth-section-head"><div><h2>Your accounts</h2><p>Every account. One clear picture.</p></div>{linked.length > 0 && <button className="wealth-text-button" onClick={() => setTab("Activity")}>View all activity <ArrowRight size={15} /></button>}</div>
     {!assets.length ? <div className="wealth-empty"><Landmark size={30} /><h3>Bring your money together</h3><p>Use <strong>Add account</strong> above to connect your bank or enter a balance yourself.</p></div> : <div className="wealth-accounts">{accountGroups.map(group => {
       const list = assets.filter(a => group.match(a.kind));
       if (!list.length) return null;
@@ -259,7 +259,7 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; priceCh
         </div>
       </details>
     </div>}
-    {tab === "Retirement" && <section className="wealth-card wealth-retirement">
+    {tab === "Retirement" && <section className="wealth-card wealth-retirement wealth-accent">
       <div className="wealth-section-head"><div><h2>Plan for retirement</h2><p>Explore how your savings could grow over time.</p></div><span className="wealth-account-icon"><Target size={20} /></span></div>
       <div className="wealth-retirement-balance"><span>Retirement accounts you’ve added</span><strong>{usd(retirementBalance)}</strong></div>
       {!retirementBalance && <p className="wealth-note">Add a Roth IRA, traditional IRA, or 401(k) in Accounts to include its current balance.</p>}
@@ -282,7 +282,7 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; priceCh
     </section>}
     {tab === "Budget" && <div className="wealth-stack">
       <BudgetNorthStar progress={budgetProgress} hasIncome={plan.income > 0} remainder={available} />
-      <section className="wealth-card"><div className="wealth-section-head"><div><h2>Your monthly budget</h2><p>Plan for your spending and savings.</p></div><CircleDollarSign size={22} /></div><div className="wealth-stack"><Amount label="Monthly income (after tax)" value={plan.income} onChange={income => update({ income })} /><Amount label="Monthly essentials · rent, groceries, bills" value={plan.essentials} onChange={essentials => update({ essentials })} /><Amount label="Monthly lifestyle · shopping, dining, fun" value={plan.lifestyle} onChange={lifestyle => update({ lifestyle })} /><div className="wealth-budget-line"><span>Savings goal contributions</span><strong>{usd(monthlyGoals)} / mo</strong></div><p className="wealth-note">Weekly contributions × 52 ÷ 12. Edit contributions in your goals.</p><div className={`wealth-budget-remainder ${available < 0 ? "over" : ""}`}><span>{available < 0 ? "Over budget" : "Left to plan"}</span><strong>{usd(Math.abs(available))}</strong></div>{available < 0 && <p className="wealth-note">Your spending and goal contributions exceed your income. Adjust your plan to close the gap.</p>}</div></section>
+      <section className="wealth-card wealth-accent"><div className="wealth-section-head"><div><h2>Your monthly budget</h2><p>Plan for your spending and savings.</p></div><CircleDollarSign size={22} /></div><div className="wealth-stack"><Amount label="Monthly income (after tax)" value={plan.income} onChange={income => update({ income })} /><Amount label="Monthly essentials · rent, groceries, bills" value={plan.essentials} onChange={essentials => update({ essentials })} /><Amount label="Monthly lifestyle · shopping, dining, fun" value={plan.lifestyle} onChange={lifestyle => update({ lifestyle })} /><div className="wealth-budget-line"><span>Savings goal contributions</span><strong>{usd(monthlyGoals)} / mo</strong></div><p className="wealth-note">Weekly contributions × 52 ÷ 12. Edit contributions in your goals.</p><div className={`wealth-budget-remainder ${available < 0 ? "over" : ""}`}><span>{available < 0 ? "Over budget" : "Left to plan"}</span><strong>{usd(Math.abs(available))}</strong></div>{available < 0 && <p className="wealth-note">Your spending and goal contributions exceed your income. Adjust your plan to close the gap.</p>}</div></section>
     </div>}
     {tab === "Activity" && <div className="wealth-stack"><button className="wealth-text-button" onClick={() => setTab("Accounts")}>← Back to your accounts</button><MoneyDashboard {...props} /></div>}
     <MoneyAssistant context={assistantContext} />
