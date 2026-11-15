@@ -51,7 +51,7 @@ export function PriceCheck({
   return (
     <section id="goal-price-check" className="goal-price-check space-y-4 scroll-mt-28" aria-labelledby="goal-price-check-title">
       <div>
-        <h2 id="goal-price-check-title" className="text-3xl font-bold text-ink"><Tag aria-hidden="true" /> Check a purchase</h2>
+        <h2 id="goal-price-check-title" className="flex items-center gap-2 text-3xl font-bold text-ink"><Tag className="h-6 w-6 shrink-0" aria-hidden="true" /> Check a purchase</h2>
         <p className="mt-1 text-stone-600">See how a price changes your goal timeline.</p>
       </div>
 
