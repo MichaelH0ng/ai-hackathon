@@ -465,11 +465,19 @@ body { background: #edf4ed; color: #24392c; }
 .money-assistant-prompts { display: flex; flex-wrap: wrap; gap: 7px; padding: 0 16px 12px; }
 .money-assistant-prompts button { min-height: 35px; padding: 6px 10px; border: 1px solid #dce5d9; border-radius: 999px; color: #436348; font-size: 12px; }
 .money-assistant-prompts button:hover { background: #f5f8f2; }
-.money-assistant-form { display: flex; gap: 8px; padding: 12px 14px; border-top: 1px solid #e8eee5; }
-.money-assistant-form input { min-width: 0; min-height: 44px; flex: 1; padding: 0 12px; border: 1px solid #d3dfce; border-radius: 8px; color: #304e35; font-size: 14px; }
-.money-assistant-form input:focus-visible { outline: 3px solid #70966c; outline-offset: 2px; }
-.money-assistant-form .wealth-primary { min-width: 44px; padding: 0; }
-.money-assistant-privacy { padding: 0 15px 12px; color: #6a7766; font-size: 11px; }
+.money-assistant-form { display: flex; align-items: flex-end; gap: 8px; padding: 12px 14px; border-top: 1px solid #e8eee5; }
+.money-assistant-form textarea { display: block; min-width: 0; min-height: 44px; max-height: 160px; flex: 1; padding: 11px 12px; overflow-y: auto; resize: none; border: 1px solid #d3dfce; border-radius: 8px; color: #304e35; font: inherit; font-size: 14px; line-height: 20px; }
+.money-assistant-form textarea:focus-visible { outline: 3px solid #70966c; outline-offset: 2px; }
+.money-assistant-form .wealth-primary { min-width: 44px; min-height: 44px; padding: 0; }
+/* Square mic button; while listening, its icon becomes voice-level bars. */
+.money-assistant-mic { display: inline-flex; flex: none; align-items: center; justify-content: center; width: 44px; height: 44px; border: 1px solid #d3dfce; border-radius: 8px; color: #456e56; }
+.money-assistant-mic:hover { background: #eff5f1; }
+.money-assistant-mic:focus-visible { outline: 3px solid #70966c; outline-offset: 2px; }
+.money-assistant-mic:disabled { opacity: .5; cursor: not-allowed; }
+.money-assistant-mic.listening { border-color: #4b7fe0; background: #e9f0fb; color: #3f67b3; }
+.money-assistant-mic-bars { display: flex; align-items: center; gap: 3px; height: 22px; }
+.money-assistant-mic-bars span { width: 3px; height: 100%; border-radius: 2px; background: currentColor; transform: scaleY(.18); transition: transform 60ms linear; }
+.money-assistant-voice-error { padding: 0 15px 12px; color: #b3412f; font-size: 12px; }
 @media (max-width: 700px) { .northstar-summary { grid-template-columns: 150px 1fr; gap: 15px; padding: 20px; } .northstar-art { font-size: 12px; } .northstar-copy h2 { font-size: 19px; } }
 @media (max-width: 450px) { .northstar-summary { grid-template-columns: 1fr; gap: 8px; } .northstar-art { display: flex; align-items: center; justify-content: center; gap: 10px; } .northstar-visual { width: 130px; margin: 0; } .wealth-account-holdings { margin-left: 40px; } .money-assistant-launch { right: 14px; bottom: 14px; } .money-assistant-panel { right: 14px; bottom: 75px; max-height: 74dvh; } }
 
@@ -569,8 +577,8 @@ body {
 .money-assistant-prompts button { border-color: #d8e2ee; color: #3d6282; }
 .money-assistant-prompts button:hover { background: #eff7f7; }
 .money-assistant-form { border-color: #e4e9f2; }
-.money-assistant-form input { border-color: #cdd9e7; color: #2f4665; }
-.money-assistant-form input:focus-visible { outline-color: #45bba9; }
+.money-assistant-form textarea, .money-assistant-mic { border-color: #cdd9e7; color: #2f4665; }
+.money-assistant-form textarea:focus-visible { outline-color: #45bba9; }
 
 .soft-aurora-background { position: fixed; inset: 0; z-index: -1; overflow: hidden; pointer-events: none; background: radial-gradient(ellipse at 18% 25%, rgb(84 226 194 / 18%) 0, transparent 62%), linear-gradient(120deg, #f8fcff, #f8f6ff); }
 .soft-aurora-background canvas { display: block; width: 100%; height: 100%; }
@@ -723,7 +731,8 @@ body {
   .money-assistant-message { background: rgb(130 174 217 / 12%); }
   .money-assistant-message.user { background: rgb(132 107 208 / 20%); }
   .money-assistant-prompts button,
-  .money-assistant-form input,
+  .money-assistant-mic,
+  .money-assistant-form textarea,
   .wealth-field input,
   .wealth-field select,
   .wealth-field textarea {
@@ -732,8 +741,12 @@ body {
     color: var(--night-text);
   }
   .money-assistant-prompts button { color: #bffdf1; }
+  .money-assistant-voice-error { color: #ffb3ab; }
+  .money-assistant-mic { color: #bffdf1; }
+  .money-assistant-mic:hover { background: rgb(84 226 194 / 11%); }
+  .money-assistant-mic.listening { border-color: #54e2c2; background: rgb(84 226 194 / 14%); color: #9af6e3; }
   .money-assistant-prompts button:hover { background: rgb(84 226 194 / 11%); }
-  .money-assistant-form input::placeholder,
+  .money-assistant-form textarea::placeholder,
   .wealth-field input::placeholder,
   .wealth-field textarea::placeholder { color: #7d91ae; }
 
@@ -887,3 +900,77 @@ html, body { overscroll-behavior-y: none; }
 .safe-verdict-kept { font-size: 12px; font-weight: 600; opacity: .8; }
 .checkbox-field { display: flex; align-items: flex-start; gap: 12px; min-height: 44px; padding: 10px 0; cursor: pointer; }
 .checkbox-field input { width: 20px; height: 20px; margin-top: 2px; flex-shrink: 0; accent-color: #54e2c2; cursor: pointer; }
+
+/* Polaris mascot, message rows and typing dots. */
+.money-assistant-identity { display: flex; align-items: center; gap: 11px; }
+.money-assistant-row { display: flex; align-items: flex-end; gap: 8px; }
+.money-assistant-row.user { justify-content: flex-end; }
+.money-assistant-row .money-assistant-message { max-width: calc(100% - 44px); }
+.money-assistant-row.user .money-assistant-message { max-width: 90%; }
+.money-assistant-row-avatar { flex: none; margin-bottom: 2px; }
+.money-assistant-launch-avatar { margin-left: -8px; filter: drop-shadow(0 1px 3px rgb(0 0 0 / 22%)); }
+.money-assistant-launch:has(.money-assistant-launch-avatar) { padding-left: 14px; }
+.money-assistant-row { animation: money-assistant-in .28s ease-out both; }
+@keyframes money-assistant-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+.money-assistant-message.typing { display: inline-flex; align-items: center; min-height: 40px; padding: 0 14px; }
+.money-assistant-dots { display: inline-flex; gap: 5px; }
+.money-assistant-dots span { width: 7px; height: 7px; border-radius: 50%; background: #5a8fd8; animation: money-assistant-dot 1.2s ease-in-out infinite; }
+.money-assistant-dots span:nth-child(2) { animation-delay: .15s; }
+.money-assistant-dots span:nth-child(3) { animation-delay: .3s; }
+@keyframes money-assistant-dot { 0%, 60%, 100% { opacity: .35; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-4px); } }
+
+.polaris-avatar { flex: none; overflow: visible; }
+.polaris-avatar-eyes { transform-box: fill-box; transform-origin: center; animation: polaris-blink 5s infinite; }
+@keyframes polaris-blink { 0%, 92%, 100% { transform: scaleY(1); } 95% { transform: scaleY(.1); } }
+.polaris-avatar-twinkle { transform-box: fill-box; transform-origin: center; animation: polaris-twinkle 2.6s ease-in-out infinite; }
+@keyframes polaris-twinkle { 0%, 100% { opacity: .35; transform: scale(.7); } 50% { opacity: 1; transform: scale(1.15); } }
+.polaris-avatar.thinking .polaris-avatar-body { animation: polaris-bob 1.2s ease-in-out infinite; }
+.polaris-avatar.thinking .polaris-avatar-eyes { animation: none; transform: translate(.6px, -1.2px); }
+@keyframes polaris-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-1.5px); } }
+
+:root[data-theme="dark"] .money-assistant-dots span { background: #9af6e3; }
+@media (prefers-reduced-motion: reduce) {
+  .money-assistant-row, .money-assistant-dots span, .polaris-avatar-eyes, .polaris-avatar-twinkle, .polaris-avatar.thinking .polaris-avatar-body { animation: none; }
+  .money-assistant-dots span { opacity: .7; }
+}
+
+/* Polaris: read aloud, new chat, moods. */
+.money-assistant-header-actions { display: flex; gap: 2px; }
+.money-assistant-header-actions .wealth-icon-button:disabled { opacity: .35; cursor: default; background: none; }
+.money-assistant-speak { display: flex; width: fit-content; align-items: center; gap: 5px; margin-top: 7px; padding: 3px 9px 3px 7px; border: 1px solid rgb(75 127 224 / 28%); border-radius: 999px; color: #3f67b3; font-size: 12px; font-weight: 600; white-space: normal; }
+.money-assistant-speak:hover { background: rgb(75 127 224 / 9%); }
+.money-assistant-speak:focus-visible { outline: 3px solid #70966c; outline-offset: 2px; }
+.money-assistant-speak.speaking { border-color: #4b7fe0; background: rgb(75 127 224 / 12%); }
+.money-assistant-mood { margin: 0; padding: 9px 18px; border-bottom: 1px solid #e8eee5; font-size: 13px; font-weight: 600; }
+.money-assistant-mood.happy { background: #eafaf4; color: #1f6f5a; }
+.money-assistant-mood.worried { background: #fff4e5; color: #8a4b0f; }
+:root[data-theme="dark"] .money-assistant-speak { border-color: rgb(154 246 227 / 30%); color: #9af6e3; }
+:root[data-theme="dark"] .money-assistant-speak:hover, :root[data-theme="dark"] .money-assistant-speak.speaking { background: rgb(84 226 194 / 12%); }
+:root[data-theme="dark"] .money-assistant-mood { border-color: var(--night-border); }
+:root[data-theme="dark"] .money-assistant-mood.happy { background: rgb(84 226 194 / 12%); color: #9af6e3; }
+:root[data-theme="dark"] .money-assistant-mood.worried { background: rgb(255 179 92 / 12%); color: #ffcf8f; }
+
+.polaris-avatar.happy .polaris-avatar-body { animation: polaris-hop 2.4s ease-in-out infinite; }
+@keyframes polaris-hop { 0%, 70%, 100% { transform: translateY(0); } 80% { transform: translateY(-2.5px); } 90% { transform: translateY(0); } }
+.polaris-avatar-twinkle.late { animation-delay: 1.3s; }
+.polaris-avatar.worried .polaris-avatar-body { transform-box: fill-box; transform-origin: 50% 90%; animation: polaris-sway 3s ease-in-out infinite; }
+@keyframes polaris-sway { 0%, 100% { transform: rotate(0); } 25% { transform: rotate(-4deg); } 75% { transform: rotate(4deg); } }
+@media (prefers-reduced-motion: reduce) {
+  .polaris-avatar.happy .polaris-avatar-body, .polaris-avatar.worried .polaris-avatar-body { animation: none; }
+}
+
+/* Polaris answers: light formatting, and words that fade in from a soft blur (React Bits "Blur Text" look). */
+.money-assistant-message .polaris-text { white-space: normal; }
+.polaris-text > * + * { margin-top: 8px; }
+.polaris-text strong { font-weight: 700; color: inherit; }
+.polaris-text em { font-style: italic; }
+.polaris-text ul, .polaris-text ol { display: grid; gap: 4px; padding-left: 20px; }
+.polaris-text ul { list-style: disc; }
+.polaris-text ol { list-style: decimal; }
+.polaris-text li::marker { color: #4b7fe0; font-weight: 700; }
+:root[data-theme="dark"] .polaris-text strong { color: #f4fbff; }
+:root[data-theme="dark"] .polaris-text li::marker { color: #54e2c2; }
+.polaris-text.animate .polaris-word { display: inline-block; animation: polaris-word-in 520ms cubic-bezier(0.22, 1, 0.36, 1) both; animation-delay: calc(var(--i) * var(--polaris-step)); }
+@keyframes polaris-word-in { from { opacity: 0; filter: blur(6px); transform: translateY(5px); } to { opacity: 1; filter: blur(0); transform: none; } }
+@media (prefers-reduced-motion: reduce) { .polaris-text.animate .polaris-word { animation: none; } }

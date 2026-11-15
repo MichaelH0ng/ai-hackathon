@@ -2,6 +2,7 @@ import { Moon, Sun } from "lucide-react";
 import type { Theme } from "../lib/theme";
 import type { Profile } from "../lib/types";
 import { BackButton, Button, Card, NumberField } from "./ui";
+import { PolarisVoiceSettings } from "./PolarisVoiceSettings";
 
 export function Settings({
   profile,
@@ -57,6 +58,7 @@ export function Settings({
           ))}
         </div>
       </Card>
+      <PolarisVoiceSettings />
       <Card>
         <h3 className="font-bold text-stone-900">Demo</h3>
         <p className="mb-3 text-sm text-stone-600">Loads the hoodie and spring break savings examples. Replaces your current goals.</p>

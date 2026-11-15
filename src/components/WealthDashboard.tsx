@@ -252,7 +252,7 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; complet
       <ChevronRight size={16} aria-hidden="true" />
     </button></li>)}</ul>
   </div>;
-  const goalList = <section className="goals-list"><div className="wealth-section-head"><div><h2>Your savings goals</h2></div><button className="wealth-text-button" onClick={onNewGoal}><Plus size={16} /> New goal</button></div>
+  const goalList = <section className="goals-list"><div className="wealth-section-head"><div /><button className="wealth-text-button" onClick={onNewGoal}><Plus size={16} /> New goal</button></div>
     {cashSplit}
     {goals.length ? <div className="wealth-goal-grid">{goals.map(g => <button key={g.id} className="wealth-goal" onClick={() => onOpenGoal(g.id)}><span className="wealth-goal-top"><ProgressRing value={g.target > 0 ? g.saved / g.target * 100 : 0} label={`${g.name} funded`} /><ChevronRight size={17} /></span><h3>{g.name}</h3><p><strong>{usd(g.saved)}</strong> <span>of {usd(g.target)}</span></p>{g.target > 0 && g.saved >= g.target ? <SpringCheck readOnly checked label="Goal reached" strike="none" color="#edf6ff" fillColor="#54e2c2" checkColor="#050b16" boxSize={22} boxRadius={7} fontSize={14} doneOpacity={1} className="wealth-goal-reached" /> : <span className="wealth-goal-detail">{usd(g.weekly)}/week <span>{months(g.weekly > 0 ? Math.max(0, g.target - g.saved) / (g.weekly * 52 / 12) : Infinity)} to go</span></span>}{g.saved < g.target && g.deadline && <span className="goal-weekly-needed">{g.deadline > todayISO() ? `Save ${formatMoney(Math.ceil(weeklyNeededForDeadline(g.target, g.saved, g.deadline) * 100) / 100, true)}/week to meet your date` : "Choose a new target date to update your weekly plan"}</span>}{g.deadline && <span className="wealth-goal-deadline">Target date · {formatLongDate(g.deadline)}</span>}</button>)}</div> : <div className="wealth-goal-placeholder"><Target size={25} /><div><h3>What does your money make possible?</h3><p>An emergency fund, a home, a trip. Give your savings a purpose.</p></div><button className="wealth-secondary" onClick={onNewGoal}>Create a goal <ArrowRight size={15} /></button></div>}
     {undatedGoals > 0 && <p className="wealth-note goals-nudge">{undatedGoals === goals.filter(g => g.saved < g.target).length ? "Add a target date to a goal" : `Add a target date to ${undatedGoals} more goal${undatedGoals === 1 ? "" : "s"}`} to see the weekly amount needed to finish on time.</p>}
@@ -272,15 +272,12 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; complet
     retirementAge: retirementPoints.length ? retirementAge : null,
   };
   // One line of real numbers under each page title (instead of a tagline).
-  const goalsSaved = goals.reduce((sum, g) => sum + Math.min(g.saved, g.target), 0);
-  const goalsWeekly = goals.filter(g => g.saved < g.target).reduce((sum, g) => sum + g.weekly, 0);
   const pageFact =
     tab === "Accounts" || tab === "Activity" ? (assets.length ? `${assets.length} account${assets.length === 1 ? "" : "s"} · ${formatMoney(total - debts)} net worth` : "No accounts yet")
-      : tab === "Goals" ? (goals.length ? `${goals.length} goal${goals.length === 1 ? "" : "s"} · ${formatMoney(goalsSaved)} saved of ${formatMoney(totalGoalTarget)}${goalsWeekly > 0 ? ` · saving ${formatMoney(goalsWeekly)}/week` : ""}` : "No goals yet")
         : tab === "Retirement" ? `${formatMoney(retirementBalance)} in retirement accounts${retirementPoints.length && retirementAge !== null ? ` · about ${formatMoney(retirementPoints.at(-1)?.balance ?? 0)} by age ${retirementAge}` : ""}`
           : plan.income > 0 ? `${formatMoney(plan.income)} monthly income · ${available >= 0 ? `${formatMoney(available)} left to plan` : `${formatMoney(-available)} over budget`}` : "No monthly income entered yet";
   return <main id="main" className={`wealth-dashboard${tab === "Goals" ? " goals-page" : ""}`}>
-    <div className="wealth-page-head"><div><h1>{tab === "Goals" ? "My goals" : tab === "Activity" ? "Account activity" : tab}</h1>{tab !== "Overview" && <p>{pageFact}</p>}</div>{(tab === "Overview" || tab === "Accounts") && addAccountButton()}</div>
+    <div className="wealth-page-head"><div><h1>{tab === "Goals" ? "My goals" : tab === "Activity" ? "Account activity" : tab}</h1>{tab !== "Overview" && tab !== "Goals" && <p>{pageFact}</p>}</div>{(tab === "Overview" || tab === "Accounts") && addAccountButton()}</div>
     {tab === "Overview" && <>
       {bank.loading && !bank.data && !assets.length ? <OverviewSkeleton /> : <HomeOverview data={{
         env: bank.data?.env ?? "manual",
