@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { MessageCircle, Send, Sparkles, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, MessageCircle, Send, Sparkles, X } from "lucide-react";
 import { answerMoneyQuestion, type MoneyAssistantContext } from "../lib/moneyAssistant";
 
 interface ChatMessage {
@@ -9,6 +9,10 @@ interface ChatMessage {
   pending?: boolean;
   offline?: boolean; // answered on-device because the AI wasn't reachable
 }
+
+// Remembered per browser; storage can be unavailable (private mode), so every access is guarded.
+const TUCK_KEY = "northstar:polaris-tucked";
+const readTucked = () => { try { return localStorage.getItem(TUCK_KEY) === "1"; } catch { return false; } };
 
 const prompts = ["Compare retirement accounts", "Roth IRA vs traditional IRA", "What is an HSA?", "How do I start investing?"];
 
@@ -40,6 +44,14 @@ async function askAI(question: string, history: ChatMessage[], context: MoneyAss
 
 export function MoneyAssistant({ context }: { context: MoneyAssistantContext }) {
   const [open, setOpen] = useState(false);
+  // Tucked: Polaris slides off the right edge, leaving a small tab to bring it back.
+  const [tucked, setTucked] = useState(readTucked);
+  function toggleTucked() {
+    const next = !tucked;
+    setTucked(next);
+    if (next) setOpen(false);
+    try { localStorage.setItem(TUCK_KEY, next ? "1" : "0"); } catch { /* keep the choice for this visit only */ }
+  }
   const [question, setQuestion] = useState("");
   // null while checking; true when this machine's server has an API key.
   const [aiReady, setAiReady] = useState<boolean | null>(null);
@@ -113,8 +125,13 @@ export function MoneyAssistant({ context }: { context: MoneyAssistantContext }) 
       </form>
       <p className="money-assistant-privacy">{aiReady ? "Your question and a summary of your dashboard are sent to an AI service to answer. Not financial advice." : "Uses dashboard numbers on this device. Not financial advice."}</p>
     </section>}
-    <button className="money-assistant-launch" aria-expanded={open} aria-controls="money-assistant-panel" onClick={() => setOpen(value => !value)}>
-      {open ? <X size={20} /> : <MessageCircle size={20} />}<span>{open ? "Close Polaris" : "Ask Polaris"}</span>
-    </button>
+    <div className={`money-assistant-dock${tucked ? " tucked" : ""}`}>
+      <button className="money-assistant-tuck" aria-label={tucked ? "Show Polaris" : "Hide Polaris"} title={tucked ? "Show Polaris" : "Hide Polaris"} onClick={toggleTucked}>
+        {tucked ? <ChevronLeft size={18} aria-hidden="true" /> : <ChevronRight size={18} aria-hidden="true" />}
+      </button>
+      <button className="money-assistant-launch" inert={tucked} aria-expanded={open} aria-controls="money-assistant-panel" onClick={() => setOpen(value => !value)}>
+        {open ? <X size={20} /> : <MessageCircle size={20} />}<span>{open ? "Close Polaris" : "Ask Polaris"}</span>
+      </button>
+    </div>
   </>;
 }

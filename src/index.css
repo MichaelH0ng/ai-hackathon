@@ -843,3 +843,14 @@ body {
 .money-assistant-message { white-space: pre-wrap; }
 .money-assistant-message.pending { color: var(--night-muted); font-style: italic; }
 .money-assistant-offline { display: block; margin-top: 6px; color: var(--night-muted); font-size: 11px; font-style: normal; }
+
+/* Polaris dock: the launcher plus a tab that slides it off the right edge and back. */
+.money-assistant-dock { position: fixed; right: 22px; bottom: 20px; z-index: 51; display: flex; align-items: center; gap: 8px; transition: transform .45s cubic-bezier(.22, 1, .36, 1); }
+.money-assistant-dock .money-assistant-launch { position: static; transition: opacity .3s ease, background .18s; }
+/* Slide so only the tab stays on screen, flush with the right edge (100% of the dock, minus the tab, plus the 22px gap). */
+.money-assistant-dock.tucked { transform: translateX(calc(100% - 6px)); }
+.money-assistant-dock.tucked .money-assistant-launch { opacity: 0; }
+.money-assistant-tuck { display: grid; place-items: center; width: 28px; height: 44px; border: 1px solid var(--night-border); border-radius: 999px; background: rgb(12 27 51 / 92%); color: var(--night-text); box-shadow: 0 6px 18px rgb(0 0 0 / 35%); transition: border-radius .3s ease, background .18s; }
+.money-assistant-tuck:hover { background: #163059; }
+.money-assistant-dock.tucked .money-assistant-tuck { border-radius: 12px 0 0 12px; }
+@media (prefers-reduced-motion: reduce) { .money-assistant-dock, .money-assistant-dock .money-assistant-launch, .money-assistant-tuck { transition: none; } }

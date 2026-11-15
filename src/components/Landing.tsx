@@ -1,4 +1,4 @@
-import { ArrowRight, CalendarClock, Camera, PiggyBank, ShoppingBag, Target, Wallet } from "lucide-react";
+import { ArrowRight, CalendarClock, PiggyBank, ShoppingBag, Target, Wallet } from "lucide-react";
 import { useMemo } from "react";
 import { formatMoney } from "../lib/finance";
 import { assetsByInstitution, detectTransferIds, netWorthSeries, periodFlow, spendableCash, upcomingBills } from "../lib/money";
@@ -224,14 +224,15 @@ function PriceAddon({ onCheck }: { onCheck: () => void }) {
   return (
     <button
       onClick={onCheck}
-      className="clay flex w-full items-center gap-3 p-5 text-left transition-transform duration-200 hover:-translate-y-0.5 active:translate-y-0 motion-reduce:transition-none"
+      aria-label="Check a purchase: see how it affects your savings goals"
+      className="clay group flex w-full items-center justify-between gap-4 p-5 text-left transition-transform duration-200 hover:-translate-y-0.5 active:translate-y-0 motion-reduce:transition-none"
     >
-      <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-[rgb(84_226_194/14%)] text-[var(--aurora-teal)]"><Camera className="h-5 w-5" aria-hidden="true" /></span>
-      <span className="min-w-0 flex-1">
-        <span className="block font-display text-lg font-bold leading-tight text-ink">Thinking about buying something?</span>
-        <span className="mt-1 inline-flex items-center gap-1 text-sm font-bold text-[var(--aurora-teal)]">
-          Check a price <ArrowRight className="h-4 w-4" aria-hidden="true" />
-        </span>
+      <span className="min-w-0">
+        <span className="block font-display text-lg font-bold leading-tight text-ink">Check a purchase before you buy</span>
+        <span className="mt-1 block text-sm text-stone-600">See how a purchase affects your savings goals.</span>
+      </span>
+      <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[var(--night-border)] text-[var(--aurora-teal)] transition-colors duration-200 group-hover:bg-[rgb(84_226_194/12%)]" aria-hidden="true">
+        <ArrowRight className="h-5 w-5" />
       </span>
     </button>
   );
