@@ -1,39 +1,11 @@
-import { Camera, Clock, ImageUp, Lightbulb, PiggyBank, RotateCcw, Tag, Wallet } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { Clock, Lightbulb, PiggyBank, RotateCcw, Tag, Wallet } from "lucide-react";
+import { useState } from "react";
 import { formatMoney, hoursOfWork, projectedDate, whatIfSpend } from "../lib/finance";
 import type { BankSnapshot, MoneyGoal, Profile } from "../lib/types";
 import { type LogDecision, MoneyWhatIf, type WhatIfItem } from "./MoneyWhatIf";
 import { Button, Card, NumberField, Notice, TextField } from "./ui";
 
-/** Shrink photos before upload: faster, cheaper, and converts HEIC to JPEG in Safari. */
-async function toJpegDataUrl(file: File, maxSide = 1568): Promise<string> {
-  const bitmap = await createImageBitmap(file);
-  const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.round(bitmap.width * scale);
-  canvas.height = Math.round(bitmap.height * scale);
-  canvas.getContext("2d")!.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-  return canvas.toDataURL("image/jpeg", 0.85);
-}
-
-interface ScanResponse {
-  kind: "single_item" | "cart" | "no_price_found";
-  items: { name: string; price: number; estimated: boolean }[];
-  total: number | null;
-  cheaper_alternative: { description: string; price: number } | null;
-  note: string;
-}
-
-interface Checked extends WhatIfItem {
-  estimated: boolean;
-  lines?: { name: string; price: number }[]; // cart line items
-  note?: string;
-}
-
-/**
- * "At the store" flow: snap a price tag (or type the price), then see what the
- * item costs each of your savings goals before you buy it.
- */
+/** Compare a typed purchase price with savings goals. */
 export function PriceCheck({
   moneyGoals,
   profile,
@@ -51,22 +23,16 @@ export function PriceCheck({
   onNewGoal: () => void;
   onSettings: () => void;
 }) {
-  const uploadRef = useRef<HTMLInputElement>(null);
-  const [preview, setPreview] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [price, setPrice] = useState<number | "">("");
-  const [item, setItem] = useState<Checked | null>(null);
-  const [picked, setPicked] = useState<boolean[]>([]);
+  const [item, setItem] = useState<WhatIfItem | null>(null);
   const [goalId, setGoalId] = useState(moneyGoals[0]?.id ?? "");
   const [message, setMessage] = useState<string | null>(null);
   const [version, setVersion] = useState(0); // resets the What-If when the item changes
-  const [dragging, setDragging] = useState(false); // a file is being dragged over the drop zone
 
   const goal = moneyGoals.find((g) => g.id === goalId) ?? moneyGoals[0];
 
-  function show(next: Checked) {
+  function show(next: WhatIfItem) {
     setItem(next);
     setMessage(null);
     setVersion((v) => v + 1);
@@ -75,77 +41,9 @@ export function PriceCheck({
 
   function reset() {
     setItem(null);
-    setPreview(null);
-    setError(null);
     setName("");
     setPrice("");
     setMessage(null);
-  }
-
-  async function handleFile(file: File | undefined) {
-    if (!file) return;
-    setError(null);
-    setItem(null);
-    setLoading(true);
-    try {
-      const image = await toJpegDataUrl(file);
-      setPreview(image);
-      const res = await fetch("/api/scan", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ image }) });
-      const body = await res.json().catch(() => ({ error: "The price reader isn't responding. Is the server running?" }));
-      if (!res.ok) throw new Error(body.error ?? "Couldn't read that photo.");
-      const r = body as ScanResponse;
-      if (r.kind === "no_price_found" || !r.items.length) throw new Error("We couldn't find a price in that photo. Try a closer shot of the tag, or type the price below.");
-      const lines = r.items.map((i) => ({ name: i.name, price: i.price }));
-      setPicked(lines.map(() => true));
-      const isCart = r.kind === "cart" && lines.length > 1;
-      const total = r.total ?? lines.reduce((s, l) => s + l.price, 0);
-      setName(isCart ? "Your cart" : lines[0].name);
-      setPrice(Math.round((isCart ? total : lines[0].price) * 100) / 100);
-      show({
-        label: isCart ? "your cart" : lines[0].name,
-        price: isCart ? total : lines[0].price,
-        alternative: r.cheaper_alternative,
-        estimated: r.items.some((i) => i.estimated),
-        lines: isCart ? lines : undefined,
-        note: r.note || undefined,
-      });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Couldn't read that photo.");
-    } finally {
-      setLoading(false);
-      if (uploadRef.current) uploadRef.current.value = "";
-    }
-  }
-
-  function handleDroppedFiles(files: FileList) {
-    const file = files[0];
-    if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      setError("That file isn't a photo. Drop an image like a JPG, PNG or screenshot, or type the price below.");
-      return;
-    }
-    void handleFile(file);
-  }
-
-  // A photo dropped just outside the drop zone would otherwise open in the browser tab and leave the app.
-  useEffect(() => {
-    const block = (e: DragEvent) => { if (e.dataTransfer?.types.includes("Files")) e.preventDefault(); };
-    window.addEventListener("dragover", block);
-    window.addEventListener("drop", block);
-    return () => {
-      window.removeEventListener("dragover", block);
-      window.removeEventListener("drop", block);
-    };
-  }, []);
-
-  function toggleLine(i: number) {
-    if (!item?.lines) return;
-    const next = picked.map((v, j) => (j === i ? !v : v));
-    setPicked(next);
-    const total = item.lines.reduce((s, l, j) => (next[j] ? s + l.price : s), 0);
-    setPrice(Math.round(total * 100) / 100);
-    setItem({ ...item, price: total });
-    setVersion((v) => v + 1);
   }
 
   const money = (n: number) => formatMoney(n, n % 1 !== 0);
@@ -157,59 +55,8 @@ export function PriceCheck({
         <p className="mt-1 text-stone-600">See how a price changes your goal timeline.</p>
       </div>
 
-      {/* 1. Capture */}
+      {/* 1. Enter a purchase */}
       <Card className="purchase-check-entry">
-        <div className="relative w-full rounded-2xl bg-brand-600 px-18 py-4 text-center text-white shadow-[0_5px_0_0_rgb(59_7_100/0.25)]">
-          {/* Icon sits on the left edge; the text is centred across the whole box, independent of the icon. */}
-          <span className="absolute top-1/2 left-4 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-2xl bg-white/15"><Camera className="h-6 w-6" aria-hidden="true" /></span>
-          <span className="block">
-            <span className="block font-display text-lg font-bold">Snap the price tag</span>
-            <span className="block text-sm text-brand-100">Add a photo below. We'll read the item and price.</span>
-          </span>
-        </div>
-        <button
-          onClick={() => uploadRef.current?.click()}
-          disabled={loading}
-          onDragEnter={(e) => { e.preventDefault(); if (!loading) setDragging(true); }}
-          onDragOver={(e) => { e.preventDefault(); e.dataTransfer.dropEffect = loading ? "none" : "copy"; }}
-          onDragLeave={(e) => { if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setDragging(false); }}
-          onDrop={(e) => {
-            e.preventDefault();
-            setDragging(false);
-            if (!loading) handleDroppedFiles(e.dataTransfer.files);
-          }}
-          className={`mt-3 flex min-h-12 w-full flex-col items-center justify-center gap-1 rounded-2xl border-2 border-dashed px-4 py-3 text-sm font-bold transition-colors duration-200 disabled:opacity-60 pointer-fine:min-h-28 ${
-            dragging ? "border-brand-500 bg-brand-50 text-brand-700" : "border-stone-300 bg-stone-100 text-stone-800 hover:bg-stone-200"
-          }`}
-        >
-          <span className="flex items-center gap-2">
-            <ImageUp className="h-4 w-4" aria-hidden="true" />
-            <span className="pointer-fine:hidden">Take or upload a photo</span>
-            <span className="hidden pointer-fine:inline">{dragging ? "Drop it here to read the price" : "Drag a photo or cart screenshot here"}</span>
-          </span>
-          <span className="hidden text-xs font-semibold text-stone-500 pointer-fine:block">or click to browse your files</span>
-        </button>
-        <input ref={uploadRef} type="file" accept="image/*" hidden onChange={(e) => handleFile(e.target.files?.[0])} />
-
-        {(preview || loading) && (
-          <div className="mt-4 overflow-hidden rounded-2xl bg-stone-100">
-            {preview && <img src={preview} alt="Your photo" className={`max-h-64 w-full object-contain ${loading ? "opacity-60" : ""}`} />}
-            {loading && (
-              <div className="flex items-center gap-2 p-3 text-sm font-semibold text-brand-700" role="status">
-                <span className="h-4 w-4 animate-spin rounded-full border-2 border-brand-200 border-t-brand-600" aria-hidden="true" /> Reading the price tag…
-              </div>
-            )}
-          </div>
-        )}
-        {error && (
-          <div className="mt-3" role="alert">
-            <Notice tone="warn">{error}</Notice>
-          </div>
-        )}
-
-        <div className="my-5 flex items-center gap-3 text-xs font-bold uppercase tracking-wider text-stone-400">
-          <span className="h-px flex-1 bg-stone-200" /> or type it in <span className="h-px flex-1 bg-stone-200" />
-        </div>
         <div className="grid grid-cols-[1fr_8rem] gap-2">
           <TextField label="What is it?" value={name} onChange={setName} placeholder="AirPods" />
           <NumberField label="How much?" value={price} onChange={setPrice} />
@@ -217,7 +64,7 @@ export function PriceCheck({
         <Button
           className="purchase-check-compare mt-3 w-full"
           disabled={!price}
-          onClick={() => show({ label: name.trim() || "this item", price: Number(price), alternative: item?.label === (name.trim() || "this item") ? item.alternative : null, estimated: false })}
+          onClick={() => show({ label: name.trim() || "this item", price: Number(price), alternative: item?.label === (name.trim() || "this item") ? item.alternative : null })}
         >
           <span className="inline-flex items-center gap-2"><Tag className="h-4 w-4" aria-hidden="true" /> Compare with my goals</span>
         </Button>
@@ -237,23 +84,6 @@ export function PriceCheck({
               </button>
             </div>
             <p className="mt-1 font-display text-5xl font-bold text-ink">{money(item.price)}</p>
-            {item.estimated && <p className="mt-1 text-xs font-semibold text-amber-700">Estimated price: no tag was visible. Edit it above if you know it.</p>}
-
-            {item.lines && (
-              <ul className="mt-3 space-y-1 rounded-2xl bg-stone-50 p-3 text-sm">
-                {item.lines.map((l, i) => (
-                  <li key={i}>
-                    <label className="flex min-h-9 items-center gap-2">
-                      <input type="checkbox" checked={picked[i]} onChange={() => toggleLine(i)} className="h-4 w-4 accent-brand-600" />
-                      <span className="flex-1">{l.name}</span>
-                      <span className="font-semibold">{money(l.price)}</span>
-                    </label>
-                  </li>
-                ))}
-                <li className="pt-1 text-xs text-stone-500">Untick anything you're not buying.</li>
-              </ul>
-            )}
-
             <div className="mt-4 grid gap-2 sm:grid-cols-2">
               <div className="flex items-center gap-3 rounded-2xl bg-brand-50 p-3">
                 <Clock className="h-5 w-5 shrink-0 text-brand-600" aria-hidden="true" />
@@ -285,7 +115,6 @@ export function PriceCheck({
                 </p>
               </div>
             )}
-            {item.note && <p className="mt-2 text-xs text-stone-500">{item.note}</p>}
           </Card>
 
           {message && (
@@ -366,7 +195,6 @@ export function PriceCheck({
                   }}
                 />
               )}
-              <p className="text-center text-xs text-stone-500">Typed prices work without AI. Photo reading uses Claude and may need a moment.</p>
             </>
           )}
         </div>
