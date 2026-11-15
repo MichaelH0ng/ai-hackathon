@@ -13,6 +13,7 @@ import { isLiability } from "../lib/money";
 import { formatDate, todayISO } from "../lib/dates";
 import { cashOnHand, envelopes } from "../lib/envelopes";
 import { bankDataForPlan, includedItems } from "../lib/planningAccounts";
+import { savingsCapacity } from "../lib/savingsCapacity";
 import { formatExact, formatMoney, weeklyNeededForDeadline } from "../lib/finance";
 import { annualSpending, budgetBalanceProgress, opportunityCost, retirementProjection, type RetirementPoint, type SpendingFrequency, type RepeatUnit } from "../lib/planning";
 import { BudgetNorthStar, NorthStar } from "./NorthStar";
@@ -160,13 +161,25 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; complet
   const retirementPoints = retirementYears === null
     ? []
     : retirementProjection(retirementBalance, retirementMonthly, retirementReturn, retirementYears);
-  const monthlyGoals = goals.reduce((s, g) => s + g.weekly * 52 / 12, 0);
+  const activeGoals = goals.filter((goal) => goal.saved < goal.target);
+  const monthlyGoals = activeGoals.reduce((s, goal) => s + Math.max(0, goal.weekly) * 52 / 12, 0);
+  // A Plan-page view includes every active goal, while the goal dial excludes the
+  // one currently being adjusted. Both use the same income/spending estimator.
+  const planCapacity = savingsCapacity({
+    bankData: planningBankData,
+    goals,
+    selectedGoalId: "__monthly-plan__",
+    manualMonthlyIncome: plan.income,
+    manualMonthlyExpenses: plan.essentials + plan.lifestyle,
+  });
   const totalGoalTarget = goals.reduce((s, g) => s + g.target, 0);
   const savedTowardGoals = goals.reduce((s, g) => s + Math.min(g.target, Math.max(0, g.saved)), 0);
   const goalProgress = totalGoalTarget > 0 ? Math.min(100, savedTowardGoals / totalGoalTarget * 100) : 0;
   const updateNorthStarPreview = useCallback((progress: number | null) => setNorthStarPreview(progress), []);
-  const available = plan.income - plan.essentials - plan.lifestyle - monthlyGoals;
-  const budgetProgress = budgetBalanceProgress(plan.income, available);
+  const available = planCapacity.status === "missing-income"
+    ? 0
+    : planCapacity.monthlyIncome - planCapacity.monthlySpending - planCapacity.monthlyOtherGoals - planCapacity.monthlyBuffer;
+  const budgetProgress = budgetBalanceProgress(planCapacity.monthlyIncome, available);
   function sample() {
     update({ assets: [...plan.assets, ...[
       { name: "Everyday checking", institution: "Chase", kind: "Checking", balance: 3250 },
@@ -185,11 +198,10 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; complet
     const includedInPlan = !plan.excludedAccountIds.includes(a.id);
     const stale = isManual && !a.sample && (!a.updatedAt || daysSince(a.updatedAt) > STALE_DAYS);
     const holdings = isLinked ? bank.data?.holdings?.filter(holding => holding.accountId === a.id) ?? [] : [];
-    return <div className="wealth-account-block" key={a.id}>
-      <div className="wealth-account"><span className={`wealth-account-icon ${investment(a.kind) ? "invest" : ""}`}>{investment(a.kind) ? <ArrowUpRight size={20} /> : <Landmark size={20} />}</span><div className="wealth-account-name"><strong>{a.name}</strong><span>{a.institution || "Personal account"} · {a.kind}{a.sample ? " · Sample" : ""}</span>
+    return <div className={`wealth-account-block${includedInPlan ? "" : " is-excluded"}`} key={a.id}>
+      <div className="wealth-account"><label className={`wealth-account-plan-checkbox${includedInPlan ? " is-checked" : ""}`} title={includedInPlan ? "Included in your plan" : "Excluded from your plan"}><input type="checkbox" checked={includedInPlan} aria-label={`${includedInPlan ? "Exclude" : "Include"} ${a.name} in your plan`} onChange={() => update({ excludedAccountIds: includedInPlan ? [...plan.excludedAccountIds, a.id] : plan.excludedAccountIds.filter((id) => id !== a.id) })} /><span aria-hidden="true">{includedInPlan && <Check size={13} strokeWidth={3} />}</span></label><span className={`wealth-account-icon ${investment(a.kind) ? "invest" : ""}`}>{investment(a.kind) ? <ArrowUpRight size={20} /> : <Landmark size={20} />}</span><div className="wealth-account-name"><strong>{a.name}</strong><span>{a.institution || "Personal account"} · {a.kind}{a.sample ? " · Sample" : ""}</span>
         {isLinked && <span className="wealth-account-status">Connected</span>}
         {isManual && !a.sample && <span className={`wealth-account-status${stale ? " stale" : ""}`}>Manual · {updatedLabel(a.updatedAt)} · <button className="wealth-inline-link" onClick={() => setAssetForm(a)}>Update</button></span>}
-        <button className={`wealth-account-plan-toggle${includedInPlan ? " is-included" : ""}`} aria-pressed={includedInPlan} onClick={() => update({ excludedAccountIds: includedInPlan ? [...plan.excludedAccountIds, a.id] : plan.excludedAccountIds.filter((id) => id !== a.id) })}>{includedInPlan ? <Check size={14} aria-hidden="true" /> : <X size={14} aria-hidden="true" />}{includedInPlan ? "Included in your plan" : "Excluded from your plan"}</button>
       </div><strong className="wealth-balance">{debt(a.kind) ? "−" : ""}{usd(a.balance)}</strong>{isManual && <button className="wealth-icon-button" aria-label={`Edit ${a.name}`} onClick={() => setAssetForm(a)}><SlidersHorizontal size={15} /></button>}</div>
       {holdings.length > 0 && <details className="wealth-account-holdings"><summary>{holdings.length} investment holding{holdings.length === 1 ? "" : "s"}</summary><ul>{holdings.map(holding => <li key={holding.id}><span><strong>{holding.ticker || holding.name}</strong><small>{holding.quantity.toLocaleString(undefined, { maximumFractionDigits: 6 })} shares</small></span><strong>{holdingMoney(holding.value, holding.currency)}</strong></li>)}</ul></details>}
     </div>;
@@ -228,7 +240,8 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; complet
   const undatedGoals = goals.filter(g => g.saved < g.target && !g.deadline).length;
   // Goals as envelopes: each goal's savings are a share of your checking + savings.
   const knowsCash = (planningBankData?.accounts ?? []).some(a => a.type === "depository") || planningAssets.some(a => a.kind === "Checking" || a.kind === "Savings");
-  const pool = envelopes(goals, cashOnHand(planningBankData?.accounts ?? [], planningAssets));
+  // Linked accounts are in planningAssets too; count them once (from the bank), plus manual ones.
+  const pool = envelopes(goals, cashOnHand(planningBankData?.accounts ?? [], planningAssets.filter(a => !linked.some(l => l.id === a.id))));
   const poolWidth = Math.max(pool.cash, pool.setAside) || 1;
   const cashSplit = knowsCash && goals.length > 0 && <div className="wealth-card cash-split">
     <div className="cash-split-head">
@@ -325,7 +338,7 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; complet
       {goalList}
       <section aria-label="Check a price">{props.priceCheck}</section>
       <h2 className="goals-tools-heading">Plan your next step</h2>
-      {goals.length > 0 && <details className="goals-tool"><summary><span className="goals-tool-icon"><SlidersHorizontal size={23} /></span><span className="goals-tool-copy"><strong>Adjust weekly savings</strong><small>Change your weekly amount and see your new finish date.</small></span><ChevronRight className="goals-tool-arrow" size={23} /></summary><div className="goals-tool-body"><SavingsPlanner goals={goals} onUpdate={props.onUpdateGoal} onOpen={onOpenGoal} /></div></details>}
+      {goals.length > 0 && <details className="goals-tool"><summary><span className="goals-tool-icon"><SlidersHorizontal size={23} /></span><span className="goals-tool-copy"><strong>Adjust weekly savings</strong><small>Choose a sustainable amount and see your new finish date.</small></span><ChevronRight className="goals-tool-arrow" size={23} /></summary><div className="goals-tool-body"><SavingsPlanner goals={goals} financials={{ bankData: planningBankData, manualMonthlyIncome: plan.income, manualMonthlyExpenses: plan.essentials + plan.lifestyle }} onUpdate={props.onUpdateGoal} onOpen={onOpenGoal} onOpenPlan={() => setTab("Plan")} /></div></details>}
       <details className="goals-tool"><summary><span className="goals-tool-icon"><CircleDollarSign size={23} /></span><span className="goals-tool-copy"><strong>Cost of a habit</strong><small>See what a subscription or regular expense costs a goal over a year.</small></span><ChevronRight className="goals-tool-arrow" size={23} /></summary><div className="goals-tool-body"><OpportunityCalculator goals={goals} totalGoalTarget={totalGoalTarget} savedTowardGoals={savedTowardGoals} onNewGoal={onNewGoal} onPreviewProgress={updateNorthStarPreview} /></div></details>
       <details className="goals-tool"><summary><span className="goals-tool-icon"><Sparkles size={23} /></span><span className="goals-tool-copy"><strong>View my constellation</strong><small>Watch your savings milestones light up.</small></span><ChevronRight className="goals-tool-arrow" size={23} /></summary><div className="goals-tool-body"><NorthStar progress={goalProgress} previewProgress={northStarPreview} hasGoals={goals.length > 0} onNewGoal={onNewGoal} /></div></details>
       <details className="wealth-card wealth-preferences goals-tool">
@@ -359,8 +372,8 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; complet
       <p className="wealth-note">This is an illustration, not a guarantee or investment advice. It assumes monthly contributions and a steady return, and excludes taxes, fees, inflation, and changes in investment value.</p>
     </section>
     <div className="wealth-stack">
-      <BudgetNorthStar progress={budgetProgress} hasIncome={plan.income > 0} remainder={available} />
-      <section className="wealth-card"><div className="wealth-section-head"><div><h2>Your monthly plan</h2></div></div><div className="wealth-stack"><Amount label="Monthly income (after tax)" value={plan.income} onChange={income => update({ income })} /><Amount label="Monthly essentials · rent, groceries, bills" value={plan.essentials} onChange={essentials => update({ essentials })} /><Amount label="Monthly lifestyle · shopping, dining, fun" value={plan.lifestyle} onChange={lifestyle => update({ lifestyle })} /><div className="wealth-budget-line"><span>Savings goal contributions</span><strong>{usd(monthlyGoals)} / mo</strong></div><p className="wealth-note">Weekly contributions × 52 ÷ 12. Edit contributions in your goals.</p><div className={`wealth-budget-remainder ${available < 0 ? "over" : ""}`}><span>{available < 0 ? "Over budget" : "Left to plan"}</span><strong>{usd(Math.abs(available))}</strong></div>{available < 0 && <p className="wealth-note">Your spending and goal contributions exceed your income. Adjust your plan to close the gap.</p>}</div></section>
+      <BudgetNorthStar progress={budgetProgress} hasIncome={planCapacity.monthlyIncome > 0} remainder={available} incomeSource={planCapacity.incomeSource} />
+      <section className="wealth-card wealth-monthly-plan"><div className="wealth-section-head"><div><h2>Your monthly plan</h2><p>Every number used in your budget is shown below.</p></div></div><div className="wealth-stack"><Amount label="Monthly income (after tax)" value={plan.income} onChange={income => update({ income })} /><Amount label="Monthly essentials · rent, groceries, bills" value={plan.essentials} onChange={essentials => update({ essentials })} /><Amount label="Monthly lifestyle · shopping, dining, fun" value={plan.lifestyle} onChange={lifestyle => update({ lifestyle })} /><div className="wealth-budget-breakdown" aria-label="Monthly plan calculation"><div className="wealth-budget-line"><span><strong>Income used</strong><small>{planCapacity.incomeSource === "detected" ? "Recurring deposits from connected accounts" : planCapacity.incomeSource === "manual" ? "Your entered monthly income" : "No income available yet"}</small></span><strong>{planCapacity.incomeSource === "none" ? "—" : `${usd(planCapacity.monthlyIncome)} / mo`}</strong></div><div className="wealth-budget-line"><span><strong>Spending used</strong><small>{planCapacity.spendingSource === "observed" ? "Observed activity is higher than your entered budget" : planCapacity.spendingSource === "manual" ? "Your entered essentials and lifestyle" : "No spending data yet"}</small></span><strong>{usd(planCapacity.monthlySpending)} / mo</strong></div><div className="wealth-budget-line wealth-budget-goal-line"><span><strong>Active goal contributions</strong><small>Weekly amount × 52 ÷ 12. Completed goals are excluded.</small></span><strong>{usd(monthlyGoals)} / mo</strong></div>{activeGoals.length > 0 && <ul className="wealth-budget-goals">{activeGoals.map((goal) => <li key={goal.id}><span>{goal.name}<small>{usd(goal.weekly)} / week</small></span><strong>{usd(goal.weekly * 52 / 12)} / mo</strong></li>)}</ul>}<div className="wealth-budget-line"><span><strong>Safety buffer</strong><small>Reserved for normal surprises before new savings are assigned.</small></span><strong>{usd(planCapacity.monthlyBuffer)} / mo</strong></div></div><div className={`wealth-budget-remainder ${available < 0 ? "over" : ""} ${planCapacity.status === "missing-income" ? "needs-income" : ""}`}><span>{planCapacity.status === "missing-income" ? "Income needed" : available < 0 ? "Over budget after buffer" : "Monthly room after buffer"}</span><strong>{planCapacity.status === "missing-income" ? "—" : usd(Math.abs(available))}</strong></div>{planCapacity.status === "missing-income" ? <p className="wealth-note">Connect the account where your pay lands, or enter monthly after-tax income above. NorthStar will not guess a positive savings amount without it.</p> : available < 0 ? <p className="wealth-note">Your income is short by {usd(Math.abs(available))} after spending, active goals, and your buffer. Lower a cost, adjust a goal, or change the timeline.</p> : <p className="wealth-note">That is about {usd(planCapacity.weeklyLimit)} per week available for a new or adjusted savings goal.</p>}</div></section>
     </div>
     </div>}
     {tab === "Activity" && <div className="wealth-stack"><button className="wealth-text-button" onClick={() => setTab("Accounts")}>← Back to your accounts</button><MoneyDashboard {...props} /></div>}

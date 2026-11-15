@@ -1,8 +1,8 @@
-import { ArrowRight, Clock, Lightbulb, PiggyBank, RotateCcw, Tag, Wallet } from "lucide-react";
+import { ArrowRight, Check, Clock, PiggyBank, RotateCcw, Tag, Undo2, Wallet } from "lucide-react";
 import { goalForItem } from "../lib/envelopes";
 import { formatDate } from "../lib/dates";
 import { useMemo, useState } from "react";
-import { formatDelay, formatMoney, priceInContext, projectedDate, whatIfSpend } from "../lib/finance";
+import { formatDelay, formatMoney, priceInContext, projectedDate, weeksToGoal, whatIfSpend } from "../lib/finance";
 import type { BankSnapshot, MoneyGoal, Profile } from "../lib/types";
 import type { BankData } from "../lib/money";
 import { buildForecast, cashFromAccounts, evaluatePurchase, isEmergencyFund, monthlyIncome } from "../lib/safeToSpend";
@@ -23,6 +23,7 @@ export function PriceCheck({
   onCreateGoal,
   onOpenGoal,
   onSettings,
+  onUpdateGoal,
 }: {
   moneyGoals: MoneyGoal[];
   profile: Profile;
@@ -34,17 +35,21 @@ export function PriceCheck({
   onCreateGoal: (g: MoneyGoal) => void;
   onOpenGoal: (id: string) => void;
   onSettings: () => void;
+  /** Logs a purchase against a goal by lowering its saved amount (and restores it on undo). */
+  onUpdateGoal?: (g: MoneyGoal) => void;
 }) {
   const [name, setName] = useState("");
   const [price, setPrice] = useState<number | "">("");
   const [item, setItem] = useState<WhatIfItem | null>(null);
-  const [goalId, setGoalId] = useState(moneyGoals[0]?.id ?? "");
+  const [goalId, setGoalId] = useState("");
+  // The goal a logged purchase came out of, as it was before, so the log can be undone.
+  const [logged, setLogged] = useState<{ before: MoneyGoal; amount: number } | null>(null);
 
   // The emergency fund never pays for a purchase, so it can't be chosen as the goal that funds one.
   const fundable = moneyGoals.filter((g) => !isEmergencyFund(g));
-  const goal = fundable.find((g) => g.id === goalId) ?? fundable[0];
   // A purchase with its own goal ("AirPods") is paid from that goal, so its savings count as available.
   const fund = item ? goalForItem(item.label, moneyGoals) : null;
+  const goal = fundable.find((g) => g.id === goalId) ?? fundable.find((g) => g.id === fund?.id) ?? fundable[0];
   // Fully saved for: the goal pays for it, so there's no cash verdict or goal trade-off to show.
   const covered = !!fund && !!item && fund.saved >= item.price;
 
@@ -79,11 +84,13 @@ export function PriceCheck({
 
   function show(next: WhatIfItem) {
     setItem(next);
+    setLogged(null);
     setTimeout(() => document.getElementById("price-result")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   }
 
   function reset() {
     setItem(null);
+    setLogged(null);
     setName("");
     setPrice("");
   }
@@ -106,7 +113,7 @@ export function PriceCheck({
         <Button
           className="purchase-check-compare mt-3 w-full"
           disabled={!price}
-          onClick={() => show({ label: name.trim() || "this item", price: Number(price), alternative: item?.label === (name.trim() || "this item") ? item.alternative : null })}
+          onClick={() => show({ label: name.trim() || "this item", price: Number(price), alternative: null })}
         >
           <span className="inline-flex items-center gap-2"><Tag className="h-4 w-4" aria-hidden="true" /> Compare with my goals</span>
         </Button>
@@ -138,14 +145,6 @@ export function PriceCheck({
                   </p>
                 )}
               </div>
-              {item.alternative && item.alternative.price < item.price && (
-                <div className="flex items-center gap-3 rounded-2xl bg-emerald-50 p-3">
-                  <Lightbulb className="h-5 w-5 shrink-0 text-emerald-600" aria-hidden="true" />
-                  <p className="text-sm text-stone-700">
-                    Cheaper idea: <strong>{item.alternative.description}</strong>, about {money(item.alternative.price)}.
-                  </p>
-                </div>
-              )}
             </div>
             {bank && !forecast && (
               <div className="mt-2 flex items-center gap-3 rounded-2xl bg-sky-50 p-3">
@@ -186,104 +185,71 @@ export function PriceCheck({
             </SafeToSpendCard>
           )}
 
-          {covered ? null : moneyGoals.length === 0 ? (
-            <Card className="text-center">
-              <PiggyBank className="mx-auto h-10 w-10 text-emerald-600" aria-hidden="true" />
-              <h3 className="mt-2 text-xl font-bold text-ink">See how this moves a goal</h3>
-              <p className="mx-auto mt-1 max-w-sm text-sm text-stone-600">Add something you're saving for, and NorthStar will show how many days this purchase pushes it back.</p>
-              <Button className="mt-4" onClick={onNewGoal}>Start a savings goal</Button>
-            </Card>
-          ) : (
-            <>
-              <Card>
-                <h3 className="text-lg font-bold text-ink">What it costs your goals</h3>
-                <p className="text-sm text-stone-600">Choose which goal would fund the purchase. Each row is a separate scenario, not a combined deduction from every goal.</p>
-                <ul className="mt-3 space-y-2" role="radiogroup" aria-label="Choose a goal">
-                  {moneyGoals.map((g) => {
-                    if (isEmergencyFund(g)) return (
-                      <li key={g.id} className="flex min-h-14 items-center justify-between gap-3 rounded-2xl px-4 ring-1 ring-stone-200">
-                        <span className="font-semibold text-ink">{g.name}</span>
-                        <span className="text-sm font-semibold text-stone-600">Not affected: never used for purchases</span>
-                      </li>
-                    );
-                    const w = whatIfSpend(g.target, g.saved, g.weekly, item.price);
-                    const on = g.id === goal?.id;
-                    return (
-                      <li key={g.id}>
-                        <button
-                          role="radio"
-                          aria-checked={on}
-                          onClick={() => setGoalId(g.id)}
-                          className={`flex min-h-14 w-full items-center justify-between gap-3 rounded-2xl px-4 text-left ring-1 transition-colors duration-200 ${on ? "bg-brand-50 ring-2 ring-brand-500" : "bg-white ring-stone-200 hover:bg-stone-50"}`}
-                        >
-                          <span className="min-w-0">
-                            <span className="block font-semibold text-ink">{g.name}</span>
-                            {(() => {
-                              const from = projectedDate(w.originalWeeks);
-                              const to = projectedDate(w.newWeeks);
-                              return from && to && w.delayDays > 0 && <span className="block text-sm text-stone-600">{formatDate(from)} → {formatDate(to)}{g.deadline && to > g.deadline && from <= g.deadline && <strong className="text-amber-700"> · past your {formatDate(g.deadline)} target</strong>}</span>;
-                            })()}
-                          </span>
-                          <span className={`shrink-0 text-right font-display text-lg font-bold ${!isFinite(w.delayDays) ? "text-stone-600" : w.delayDays > 0 ? "text-amber-700" : "text-emerald-700"}`}>
-                            {isFinite(w.delayDays) ? (w.delayDays > 0 ? `+${formatDelay(w.delayDays)}` : "no delay") : "Set a weekly amount"}
-                          </span>
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
+          {!covered && (() => {
+            // Spare cash pays first (the same lowest-point headroom Safe-to-Spend uses). Only what's
+            // left over comes out of a goal, so a purchase spare cash covers never delays one.
+            const spare = forecast ? Math.max(0, Math.floor(forecast.headroom)) : null;
+            const fromGoal = spare === null ? item.price : Math.max(0, Math.round((item.price - spare) * 100) / 100);
+            if (fromGoal === 0) return (
+              <Card className="purchase-goal-impact is-clear">
+                <h3><Check className="h-5 w-5" aria-hidden="true" /> Your goals stay on track</h3>
+                <p>Your spare cash covers this, so none of your goal savings would be used.</p>
               </Card>
-
-              {goal && (
-                <Card className="purchase-verdict">
-                  <h3>Trade-off for {goal.name}</h3>
-                  <p>{(() => {
-                    const impact = whatIfSpend(goal.target, goal.saved, goal.weekly, item.price);
-                    const finishISO = projectedDate(impact.newWeeks);
-                    const baselineISO = projectedDate(impact.originalWeeks);
-                    const finish = finishISO && formatDate(finishISO);
-                    if (goal.weekly <= 0) return "Set a weekly savings amount before deciding: there isn’t enough information to estimate how long recovery would take.";
-                    if (!Number.isFinite(impact.delayDays)) return "A timeline cannot be calculated with the current goal settings.";
-                    if (goal.deadline && finishISO && finishISO > goal.deadline) return `${baselineISO && baselineISO > goal.deadline ? "Your plan already misses its target date. This purchase would delay it further" : "This purchase would push your goal past its target date"} to ${finish}. Consider skipping it or choosing a cheaper option if that deadline matters most.`;
-                    if (impact.delayDays <= 0) return "This scenario adds no delay to this goal. That alone doesn’t establish whether the purchase fits your overall budget.";
-                    return `The trade-off is ${formatDelay(impact.delayDays)} of extra saving${finish ? `, reaching this goal around ${finish}` : ""}${goal.deadline ? ", still within your target date" : ""}. It may be worth it if the purchase matters more to you than that wait; skipping it protects your current timeline.`;
-                  })()}</p>
-                  {(() => {
-                    const impact = whatIfSpend(goal.target, goal.saved, goal.weekly, item.price);
-                    const from = projectedDate(impact.originalWeeks);
-                    const to = projectedDate(impact.newWeeks);
-                    if (!from || !to || impact.delayDays <= 0) return null;
-                    const alt = item.alternative && item.alternative.price < item.price ? item.alternative : null;
-                    const altImpact = alt ? whatIfSpend(goal.target, goal.saved, goal.weekly, alt.price) : null;
-                    const altTo = altImpact ? projectedDate(altImpact.newWeeks) : null;
-                    return (
-                      <div className="goal-shift" aria-label={`${goal.name}: ${formatDate(from)} without it, ${formatDate(to)} if you buy it`}>
-                        <div className="goal-shift-tile">
-                          <small>Without it</small>
-                          <strong>{formatDate(from)}</strong>
-                          {goal.deadline && <span>Target date {formatDate(goal.deadline)}</span>}
-                        </div>
-                        <ArrowRight className="goal-shift-arrow" size={20} aria-hidden="true" />
-                        <div className="goal-shift-tile is-later">
-                          <small>If you buy {item.label}</small>
-                          <strong>{formatDate(to)}</strong>
-                          <span>+{formatDelay(impact.delayDays)}</span>
-                        </div>
-                        {alt && altTo && altImpact && (
-                          <div className="goal-shift-tile is-alt">
-                            <small>{alt.description} ({money(alt.price)})</small>
-                            <strong>{formatDate(altTo)}</strong>
-                            <span>{altImpact.delayDays > 0.05 ? `+${formatDelay(altImpact.delayDays)}` : "No delay"}</span>
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })()}
-                  <p className="wealth-note">Assumes the full price comes from this goal’s savings and weekly contributions stay unchanged. This is a planning comparison, not a guarantee of affordability.</p>
-                </Card>
-              )}
-            </>
-          )}
+            );
+            if (!goal) return (
+              <Card className="text-center">
+                <PiggyBank className="mx-auto h-10 w-10 text-emerald-600" aria-hidden="true" />
+                <h3 className="mt-2 text-xl font-bold text-ink">See how this moves a goal</h3>
+                <p className="mx-auto mt-1 max-w-sm text-sm text-stone-600">Add something you're saving for, and NorthStar will show how much later this purchase makes it.</p>
+                <Button className="mt-4" onClick={onNewGoal}>Start a savings goal</Button>
+              </Card>
+            );
+            const impact = whatIfSpend(goal.target, goal.saved, goal.weekly, fromGoal);
+            const from = projectedDate(weeksToGoal(goal.target, goal.saved, goal.weekly));
+            const to = projectedDate(impact.newWeeks);
+            const take = Math.min(fromGoal, Math.max(0, goal.saved));
+            return (
+              <Card className="purchase-goal-impact">
+                <h3>{spare === null ? `${money(fromGoal)} would come from a goal` : spare > 0 ? `Spare cash covers ${money(spare)}. The other ${money(fromGoal)} comes from a goal.` : `You'd need ${money(fromGoal)} from a goal`}</h3>
+                <p>{spare === null ? "NorthStar can't see your checking or savings yet, so this assumes the whole price comes from a goal." : "That's the part your spare cash can't cover in the next 30 days."}</p>
+                {fundable.length > 1 && (
+                  <label className="wealth-field purchase-goal-pick">
+                    <span>Take it from</span>
+                    <select value={goal.id} onChange={(e) => { setGoalId(e.target.value); setLogged(null); }}>
+                      {fundable.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+                    </select>
+                  </label>
+                )}
+                {goal.weekly <= 0 ? (
+                  <p className="purchase-goal-note">Set a weekly amount for {goal.name} to see how long it takes to win this back.</p>
+                ) : from && to && (
+                  <div className="goal-shift" aria-label={`${goal.name}: ${formatDate(from)} without it, ${formatDate(to)} if you buy it`}>
+                    <div className="goal-shift-tile">
+                      <small>{goal.name} without it</small>
+                      <strong>{formatDate(from)}</strong>
+                      {goal.deadline && <span>Target {formatDate(goal.deadline)}</span>}
+                    </div>
+                    <ArrowRight className="goal-shift-arrow" size={20} aria-hidden="true" />
+                    <div className="goal-shift-tile is-later">
+                      <small>If you buy {item.label}</small>
+                      <strong>{formatDate(to)}</strong>
+                      <span>{impact.delayDays > 0 ? `+${formatDelay(impact.delayDays)}` : "No delay"}{goal.deadline && to > goal.deadline ? " · past your target" : ""}</span>
+                    </div>
+                  </div>
+                )}
+                {logged ? (
+                  <p className="purchase-logged" role="status">
+                    Took {money(logged.amount)} from {logged.before.name}.
+                    <button type="button" onClick={() => { onUpdateGoal?.(logged.before); setLogged(null); }}><Undo2 className="h-4 w-4" aria-hidden="true" /> Undo</button>
+                  </p>
+                ) : onUpdateGoal && take > 0 && (
+                  <button type="button" className="wealth-secondary purchase-log" onClick={() => { onUpdateGoal({ ...goal, saved: Math.round((goal.saved - take) * 100) / 100 }); setLogged({ before: goal, amount: take }); }}>
+                    I bought it: take {money(take)} from {goal.name}
+                  </button>
+                )}
+              </Card>
+            );
+          })()}
         </div>
       )}
     </section>

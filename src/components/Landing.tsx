@@ -50,7 +50,7 @@ export function Landing({
         <Welcome bank={bank} goal={goal} goalCount={goalCount} onCheck={onCheck} onDemo={onDemo} onGoals={onGoals} />
       )}
 
-      {moneyGoals.length > 0 && <SavingsPlanner goals={moneyGoals} onUpdate={onUpdateGoal} onOpen={onOpenGoal} />}
+      {moneyGoals.length > 0 && <SavingsPlanner goals={moneyGoals} financials={{ bankData: bank.data }} onUpdate={onUpdateGoal} onOpen={onOpenGoal} />}
 
       <section aria-label="More in NorthStar" className="px-4 pb-14">
         <div className="mx-auto max-w-6xl">

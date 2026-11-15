@@ -243,3 +243,13 @@ button.ui-button > span, button.wealth-primary > span, button.wealth-secondary >
 .goals-page .wealth-goal .wealth-goal-reached { padding-top: 12px; border-top: 1px solid #899bb54d; }
 /* Keep "My goals" and its New goal button on one centered row on phones. */
 .goals-page .wealth-page-head { align-items: center; flex-wrap: nowrap; }
+
+/* Check a purchase: one card for the part a goal would pay. */
+.purchase-goal-impact { display: grid; gap: 10px; }
+.purchase-goal-impact h3 { display: flex; align-items: center; gap: 8px; font-size: 18px; font-weight: 750; line-height: 1.4; }
+.purchase-goal-impact p { font-size: 15px; line-height: 1.6; }
+.purchase-goal-impact.is-clear h3 { color: var(--ns-accent); }
+.purchase-goal-impact .goal-shift { margin-top: 4px; }
+.purchase-goal-pick { max-width: 320px; }
+.purchase-log { justify-self: start; }
+.purchase-logged { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-weight: 700; color: var(--ns-accent); }

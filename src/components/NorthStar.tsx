@@ -68,10 +68,11 @@ export function NorthStar({ progress, previewProgress, hasGoals, onNewGoal }: {
   </section>;
 }
 
-export function BudgetNorthStar({ progress, hasIncome, remainder }: {
+export function BudgetNorthStar({ progress, hasIncome, remainder, incomeSource = "manual" }: {
   progress: number;
   hasIncome: boolean;
   remainder: number;
+  incomeSource?: "detected" | "manual" | "none";
 }) {
   const milestone = northStarMilestone(progress);
   const status = remainder < 0
@@ -94,7 +95,7 @@ export function BudgetNorthStar({ progress, hasIncome, remainder }: {
         <div className="northstar-progress" role="progressbar" aria-label="Monthly plan balance" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(progress)}><i style={{ width: `${progress}%` }} /></div>
         <p className="northstar-current">{status}</p>
       </> : <p className="northstar-current">Add monthly after-tax income to see your progress.</p>}
-      <p className="wealth-note">Based on your plan, not actual transactions.</p>
+      <p className="wealth-note">{incomeSource === "detected" ? "Income is estimated from recurring connected-account deposits; it can change as activity changes." : "Based on the monthly amounts you entered."}</p>
     </div>
   </section>;
 }
