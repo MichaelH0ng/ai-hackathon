@@ -26,6 +26,8 @@ export interface Profile {
   name?: string;
   email?: string;
   phone?: string;
+  avatarColor?: string;
+  avatarImage?: string;
 }
 
 /** A choice the user made in a What-If — powers "Your choices" insights. */

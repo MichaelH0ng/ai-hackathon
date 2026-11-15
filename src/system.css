@@ -10,6 +10,7 @@
  */
 :root {
   --ns-radius-control: 10px;
+  --ns-focus: #4c86d9;
   --ns-radius-card: 16px;
   /* The signature gradient, deepened a step so white button text meets WCAG AA. */
   --ns-primary: linear-gradient(115deg, #117275, #3c69c9 60%, #8450c4);
@@ -23,6 +24,7 @@
   --ns-surface-inset: #f1f5fb;
 }
 :root[data-theme="dark"] {
+  --ns-focus: #94c9ff;
   --ns-accent: #54e2c2;
   --ns-secondary-bg: #0f213d;
   --ns-secondary-hover: #163059;
@@ -83,8 +85,37 @@
 :root[data-theme] .goals-tool-icon { border-radius: var(--ns-radius-control); }
 
 /* ---------- Text ---------- */
+.profile-color-swatch { width: 44px; height: 44px; border-radius: 50%; color: white; font-size: 22px; font-weight: 700; border: 2px solid transparent; }
+.profile-color-swatch[aria-pressed="true"] { border-color: white; box-shadow: 0 0 0 2px var(--ns-focus); }
+.profile-color-swatch:disabled { opacity: .5; cursor: wait; }
+
 /* Form labels were left in an old low-contrast gray; make them readable everywhere. */
-:root[data-theme] .wealth-field > span { color: var(--ns-label); font-weight: 600; }
+:root[data-theme] :is(.wealth-field, .ui-field) > span:first-child { color: var(--ns-label); font-size: 14px; font-weight: 600; }
+
+/* Use one blue focus treatment for editable fields throughout the app. */
+:root[data-theme] :is(.ui-field > input, .ui-number-field, .wealth-field input, .wealth-field select, .wealth-field textarea) {
+  border: 1px solid var(--ns-line);
+  border-radius: var(--ns-radius-control);
+  box-shadow: none;
+}
+
+:root[data-theme] :is(input:where(:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="button"]):not([type="submit"])), select, textarea):focus,
+:root[data-theme] :is(.ui-number-field, .cash-split-editor-input):focus-within {
+  outline: 2px solid var(--ns-focus);
+  outline-offset: -1px;
+  box-shadow: none;
+  border-radius: var(--ns-radius-control);
+}
+
+/* Composite fields draw the highlight around the currency/unit as well. */
+:root[data-theme] :is(.ui-number-field, .cash-split-editor-input) > input:focus {
+  outline: none;
+  box-shadow: none;
+}
+
+:root[data-theme] .wealth-field :is(input, select, textarea):focus { border-color: var(--ns-focus); }
+:root[data-theme] .northstar-copy .northstar-current { font-size: 14px; line-height: 1.7; }
+:root[data-theme] .wealth-retirement > .wealth-note:last-child { margin-top: 24px; }
 
 /* ---------- Page-specific fixes ---------- */
 /* Budget: the over/under box and divider used light-theme colors in dark mode. */
@@ -225,6 +256,17 @@
 .goal-linked p { margin: 0; flex: 1 1 260px; }
 .goal-saved-edit > button, .goal-saved-edit > :is(.ui-button) { margin-top: 26px; }
 /* "Add to savings": the Add button matches the input's height and lines up with it. */
+:root[data-theme] .purchase-goal-option {
+  border: 1px solid var(--ns-line);
+  background: var(--ns-secondary-bg);
+  box-shadow: none;
+}
+:root[data-theme] button.purchase-goal-option:hover { background: var(--ns-secondary-hover); }
+:root[data-theme] button.purchase-goal-option:focus-visible {
+  outline: 2px solid var(--ns-focus);
+  outline-offset: -1px;
+}
+
 .goal-deposit .ui-button { height: var(--goal-input-h, 46px); min-height: 0; padding-block: 0; display: inline-flex; align-items: center; justify-content: center; }
 .goal-deposit-hint { margin: 6px 0 0; font-size: 12px; color: var(--ns-label); }
 /* Rename a goal: Save and Cancel line up with the name field. */
@@ -241,6 +283,29 @@
 .goal-shift-tile.is-alt span { color: var(--ns-accent); }
 .goal-shift-arrow { align-self: center; flex-shrink: 0; color: var(--ns-label); }
 @media (max-width: 520px) { .goal-shift-arrow { transform: rotate(90deg); margin-inline: auto; } .goal-shift { flex-direction: column; } }
+/* Composite amount fields own their focus ring, including the currency and unit.
+   Keep page-level input outlines from drawing a second, partial ring inside. */
+:root[data-theme] .ui-number-field > input:focus-visible {
+  outline: none;
+}
+
+/* Expanded tools share their disclosure's surface instead of nesting another card. */
+:root[data-theme] .goals-page .goals-tool-body > :is(.wealth-card, .northstar-summary, .savings-planner-panel, .clay) {
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+/* One divider below the launcher; mouse clicks need no extra focus outline.
+   Keyboard navigation retains the existing visible focus indicator. */
+:root[data-theme] .goals-tool-body { border-top: 0; }
+:root[data-theme] summary:focus:not(:focus-visible) { outline: none; }
+:root[data-theme] .goals-page .goals-tool > summary:focus-visible {
+  outline: 2px solid var(--ns-focus);
+  outline-offset: -1px;
+}
+
 /* Your cash: Total − Set aside = Not set aside, as three clear numbers. */
 .cash-split-sum { display: flex; flex-wrap: wrap; align-items: stretch; gap: 8px; margin: 0; }
 .cash-split-sum > div { flex: 1 1 150px; display: grid; gap: 2px; padding: 12px 14px; border-radius: 12px; background: var(--ns-surface-inset); min-width: 0; }

@@ -257,7 +257,7 @@ export default function App() {
         lightMode={theme === "light"}
         className="soft-aurora-background"
       />
-      <TopNav onNavigate={navigate} active={screen.name === "profile" ? "Profile" : screen.name === "goal" || screen.name === "new-money" ? "Goals" : screen.name === "settings" ? null : dashboardTab === "Activity" ? "Accounts" : dashboardTab} />
+      <TopNav profile={state.profile} onNavigate={navigate} active={screen.name === "profile" ? "Profile" : screen.name === "goal" || screen.name === "new-money" ? "Goals" : screen.name === "settings" ? null : dashboardTab === "Activity" ? "Accounts" : dashboardTab} />
       {isLanding ? body : <main id="main" className="mx-auto max-w-md px-4 pb-16 pt-6 sm:max-w-2xl">{body}</main>}
     </div>
   );
