@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { BankTransaction } from "../src/lib/money.ts";
-import { comparisonPeriods, goalFinishDate, hasUnmatchedSubject, matchCategory, matchGoal, matchMerchant, rollingRange, windowTotals, explicitRange, followUpQuestion } from "./assistantData.ts";
+import { monthlySummaries, needsSonnet, comparisonPeriods, goalFinishDate, hasUnmatchedSubject, matchCategory, matchGoal, matchMerchant, rollingRange, windowTotals, explicitRange, followUpQuestion } from "./assistantData.ts";
 
 const tx = (id: string, name: string, amount: number, category: string, date = "2026-11-10"): BankTransaction => ({ id, accountId: "a", date, name, amount, category, pending: false });
 const transactions = [
@@ -105,5 +105,38 @@ describe("followUpQuestion", () => {
   });
   it("leaves full questions alone", () => {
     expect(followUpQuestion("What's my credit card balance right now?", history)).toBe("What's my credit card balance right now?");
+  });
+});
+
+describe("monthlySummaries", () => {
+  const tx = (date: string, amount: number, name = "Cafe", category = "FOOD_AND_DRINK") => ({ id: `${date}-${name}-${amount}`, accountId: "chk", date, name, amount, category, pending: false });
+  it("summarizes each calendar month, newest first, with exact totals", () => {
+    const rows = monthlySummaries([tx("2026-10-02", 10), tx("2026-10-20", 5.5), tx("2026-09-01", 20), tx("2026-09-15", -500, "Payroll", "INCOME"), tx("2026-11-03", 7)], new Set(), new Date(2026, 10, 15));
+    expect(rows.map((r) => r.month)).toEqual(["2026-11", "2026-10", "2026-09"]);
+    expect(rows[0]).toMatchObject({ partialMonth: true, spending: 7 });
+    expect(rows[1]).toMatchObject({ spending: 15.5, income: 0 });
+    expect(rows[1].partialMonth).toBeUndefined();
+    expect(rows[2]).toMatchObject({ spending: 20, income: 500, net: 480 });
+  });
+  it("keeps only the newest months", () => {
+    const many = Array.from({ length: 30 }, (_, i) => tx(`${2024 + Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, "0")}-05`, 1));
+    const rows = monthlySummaries(many, new Set(), new Date(2026, 10, 15), 24);
+    expect(rows).toHaveLength(24);
+    expect(rows[0].month).toBe("2026-06");
+  });
+});
+
+describe("needsSonnet", () => {
+  it("keeps everyday questions on Haiku", () => {
+    for (const q of ["Where is my money going?", "Why did I spend more this month?", "Compare food this month to last month", "Can you explain my spending trend this year?", "What subscriptions do I have?"]) expect(needsSonnet(q)).toBe(false);
+  });
+  it("sends planning and trade-off decisions to Sonnet", () => {
+    for (const q of ["Make me a plan to save $2,000 by June", "Should I pay off my card or save?", "How should I start investing?", "What's the best strategy for my student loans?"]) expect(needsSonnet(q)).toBe(true);
+  });
+});
+
+describe("rollingRange in years", () => {
+  it("reads 'last 2 years'", () => {
+    expect(rollingRange("what did I spend in the last 2 years", new Date(2026, 10, 14))).toMatchObject({ label: "the last 2 years", start: "2024-11-15", endExclusive: "2026-11-15" });
   });
 });

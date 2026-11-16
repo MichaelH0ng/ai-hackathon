@@ -105,6 +105,40 @@ export function comparisonPeriods(question: string, now = new Date()): DateRange
   return null;
 }
 
+/**
+ * One line per calendar month (newest first, up to `months`): Polaris's long-term memory.
+ * A few thousand tokens cover two years, so old history is summarized instead of sent line by line.
+ */
+export function monthlySummaries(transactions: BankTransaction[], transferIds: Set<string>, now = new Date(), months = 24) {
+  const current = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const byMonth = new Map<string, BankTransaction[]>();
+  for (const t of transactions) {
+    const month = t.date.slice(0, 7);
+    if (month > current) continue;
+    byMonth.set(month, [...(byMonth.get(month) ?? []), t]);
+  }
+  return [...byMonth.keys()]
+    .sort((a, b) => b.localeCompare(a))
+    .slice(0, months)
+    .map((month) => {
+      const totals = windowTotals(byMonth.get(month)!, transferIds);
+      return {
+        month,
+        ...(month === current ? { partialMonth: true } : {}),
+        spending: totals.spendingTotal,
+        income: totals.inflowTotal,
+        net: totals.netCashFlow,
+        topCategories: Object.fromEntries(Object.entries(totals.spendingByCategory).slice(0, 5)),
+        topMerchants: totals.spendingByMerchant.slice(0, 3).map(({ merchant, total }) => `${merchant} ${total}`),
+      };
+    });
+}
+
+/** The few questions worth Sonnet's ~20x price: multi-step plans and weighing real trade-offs. */
+export function needsSonnet(question: string) {
+  return /\b(plan|strategy|strategi[sz]e|optimi[sz]e|prioriti[sz]e|trade[- ]?offs?|invest(ing|ment)?|retire(ment)?|debt|loans?|refinanc\w*|tax(es)?)\b|\bshould i (pay off|invest|move|switch|take|open|close)\b/i.test(question);
+}
+
 export const inRange = (t: { date: string }, range: DateRange) => t.date >= range.start && (!range.endExclusive || t.date < range.endExclusive);
 
 /** The one goal a question names, matched on any distinctive word of its name. */
@@ -124,7 +158,7 @@ export function goalFinishDate(goal: { target: number; saved: number; weekly: nu
 }
 
 const NUMBER_WORDS: Record<string, number> = { two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, "a couple of": 2, "couple of": 2, "a couple": 2, few: 3, "a few": 3 };
-const UNIT_DAYS: Record<string, number> = { day: 1, week: 7, month: 30 };
+const UNIT_DAYS: Record<string, number> = { day: 1, week: 7, month: 30, year: 365 };
 
 /**
  * Rolling windows like "last 2 weeks", "past ten days", "previous 3 months", "last fortnight".
@@ -135,7 +169,7 @@ export function rollingRange(question: string, now = new Date()): DateRange | nu
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   const day = (offset: number) => isoDate(new Date(today.getFullYear(), today.getMonth(), today.getDate() + offset));
   if (/\b(last|past)\s+fortnight\b/.test(text)) return { label: "the last 2 weeks", start: day(-13), endExclusive: day(1) };
-  const m = text.match(/\b(?:last|past|previous)\s+(\d+|a couple of|couple of|a couple|a few|few|two|three|four|five|six|seven|eight|nine|ten)\s+(day|week|month)s?\b/);
+  const m = text.match(/\b(?:last|past|previous)\s+(\d+|a couple of|couple of|a couple|a few|few|two|three|four|five|six|seven|eight|nine|ten)\s+(day|week|month|year)s?\b/);
   if (!m) return null;
   const n = /^\d+$/.test(m[1]) ? Number(m[1]) : NUMBER_WORDS[m[1]];
   if (!n || n > 400) return null;

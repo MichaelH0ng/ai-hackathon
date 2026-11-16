@@ -115,6 +115,14 @@ describe("goalReserve", () => {
     expect(goalReserve([{ name: "Car", target: 20000, saved: 600, weekly: 50 }, { name: "AirPods", target: 100, saved: 170, weekly: 0 }])).toEqual({ amount: 770, name: null });
     expect(goalReserve([{ name: "AirPods", target: 100, saved: 170, weekly: 0 }, { name: "Car", target: 20000, saved: 0, weekly: 50 }])).toEqual({ amount: 170, name: "AirPods" });
   });
+
+  it("does not reserve the same linked balance twice", () => {
+    expect(goalReserve([
+      { name: "Car", target: 10_000, saved: 600, weekly: 50, linkedAccountId: "savings" },
+      { name: "Study abroad", target: 8_000, saved: 600, weekly: 40, linkedAccountId: "savings" },
+      { name: "Textbooks", target: 300, saved: 100, weekly: 10 },
+    ])).toEqual({ amount: 700, name: null });
+  });
 });
 
 describe("without transaction history", () => {

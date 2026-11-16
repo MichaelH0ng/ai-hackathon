@@ -13,7 +13,7 @@ const accounts: BankAccount[] = [
 const transactions = [
   ...[3, 17, 31, 45, 59].map((d) => tx(d, "CAMPUS BOOKSTORE PAYROLL", -412.5, "INCOME")),
   ...[2, 32].map((d) => tx(d, "Mustang Village", 350, "RENT_AND_UTILITIES")),
-  ...[6, 36].map((d) => tx(d, "Spotify", 11.99, "ENTERTAINMENT", "card")),
+  ...[6, 36, 66].map((d) => tx(d, "Spotify", 11.99, "ENTERTAINMENT", "card")),
   ...Array.from({ length: 20 }, (_, i) => tx(i * 3 + 1, "Starbucks", 6, "FOOD_AND_DRINK", "card")),
   ...Array.from({ length: 6 }, (_, i) => tx(i * 10 + 4, "Target", 40, "GENERAL_MERCHANDISE", "card")),
 ];

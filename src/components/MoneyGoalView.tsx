@@ -19,6 +19,7 @@ export function MoneyGoalView({
   onBuy,
   onRestore,
   linkedAccount,
+  linkPaused = false,
 }: {
   goal: MoneyGoal;
   onChange: (g: MoneyGoal) => void;
@@ -33,6 +34,8 @@ export function MoneyGoalView({
   onRestore: () => void;
   /** The account whose whole balance this goal follows, if any. */
   linkedAccount?: { name: string; balance: number };
+  /** The followed account's bank is disconnected: the goal keeps its last balance. */
+  linkPaused?: boolean;
 }) {
   const [renaming, setRenaming] = useState(false);
   const [nameDraft, setNameDraft] = useState(goal.name);
@@ -141,6 +144,12 @@ export function MoneyGoalView({
               <span>{formatMoney(goal.saved, goal.saved % 1 !== 0)} of {formatMoney(goal.target)} · {Math.round(Math.min(1, goal.saved / goal.target) * 100)}% saved</span>
               <button className="wealth-inline-link" onClick={() => { setSavedDraft(goal.saved); setEditingSaved(true); }}>Edit amount</button>
             </p>
+          )}
+          {linkPaused && !editingSaved && (
+            <div className="goal-linked">
+              <p>The bank account this goal follows isn't connected right now, so it's keeping its last balance. It picks the account back up automatically when you reconnect that bank.</p>
+              <button className="wealth-inline-link" onClick={() => onChange({ ...goal, linkedAccountId: undefined })}>Track it manually instead</button>
+            </div>
           )}
           {linkedAccount && !editingSaved && (
             <div className="goal-linked">

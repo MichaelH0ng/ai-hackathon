@@ -1,12 +1,14 @@
-import { ArrowRight, CalendarClock, PiggyBank, Plus, ShoppingBag, Target, Wallet } from "lucide-react";
+import { ArrowRight, CalendarClock, PiggyBank, Plus, RefreshCw, Sparkles, Target } from "lucide-react";
 import { useMemo } from "react";
-import { formatExact, formatMoney } from "../lib/finance";
-import { assetsByInstitution, detectTransferIds, netWorthSeries, periodFlow, spendableCash, upcomingBills } from "../lib/money";
+import { daysBetween, formatDate, todayISO } from "../lib/dates";
+import { formatExact, formatMoney, weeklyNeededForDeadline } from "../lib/finance";
+import { assetsByInstitution, billsFor, detectTransferIds, netWorthSeries } from "../lib/money";
+import { buildForecast, cashFromAccounts } from "../lib/safeToSpend";
 import type { MoneyGoal } from "../lib/types";
-import type { Bank } from "../lib/useBank";
+import { balancesAreFresh, type Bank } from "../lib/useBank";
 import { AssetSplit } from "./AssetSplit";
 import { ConnectCard } from "./MoneyDashboard";
-import { NetWorthChart } from "./NetWorthChart";
+import { NetWorthChart, type NetWorthQuickLook } from "./NetWorthChart";
 import { SavingsPlanner } from "./SavingsPlanner";
 
 /**
@@ -41,7 +43,7 @@ export function Landing({
   return (
     <main id="main">
       {bank.connected ? (
-        <HomeOverview data={bank.data!} goal={goal} onCheck={onCheck} onMoney={onMoney} />
+        <HomeOverview data={bank.data!} goal={goal} goals={moneyGoals} onCheck={onCheck} onMoney={onMoney} />
       ) : bank.loading && !bank.status ? (
         <section className="px-4 pt-6">
           <div className="clay mx-auto h-[28rem] max-w-6xl animate-pulse" aria-label="Loading your accounts" />
@@ -67,66 +69,162 @@ export function Landing({
 
 // ---------- connected: the dashboard ----------
 
-export function HomeOverview({ data, goals = [], onCheck, onMoney, addAccount, onGoals, onNewGoal, onOpenGoal }: {
+export function HomeOverview({ data, goals = [], profileName = "Michael", onCheck, onMoney, addAccount, onGoals, onNewGoal, onOpenGoal, onRefresh, refreshing = false }: {
   data: import("../lib/money").BankData;
+  profileName?: string;
   goal?: MoneyGoal;
   goals?: MoneyGoal[];
   onCheck: () => void;
   onMoney: () => void;
-  /** Optional "Add account" button; it shares the row with "View accounts and activity". */
+  /** Optional account action shown beside the activity shortcut. */
   addAccount?: React.ReactNode;
   onGoals?: () => void;
   onNewGoal?: () => void;
   onOpenGoal?: (id: string) => void;
+  /** Reloads the latest data NorthStar can retrieve; this is not a guaranteed real-time bank balance. */
+  onRefresh?: () => void;
+  refreshing?: boolean;
 }) {
   const view = useMemo(() => {
-    const transferIds = detectTransferIds(data.transactions);
+    // Pending card entries can change or disappear before they settle. Trends,
+    // bills, and the reconstructed history are therefore based on posted data.
+    const postedTransactions = data.transactions.filter((transaction) => !transaction.pending);
+    const transferIds = detectTransferIds(postedTransactions);
+    const oldestTransaction = postedTransactions.reduce<string | null>((oldest, transaction) => !oldest || transaction.date < oldest ? transaction.date : oldest, null);
+    // Plaid bank Links request at most two years of activity. Do not pad the
+    // chart with made-up flat history before the first available transaction.
+    const historyDays = oldestTransaction ? Math.min(730, Math.max(1, daysBetween(oldestTransaction, todayISO()))) : 1;
+    const estimatedSeries = netWorthSeries(data.accounts, postedTransactions, historyDays);
+    const recorded = data.netWorthSnapshots ?? [];
+    const hasRecordedHistory = recorded.length >= 2;
     return {
-      series: netWorthSeries(data.accounts, data.transactions, 90),
+      // Transaction math is useful context, but only points NorthStar has
+      // captured are true whole-account net-worth records.
+      series: hasRecordedHistory ? recorded : estimatedSeries,
       slices: assetsByInstitution(data.accounts),
-      cash: spendableCash(data.accounts),
-      flow: periodFlow(data.transactions, transferIds, "month"),
-      bills: upcomingBills(data.transactions, transferIds).slice(0, 5),
+      chartTransactions: postedTransactions.filter((transaction) => !transferIds.has(transaction.id)),
+      bills: billsFor({ transactions: postedTransactions, recurring: data.recurring }, transferIds).slice(0, 3),
     };
   }, [data]);
   // Unfinished goals first, so the snapshot shows what still needs saving.
-  const topGoals = [...goals].sort((a, b) => Number(a.saved >= a.target) - Number(b.saved >= b.target)).slice(0, 4);
+  const topGoals = [...goals].sort((a, b) => Number(a.saved >= a.target) - Number(b.saved >= b.target)).slice(0, 3);
   const billsTotal = view.bills.reduce((sum, b) => sum + b.amount, 0);
-  const spent = view.flow.current.out;
+  const quickLook = useMemo<NetWorthQuickLook[]>(() => {
+    const cash = cashFromAccounts(data.accounts);
+    const forecast = buildForecast({
+      cash: cash.checking,
+      savings: cash.savings,
+      transactions: data.transactions,
+      cashAccountIds: cash.cashAccountIds,
+      goals,
+      today: todayISO(),
+    });
+    const comfortableToday = Math.floor(Math.max(0, forecast.headroom) / 2);
+    const nextBill = view.bills[0];
+    const nextIncome = forecast.nextIncome;
+    const activeGoal = [...goals]
+      .filter((goal) => goal.saved < goal.target)
+      .sort((a, b) => (a.deadline ?? "9999-12-31").localeCompare(b.deadline ?? "9999-12-31"))[0];
+    const goalPace = (() => {
+      if (!activeGoal) return { value: "No active goal", detail: "Create one when you are ready." };
+      if (!activeGoal.deadline) return activeGoal.weekly > 0
+        ? { value: `${formatMoney(activeGoal.weekly)}/week`, detail: `${activeGoal.name} · add a date to check pace` }
+        : { value: "Set a weekly amount", detail: activeGoal.name };
+      const needed = weeklyNeededForDeadline(activeGoal.target, activeGoal.saved, activeGoal.deadline);
+      const gap = Math.max(0, needed - activeGoal.weekly);
+      return gap <= 0.01
+        ? { value: "On track", detail: `${activeGoal.name} · ${formatMoney(activeGoal.weekly)}/week` }
+        : { value: `${formatMoney(gap)}/week short`, detail: `${activeGoal.name} by ${formatDate(activeGoal.deadline)}` };
+    })();
+    const newestDate = view.chartTransactions.reduce<string | null>((newest, transaction) => !newest || transaction.date > newest ? transaction.date : newest, null);
+    const newestActivity = newestDate
+      ? view.chartTransactions.filter((transaction) => transaction.date === newestDate).sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))[0]
+      : null;
+
+    return [
+      {
+        label: "Safe to spend today",
+        value: comfortableToday > 0 ? formatMoney(comfortableToday) : "$0",
+        detail: comfortableToday > 0 ? "Comfortable room after the next 30 days." : "Bills, goals, or everyday spending use the available room.",
+        tone: "mint",
+      },
+      nextBill ? {
+        label: "Coming up next",
+        value: formatMoney(nextBill.amount),
+        detail: `${nextBill.name} · ${nextBill.daysUntil === 0 ? "due today" : nextBill.daysUntil === 1 ? "due tomorrow" : `due in ${nextBill.daysUntil} days`}`,
+        tone: "blue",
+      } : nextIncome ? {
+        label: "Coming up next",
+        value: formatMoney(nextIncome.amount),
+        detail: `${nextIncome.name} · expected ${formatDate(nextIncome.date)}`,
+        tone: "blue",
+      } : {
+        label: "Coming up next",
+        value: "Nothing scheduled",
+        detail: "We will show recurring bills or income here.",
+        tone: "blue",
+      },
+      { label: "Goal check-in", ...goalPace, tone: "violet" },
+      newestActivity ? {
+        label: "Recent money move",
+        value: `${newestActivity.amount < 0 ? "+" : "−"}${formatMoney(Math.abs(newestActivity.amount))}`,
+        detail: `${newestActivity.name} · ${formatDate(newestActivity.date)}`,
+        tone: "sky",
+      } : {
+        label: "Recent money move",
+        value: "No posted activity",
+        detail: "New transactions will appear here once they settle.",
+        tone: "sky",
+      },
+    ];
+  }, [data.accounts, data.transactions, goals, view.bills, view.chartTransactions]);
+  const lastBankUpdate = data.status
+    .map((status) => status.lastUpdatedAt)
+    .filter((stamp): stamp is string => !!stamp && !Number.isNaN(Date.parse(stamp)))
+    .sort()
+    .at(-1);
+  /** "just now", "4 min ago", or a time for anything older than an hour. */
+  const sinceLabel = (stamp: string) => {
+    const minutes = Math.floor((Date.now() - Date.parse(stamp)) / 60_000);
+    return minutes < 1 ? "just now" : minutes < 60 ? `${minutes} min ago` : formatTime(stamp);
+  };
+  const formatTime = (stamp: string) => new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(stamp));
+  const firstName = profileName.trim().split(/\s+/)[0] || "Michael";
 
   return (
     <section className="dashboard-home-overview" aria-label="Money overview">
-      {/* Wide screens: the chart keeps the left, and the side cards split into two columns
-          instead of stretching, so the page fills the width with more to see at a glance. */}
-      <div className="grid gap-5 lg:grid-cols-[1.75fr_1fr] min-[1600px]:grid-cols-[1.35fr_1.25fr] min-[1600px]:gap-6 [&>*]:min-w-0">
+      <header className="home-welcome">
+        <span className="home-welcome-orbit home-welcome-orbit-one" aria-hidden="true" />
+        <span className="home-welcome-orbit home-welcome-orbit-two" aria-hidden="true" />
+        <div className="home-welcome-copy"><p className="home-welcome-kicker"><Sparkles size={15} aria-hidden="true" /> YOUR NORTHSTAR</p><h1>Welcome, <span className="home-welcome-name">{firstName}<i aria-hidden="true" /></span></h1></div>
+        <div className="home-sync">
+          {/* Balances and transactions update separately: say which is which. */}
+          <span><i aria-hidden="true" />{data.balancesCheckedAt ? `Balances checked ${sinceLabel(data.balancesCheckedAt)}` : lastBankUpdate ? `Bank data updated ${formatTime(lastBankUpdate)}` : `NorthStar checked ${formatTime(data.fetchedAt)}`}</span>
+          {data.balancesCheckedAt && lastBankUpdate && <small>Transactions updated {formatTime(lastBankUpdate)}</small>}
+          {onRefresh && <button type="button" className="home-sync-link" onClick={onRefresh} disabled={refreshing || balancesAreFresh(data)} title={balancesAreFresh(data) ? "Checked with your banks in the last 15 minutes" : "Ask your banks for current balances"}><RefreshCw size={14} className={refreshing ? "home-sync-spin" : ""} aria-hidden="true" />{refreshing ? "Checking…" : balancesAreFresh(data) ? "Balances up to date" : "Update balances"}</button>}
+        </div>
+      </header>
+      {/* The trend and allocation share the primary card; action cards remain compact at right. */}
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] min-[1600px]:gap-6 [&>*]:min-w-0">
         <div className="clay wealth-accent p-5 sm:p-7">
-          <NetWorthChart series={view.series} />
-          <div className="mt-6">
-            <AssetSplit slices={view.slices} />
+          <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_230px]">
+            <NetWorthChart series={view.series} transactions={view.chartTransactions} quickLook={quickLook} />
+            <div className="border-t border-stone-100 pt-5 xl:border-l xl:border-t-0 xl:pt-0 xl:pl-6">
+              <AssetSplit slices={view.slices} />
+              <div className="mt-4 border-t border-stone-100 pt-4">
+                <div className={addAccount ? "grid grid-cols-2 gap-3" : undefined}>
+                  {addAccount}
+                  <button onClick={onMoney} className="wealth-secondary w-full min-w-0 justify-center whitespace-normal text-center leading-tight">
+                    View accounts and activity <ArrowRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  </button>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
-        <aside className="grid gap-4 min-[1600px]:grid-cols-2 min-[1600px]:gap-5 [&>*]:min-w-0">
-          <div className="flex flex-col gap-4 min-[1600px]:gap-5">
-          <div className="clay divide-y divide-stone-100 px-5 py-2">
-            <Stat icon={<Wallet className="h-4 w-4 text-sky-300" />} label="Spendable cash" value={formatExact(view.cash)} />
-            <Stat
-              icon={<ShoppingBag className="h-4 w-4 text-amber-300" />}
-              label="Spent this month"
-              value={data.transactions.length ? formatMoney(spent) : "No activity yet"}
-            />
-          </div>
-
-          <div className={addAccount ? "grid grid-cols-2 gap-3" : undefined}>
-            {addAccount}
-            {/* Secondary on purpose: "Add account" is this view's one primary action. */}
-            <button onClick={onMoney} className="wealth-secondary w-full min-w-0 justify-center whitespace-normal text-center leading-tight">
-              View accounts and activity <ArrowRight className="h-4 w-4 shrink-0" aria-hidden="true" />
-            </button>
-          </div>
-
-          {/* Cards grow to line up with the chart; their content fills the extra room instead of stretching. */}
-          <div className="clay wealth-accent flex flex-1 flex-col p-5">
+        <aside className="flex flex-col gap-4 [&>*]:min-w-0">
+          <div className="clay wealth-accent flex flex-col p-4">
             <CardHead title="Savings goals" action={goals.length && onGoals ? { label: "See all", onClick: onGoals } : undefined} />
             {topGoals.length ? (
               <ul className="mt-1 divide-y divide-stone-100">
@@ -163,10 +261,7 @@ export function HomeOverview({ data, goals = [], onCheck, onMoney, addAccount, o
             )}
           </div>
 
-          </div>
-
-          <div className="flex flex-col gap-4 min-[1600px]:gap-5">
-          <div className="clay wealth-accent flex flex-1 flex-col p-5">
+          <div className="clay wealth-accent flex flex-col p-4">
             <CardHead title="Upcoming bills" />
             {view.bills.length ? (
               <ul className="mt-1 divide-y divide-stone-100">
@@ -197,25 +292,9 @@ export function HomeOverview({ data, goals = [], onCheck, onMoney, addAccount, o
           </div>
 
           <PriceAddon onCheck={onCheck} />
-          </div>
         </aside>
       </div>
     </section>
-  );
-}
-
-function Stat({ icon, label, value, sub }: { icon: React.ReactNode; label: string; value: string; sub?: string }) {
-  return (
-    <div className="flex items-center justify-between gap-3 py-3">
-      <span className="flex min-w-0 items-center gap-2 text-sm text-stone-600">
-        <span aria-hidden="true">{icon}</span>
-        <span className="truncate">{label}</span>
-      </span>
-      <span className="shrink-0 text-right">
-        <span className="block font-bold tabular-nums text-ink">{value}</span>
-        {sub && <span className="block text-xs text-stone-500">{sub}</span>}
-      </span>
-    </div>
   );
 }
 

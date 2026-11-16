@@ -15,5 +15,6 @@ export function bankDataForPlan(data: BankData | null | undefined, excludedAccou
     accounts: data.accounts.filter((account) => !excluded.has(account.id)),
     transactions: data.transactions.filter((transaction) => !excluded.has(transaction.accountId)),
     holdings: data.holdings?.filter((holding) => !excluded.has(holding.accountId)),
+    recurring: data.recurring?.filter((stream) => !excluded.has(stream.accountId)),
   };
 }

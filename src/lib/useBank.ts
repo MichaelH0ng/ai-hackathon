@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { BankData } from "./money";
 
-export type PlaidStatus = { env: string; configured?: boolean; missing?: string[]; items: { itemId: string; institution: string; kind?: "bank" | "investments" }[] };
+export type PlaidStatus = { env: string; configured?: boolean; missing?: string[]; items: { itemId: string; institution: string; kind?: "bank" | "investments" | "all" }[] };
 
 export interface Bank {
   status: PlaidStatus | null;
@@ -9,8 +9,19 @@ export interface Bank {
   loading: boolean;
   error: string | null;
   connected: boolean;
-  reload: () => Promise<void>;
+  /** A live refresh asks Plaid for current balances; normal reloads use cached balances. */
+  reload: (options?: { liveBalances?: boolean }) => Promise<BankData | null>;
+  /**
+   * Before a spending decision: live balances, unless they were checked in the last 15 minutes.
+   * Resolves to the data to decide with (the current data if the check fails).
+   */
+  ensureFreshBalances: () => Promise<BankData | null>;
 }
+
+/** How long a live balance check counts as current (matches the server's reuse window). */
+export const LIVE_BALANCE_FRESH_MS = 15 * 60 * 1000;
+export const balancesAreFresh = (data: BankData | null | undefined, now = Date.now()) =>
+  !!data?.balancesCheckedAt && now - Date.parse(data.balancesCheckedAt) < LIVE_BALANCE_FRESH_MS;
 
 export async function api<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
@@ -31,23 +42,33 @@ export function useBank(): Bank {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const reload = useCallback(async () => {
+  const dataRef = useRef<BankData | null>(null);
+  const reload = useCallback(async (options: { liveBalances?: boolean } = {}) => {
     setLoading(true);
     setError(null);
     try {
       const s = await api<PlaidStatus>("/api/plaid/status");
       setStatus(s);
-      setData(s.configured !== false && s.items.length ? await api<BankData>("/api/plaid/dashboard") : null);
+      const next = s.configured !== false && s.items.length ? await api<BankData>(`/api/plaid/dashboard${options.liveBalances ? "?live=1" : ""}`) : null;
+      dataRef.current = next;
+      setData(next);
+      return next;
     } catch (e) {
       setError(e instanceof Error ? e.message : "Couldn't load your accounts.");
+      return dataRef.current;
     } finally {
       setLoading(false);
     }
   }, []);
+  const ensureFreshBalances = useCallback(async () => {
+    const current = dataRef.current;
+    if (!current || balancesAreFresh(current)) return current;
+    return reload({ liveBalances: true });
+  }, [reload]);
 
   useEffect(() => {
     reload();
   }, [reload]);
 
-  return { status, data, loading, error, connected: !!status?.items.length && !!data, reload };
+  return { status, data, loading, error, connected: !!status?.items.length && !!data, reload, ensureFreshBalances };
 }

@@ -836,6 +836,30 @@ body {
 .add-account-connect > div { display: grid; gap: 4px; min-width: 0; flex: 1 1 200px; }
 .add-account-connect strong { color: var(--night-text); font-size: 15px; }
 .add-account-connect span { color: var(--night-muted); font-size: 13px; line-height: 1.5; }
+/* Edit accounts: connected banks, each with a Disconnect that asks first. */
+.connected-banks { margin: 4px 0 16px; }
+.connected-banks h3 { margin: 0 0 8px; color: var(--night-text); font-size: 13px; font-weight: 700; }
+.connected-banks ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.connected-banks li { padding: 12px; border: 1px solid var(--night-border); border-radius: 12px; }
+.connected-banks li.is-confirming { border-color: #e2a4b1; background: rgb(226 164 177 / 8%); }
+.connected-bank-row { display: flex; align-items: center; gap: 12px; }
+.connected-bank-row .goals-tool-icon { width: 36px; height: 36px; border-radius: 10px; }
+.connected-bank-name { display: grid; gap: 2px; min-width: 0; flex: 1; }
+.connected-bank-name strong { color: var(--night-text); font-size: 14px; }
+.connected-bank-name span { overflow: hidden; color: var(--night-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
+.connected-bank-disconnect { display: flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 10px; border-radius: 10px; color: #b5566b; font-size: 13px; font-weight: 600; flex-shrink: 0; }
+.connected-bank-disconnect:hover { background: rgb(226 164 177 / 14%); }
+.connected-bank-disconnect:disabled { cursor: not-allowed; opacity: 0.5; }
+.connected-bank-confirm { margin-top: 10px; }
+.connected-bank-confirm p { margin: 0 0 10px; color: var(--night-text); font-size: 13px; line-height: 1.5; }
+.connected-bank-history { display: flex; align-items: center; gap: 8px; min-height: 44px; margin: 0 0 6px; color: var(--night-text); font-size: 13px; cursor: pointer; }
+.connected-bank-history input { width: 18px; height: 18px; accent-color: #c4566e; }
+.connected-bank-confirm > div { display: flex; justify-content: flex-end; gap: 8px; }
+.connected-bank-confirm button { min-height: 40px; padding: 0 14px; border-radius: 10px; font-size: 13px; font-weight: 600; }
+.connected-bank-confirm-button { background: #c4566e; color: #fff; }
+.connected-bank-confirm-button:hover { background: #ad4a60; }
+.connected-bank-confirm button:disabled { cursor: not-allowed; opacity: 0.6; }
+.connected-banks-error { margin: 0 0 8px; color: #b5566b; font-size: 13px; }
 .add-account-divider { display: flex; align-items: center; gap: 12px; margin: 18px 0 2px; color: var(--night-muted); font-size: 12px; }
 .add-account-divider::before, .add-account-divider::after { content: ""; flex: 1; height: 1px; background: var(--night-border); }
 
@@ -880,7 +904,7 @@ body {
 .asset-split-tip.at-start { left: 0; transform: scaleY(.84); }
 .asset-split-tip.at-end { left: auto; right: 0; transform: scaleY(.84); }
 
-/* React Bits pieces: Star Border on the primary "Add account" button, Spring Check on reached goals. */
+/* React Bits pieces: Star Border on the primary "Edit accounts" button, Spring Check on reached goals. */
 .wealth-add-account { min-height: 44px; padding: 0 18px; font-size: 14px; font-weight: 650; box-shadow: 0 8px 22px rgb(57 116 221 / 27%); }
 .wealth-goal-reached { margin-top: 2px; min-height: 0; font-weight: 650; }
 :where(:root[data-theme="dark"]) .asset-split-tip { background: #050b16; box-shadow: 0 6px 18px rgb(0 0 0 / 40%); }
@@ -1062,6 +1086,14 @@ html, body { overscroll-behavior-y: none; }
 .polaris-afford small { grid-column: 1 / -1; color: #6a7a90; font-size: 12px; }
 .polaris-afford-open { grid-column: 1 / -1; display: inline-flex; width: fit-content; align-items: center; gap: 4px; color: #3f67b3; font-size: 13px; font-weight: 700; }
 .polaris-afford-open:hover { text-decoration: underline; }
+/* "Get a deeper answer": reruns a planning question on Sonnet only when the user asks. */
+.polaris-deeper { display: inline-flex; align-items: center; gap: 6px; width: fit-content; min-height: 36px; margin-top: 8px; padding: 0 12px; border: 1px solid #c9d8f2; border-radius: 999px; background: #f4f8ff; color: #3f67b3; font-size: 13px; font-weight: 700; }
+.polaris-deeper:hover { background: #e8f0fd; }
+.polaris-deeper:disabled { cursor: not-allowed; opacity: 0.55; }
+.polaris-deep-tag { display: inline-flex; align-items: center; gap: 4px; margin-top: 6px; color: #6b7a99; font-size: 11px; font-weight: 600; }
+:root[data-theme="dark"] .polaris-deeper { border-color: rgb(154 246 227 / 30%); background: rgb(154 246 227 / 8%); color: #9af6e3; }
+:root[data-theme="dark"] .polaris-deeper:hover { background: rgb(154 246 227 / 14%); }
+:root[data-theme="dark"] .polaris-deep-tag { color: #a9b6cf; }
 :root[data-theme="dark"] .polaris-afford { border-color: var(--night-border); background: rgb(5 11 22 / 35%); }
 :root[data-theme="dark"] .polaris-afford small { color: var(--night-muted); }
 :root[data-theme="dark"] .polaris-afford-open { color: #9af6e3; }
@@ -1084,3 +1116,40 @@ html, body { overscroll-behavior-y: none; }
 /* Home page uses more of wide screens (the top bar matches this width). */
 .wealth-dashboard.overview-page { max-width: 1680px; }
 @media (min-width: 1024px) { .wealth-dashboard.overview-page { padding-left: 32px; padding-right: 32px; } }
+
+/* Plaid connect intro: NorthStar's explanation before Plaid's own window opens (first time only). */
+.plaid-intro { display: grid; gap: 10px; max-width: 420px; padding: 14px 16px; border: 1px solid var(--night-border, #dfeae4); border-radius: 12px; background: rgb(84 226 194 / 7%); text-align: left; }
+.plaid-intro > strong { display: flex; align-items: center; gap: 8px; color: var(--night-text, #1f2a24); font-size: 15px; }
+.plaid-intro > strong svg { color: #168e90; }
+.plaid-intro ul { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.plaid-intro li { display: grid; grid-template-columns: 18px 1fr; gap: 8px; color: var(--night-muted, #5b6b62); font-size: 13px; line-height: 1.5; }
+.plaid-intro li svg { margin-top: 3px; color: #168e90; }
+.plaid-intro-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.plaid-intro .plaid-intro-actions button { min-height: 44px; padding: 0 16px; border-radius: 10px; font-size: 14px; font-weight: 700; white-space: nowrap; }
+.plaid-intro li b { color: var(--night-text, #1f2a24); font-weight: 700; }
+
+/* App-wide toast (e.g. "Chase connected"). */
+.app-toast-region { position: fixed; left: 50%; bottom: 24px; z-index: 1000; width: min(440px, calc(100vw - 32px)); transform: translateX(-50%); pointer-events: none; }
+.app-toast { display: flex; align-items: flex-start; gap: 12px; padding: 14px 16px; border: 1px solid #cfe9df; border-radius: 14px; background: #ffffff; box-shadow: 0 12px 32px rgb(20 40 60 / 18%); color: #1f2a24; pointer-events: auto; animation: app-toast-in 220ms ease-out; }
+.app-toast > svg { flex-shrink: 0; margin-top: 1px; color: #168e90; }
+.app-toast > div { display: grid; flex: 1; gap: 2px; min-width: 0; }
+.app-toast strong { font-size: 14px; }
+.app-toast span { color: #5b6b62; font-size: 13px; line-height: 1.45; }
+.app-toast button { display: grid; place-items: center; width: 32px; height: 32px; margin: -6px -8px 0 0; border-radius: 8px; color: #7a8a81; }
+.app-toast button:hover { background: #f1f5f3; }
+@keyframes app-toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .app-toast { animation: none; } }
+:root[data-theme="dark"] .plaid-intro { background: rgb(84 226 194 / 6%); }
+:root[data-theme="dark"] .plaid-intro > strong svg, :root[data-theme="dark"] .plaid-intro li svg { color: #54e2c2; }
+:root[data-theme="dark"] .app-toast { border-color: rgb(84 226 194 / 25%); background: #13202a; color: #e8f1ee; }
+:root[data-theme="dark"] .app-toast > svg { color: #54e2c2; }
+:root[data-theme="dark"] .app-toast span { color: #a9bcb5; }
+:root[data-theme="dark"] .app-toast button:hover { background: rgb(255 255 255 / 8%); }
+
+/* A small dot on the Polaris button when a weekly check-in or bill heads-up is waiting. */
+.money-assistant-news { position: absolute; top: 6px; right: 8px; width: 10px; height: 10px; border: 2px solid #fff; border-radius: 50%; background: #e0566e; }
+:root[data-theme="dark"] .money-assistant-news { border-color: #13202a; }
+
+/* Check a purchase: shown while live balances are being checked before the verdict. */
+.purchase-check-refreshing { display: flex; align-items: center; gap: 8px; margin: 0; color: #4a5f78; font-size: 13px; font-weight: 600; }
+:root[data-theme="dark"] .purchase-check-refreshing { color: #b9cbe0; }

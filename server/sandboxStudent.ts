@@ -65,7 +65,25 @@ export function studentBanks() {
       config: {
         override_accounts: [
           { type: "depository", subtype: "checking", starting_balance: 742.18, meta: { name: "Student Checking", mask: "4821" }, transactions: checking },
-          { type: "credit", subtype: "credit card", starting_balance: 184.62, meta: { name: "Student Visa", mask: "1177", limit: 1000 }, transactions: card },
+          {
+            type: "credit",
+            subtype: "credit card",
+            starting_balance: 184.62,
+            meta: { name: "Student Visa", mask: "1177", limit: 1000 },
+            transactions: card,
+            // What Plaid Liabilities returns for this card. The sandbox doesn't return a due date for custom users,
+            // so the panel shows the minimum without one, as it will at banks that don't share it.
+            liability: {
+              type: "credit",
+              purchase_apr: 24.99,
+              cash_apr: 29.99,
+              balance_transfer_apr: 24.99,
+              special_apr: 0,
+              last_payment_amount: 150,
+              last_statement_balance: 160.4,
+              minimum_payment_amount: 35,
+            },
+          },
         ],
       },
     },

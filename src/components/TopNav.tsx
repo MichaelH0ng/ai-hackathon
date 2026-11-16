@@ -1,6 +1,6 @@
 import { ProfileAvatar } from "./ProfileAvatar";
 import type { Profile } from "../lib/types";
-import { ChartNoAxesCombined, House, Landmark, Target } from "lucide-react";
+import { ArrowLeftRight, ChartNoAxesCombined, House, Landmark, Target } from "lucide-react";
 
 export function Logo({ onClick }: { onClick: () => void }) {
   return (
@@ -27,19 +27,21 @@ export function Logo({ onClick }: { onClick: () => void }) {
   );
 }
 
-export type NavPage = "Overview" | "Accounts" | "Plan" | "Goals" | "Price check" | "Profile";
+export type NavPage = "Overview" | "Accounts" | "Activity" | "Plan" | "Goals" | "Price check" | "Profile";
 export function TopNav({ onNavigate, active, profile }: { profile: Profile; onNavigate: (page: NavPage) => void; active: NavPage | null }) {
   const links = [
     { id: "Overview", label: "Home", Icon: House },
-    { id: "Accounts", label: "Money", Icon: Landmark },
+    { id: "Accounts", label: "Accounts", Icon: Landmark },
+    { id: "Activity", label: "Activity", Icon: ArrowLeftRight },
     { id: "Plan", label: "Plan", Icon: ChartNoAxesCombined },
     { id: "Goals", label: "My goals", Icon: Target },
   ] as const;
   return <header className="sticky top-0 z-40 border-b border-brand-100 bg-white/85 backdrop-blur-md">
     <nav aria-label="Main" className="mx-auto flex max-w-[1680px] flex-wrap items-center justify-between gap-2 px-4 py-2 lg:px-8">
       <Logo onClick={() => onNavigate("Overview")} />
-      <div className="ml-auto flex max-w-full items-center gap-1 overflow-x-auto max-[650px]:order-last max-[650px]:w-full max-[650px]:justify-end">
-        {links.map(({ id, label, Icon }) => <button key={id} onClick={() => onNavigate(id)} aria-current={active === id ? "page" : undefined} className={"flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl px-3 text-xs font-bold sm:text-sm " + (active === id ? "bg-brand-100 text-brand-700" : "text-stone-700 hover:bg-brand-50")}><Icon size={17} aria-hidden="true" />{label}</button>)}
+      {/* Phones: five tabs plus the profile fit across by stacking each icon over its label. */}
+      <div className="ml-auto flex max-w-full items-center gap-1 overflow-x-auto max-[650px]:order-last max-[650px]:w-full max-[650px]:justify-between max-[650px]:gap-0">
+        {links.map(({ id, label, Icon }) => <button key={id} onClick={() => onNavigate(id)} aria-current={active === id ? "page" : undefined} className={"flex min-h-11 shrink-0 items-center gap-1.5 rounded-xl px-3 text-xs font-bold sm:text-sm max-[650px]:min-w-14 max-[650px]:flex-col max-[650px]:justify-center max-[650px]:gap-0.5 max-[650px]:px-1.5 max-[650px]:py-1 max-[650px]:text-[11px] " + (active === id ? "bg-brand-100 text-brand-700" : "text-stone-700 hover:bg-brand-50")}><Icon size={17} aria-hidden="true" />{label}</button>)}
         <button onClick={() => onNavigate("Profile")} aria-label="Your profile" title="Your profile" aria-current={active === "Profile" ? "page" : undefined} className={"flex h-11 w-11 shrink-0 items-center justify-center rounded-full " + (active === "Profile" ? "bg-brand-100 text-brand-700" : "text-stone-700 hover:bg-brand-50")}><ProfileAvatar profile={profile} className="h-9 w-9 text-sm" /></button>
       </div>
     </nav>

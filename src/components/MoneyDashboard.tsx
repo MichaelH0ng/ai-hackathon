@@ -1,5 +1,5 @@
 import { CategoryIcon } from "./CategoryIcon";
-import { ArrowDownLeft, ArrowUpRight, Landmark, RefreshCw, Unplug, Wallet } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Eye, Landmark, Lock, RefreshCw, ShieldCheck, Unplug, Wallet } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePlaidLink } from "react-plaid-link";
 import { formatDate } from "../lib/dates";
@@ -14,11 +14,14 @@ import {
   netWorth,
   periodFlow,
   spendableCash,
+  billsFor,
   topCategories,
-  upcomingBills,
 } from "../lib/money";
 import type { MoneyGoal } from "../lib/types";
 import { type Bank, api, post } from "../lib/useBank";
+import { type ConnectKind, finishConnection, introSeen, markIntroSeen, rememberLinkSession } from "../lib/plaidConnect";
+import { DebtPanel } from "./DebtPanel";
+import { ReconnectButton } from "./ReconnectButton";
 import { Button, Card, Notice } from "./ui";
 
 const money = (n: number) => formatExact(n);
@@ -39,6 +42,8 @@ export function MoneyDashboard({
 }) {
   const { status, data, loading, error, reload: load } = bank;
   const [flow, setFlow] = useState<FlowPeriod>("month");
+  const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
+  const [disconnectError, setDisconnectError] = useState<string | null>(null);
   const retries = useRef(0);
 
   // A just-connected sandbox bank needs a few seconds before transactions are ready.
@@ -66,7 +71,7 @@ export function MoneyDashboard({
     return (
       <Shell>
         <Notice tone="warn">{error}</Notice>
-        <Button className="mt-3" onClick={load}>Try again</Button>
+        <Button className="mt-3" onClick={() => { void load(); }}>Try again</Button>
       </Shell>
     );
   }
@@ -85,21 +90,60 @@ export function MoneyDashboard({
   const net = f.current.in - f.current.out;
   const cats = topCategories(data.transactions, transferIds, 30);
   const maxCat = cats[0]?.value ?? 1;
-  const bills = upcomingBills(data.transactions, transferIds).slice(0, 5);
+  const bills = billsFor(data, transferIds).slice(0, 5);
+  const billsFromPlaid = bills.some((b) => b.source === "plaid");
+  const needDebtConsent = data.status.filter((s) => s.needsDebtConsent).map((s) => ({ itemId: s.itemId, institution: s.institution.replace(/ \(test\)$/, "") }));
+  const needLogin = data.status.filter((s) => s.problem === "ITEM_LOGIN_REQUIRED");
   const recent = data.transactions.slice(0, 10);
   const accountName = new Map(data.accounts.map((a) => [a.id, a.name]));
+  const holdingsByAccount = new Map<string, NonNullable<typeof data.holdings>>();
+  for (const holding of data.holdings ?? []) {
+    holdingsByAccount.set(holding.accountId, [...(holdingsByAccount.get(holding.accountId) ?? []), holding]);
+  }
+  for (const holdings of holdingsByAccount.values()) holdings.sort((a, b) => b.value - a.value);
   const problems = data.status.filter((s) => s.problem);
+  const latestActivityUpdate = data.status
+    .map((status) => status.lastUpdatedAt)
+    .filter((stamp): stamp is string => !!stamp && !Number.isNaN(Date.parse(stamp)))
+    .sort()
+    .at(-1);
+  const freshness = latestActivityUpdate
+    ? `most recent bank activity update ${new Date(latestActivityUpdate).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`
+    : `NorthStar checked ${new Date(data.fetchedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+  const disconnect = async (itemId: string) => {
+    setDisconnectingId(itemId);
+    setDisconnectError(null);
+    try {
+      await api(`/api/plaid/items/${itemId}`, { method: "DELETE" });
+      await load();
+    } catch (cause) {
+      setDisconnectError(cause instanceof Error ? cause.message : "Couldn't disconnect that account. Please try again.");
+    } finally {
+      setDisconnectingId(null);
+    }
+  };
 
   return (
     <Shell
       actions={
-        <button onClick={load} disabled={loading} className="flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-bold text-brand-700 hover:bg-brand-50 disabled:opacity-50">
-          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} aria-hidden="true" /> Refresh
+        <button onClick={() => { void load({ liveBalances: true }); }} disabled={loading} className="flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-bold text-brand-700 hover:bg-brand-50 disabled:opacity-50">
+          <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} aria-hidden="true" /> Update balances
         </button>
       }
-      sub={`${data.status.map((s) => s.institution).join(" · ")} · updated ${new Date(data.fetchedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}${data.env === "sandbox" ? " · sandbox test data" : ""}`}
+      sub={`${data.status.map((s) => s.institution).join(" · ")} · ${freshness}${data.env === "sandbox" ? " · sandbox test data" : ""}`}
     >
-      {problems.length > 0 && <Notice tone="warn">Couldn't fully refresh {problems.map((p) => p.institution).join(", ")} ({problems[0].problem}).</Notice>}
+      {needLogin.map((s) => (
+        <Notice key={s.itemId} tone="warn">
+          <span className="flex flex-wrap items-center justify-between gap-2">
+            <span>{s.institution.replace(/ \(test\)$/, "")} needs you to sign in again before NorthStar can refresh it. Your saved history stays.</span>
+            <ReconnectButton itemId={s.itemId} institution={s.institution} label="Sign in again" onDone={load} />
+          </span>
+        </Notice>
+      ))}
+      {problems.filter((p) => p.problem !== "ITEM_LOGIN_REQUIRED").length > 0 && (
+        <Notice tone="warn">Couldn't fully refresh {problems.filter((p) => p.problem !== "ITEM_LOGIN_REQUIRED").map((p) => p.institution).join(", ")} ({problems.find((p) => p.problem !== "ITEM_LOGIN_REQUIRED")?.problem}).</Notice>
+      )}
+      {disconnectError && <Notice tone="warn">{disconnectError}</Notice>}
       {waiting && <Notice tone="info">Your bank is still sending transactions. This page refreshes on its own in a few seconds.</Notice>}
 
       <div className="grid gap-4 lg:grid-cols-3 [&>*]:min-w-0">
@@ -133,6 +177,7 @@ export function MoneyDashboard({
           <p className={`mt-3 font-display text-2xl font-bold ${net >= 0 ? "text-emerald-700" : "text-amber-700"}`}>
             {net >= 0 ? "+" : "−"}{money(Math.abs(net))} <span className="font-sans text-sm font-semibold text-stone-500">net this {flow}</span>
           </p>
+          <p className="mt-1 text-xs text-stone-500">Posted activity only; pending transactions stay in the list below.</p>
         </Card>
 
         {/* Top categories */}
@@ -177,7 +222,14 @@ export function MoneyDashboard({
               ))}
             </ul>
           )}
+          {bills.length > 0 && (
+            <p className="mt-2 text-xs text-stone-500">
+              {billsFromPlaid ? "Detected by Plaid from your bank history." : "Estimated from your past transactions, so dates and amounts can be off."}
+            </p>
+          )}
         </Card>
+
+        <DebtPanel debts={data.debts ?? []} reconnect={needDebtConsent} onReconnected={load} />
 
         {/* Recent transactions */}
         <Card className="lg:col-span-2">
@@ -213,6 +265,7 @@ export function MoneyDashboard({
             <ul className="mt-3 space-y-4">
               {goals.map((g) => {
                 const pct = Math.round(Math.min(1, g.saved / g.target) * 100);
+                const linkedElsewhere = (accountId: string) => goals.some((other) => other.id !== g.id && other.linkedAccountId === accountId);
                 return (
                   <li key={g.id}>
                     <div className="flex items-baseline justify-between gap-2 text-sm">
@@ -231,11 +284,12 @@ export function MoneyDashboard({
                         className="mt-1 block min-h-10 w-full rounded-xl bg-stone-50 px-2 text-sm font-medium text-stone-800 ring-1 ring-stone-300"
                       >
                         <option value="">No: I'll set the amount</option>
-                        {data.accounts.filter((a) => a.type === "depository").map((a) => (
+                        {data.accounts.filter((a) => a.type === "depository" && (a.id === g.linkedAccountId || !linkedElsewhere(a.id))).map((a) => (
                           <option key={a.id} value={a.id}>{a.name}{a.mask ? ` ••${a.mask}` : ""} ({formatExact(a.current)})</option>
                         ))}
                       </select>
                     </label>
+                    {g.linkedAccountId && linkedElsewhere(g.linkedAccountId) && <p className="mt-1 text-xs text-amber-700">Another goal follows this balance. Pick a separate account or set each goal amount manually.</p>}
                   </li>
                 );
               })}
@@ -258,12 +312,35 @@ export function MoneyDashboard({
                     <span className={isLiability(list[0]) ? "text-amber-700" : "text-stone-700"}>{formatExact(total)}</span>
                   </p>
                   <ul className="mt-1 space-y-1 text-sm">
-                    {list.map((a) => (
-                      <li key={a.id} className="flex justify-between gap-2">
-                        <span className="truncate text-stone-700">{a.name}{a.mask ? <span className="text-stone-400"> ••{a.mask}</span> : null}</span>
-                        <span className="shrink-0 font-semibold text-ink">{formatExact(a.current)}</span>
-                      </li>
-                    ))}
+                    {list.map((a) => {
+                      const holdings = holdingsByAccount.get(a.id) ?? [];
+                      const isPortfolio = a.type === "investment" || a.type === "brokerage";
+                      return (
+                        <li key={a.id} className="wealth-account-block">
+                          <div className="flex justify-between gap-2">
+                            <span className="truncate text-stone-700">{a.name}{a.mask ? <span className="text-stone-400"> ••{a.mask}</span> : null}</span>
+                            <span className="shrink-0 font-semibold text-ink">{formatExact(a.current)}</span>
+                          </div>
+                          {isPortfolio && holdings.length > 0 && (
+                            <details className="wealth-account-holdings">
+                              <summary>View holdings <span>{holdings.length}</span></summary>
+                              <ul aria-label={`${a.name} holdings`}>
+                                {holdings.map((holding) => (
+                                  <li key={holding.id} className="flex items-start justify-between gap-3">
+                                    <span className="min-w-0">
+                                      <span className="block truncate font-semibold">{holding.name}</span>
+                                      <small className="block truncate">{holding.ticker ? `${holding.ticker} · ` : ""}{holding.quantity.toLocaleString(undefined, { maximumFractionDigits: 4 })} units</small>
+                                    </span>
+                                    <span className="shrink-0 text-right font-semibold tabular-nums">{formatExact(holding.value)}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </details>
+                          )}
+                          {isPortfolio && holdings.length === 0 && <p className="mt-1 text-xs text-stone-500">Holdings are not available from this connection yet.</p>}
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
               );
@@ -274,13 +351,11 @@ export function MoneyDashboard({
             {data.status.map((s) => (
               <button
                 key={s.itemId}
-                onClick={async () => {
-                  await api(`/api/plaid/items/${s.itemId}`, { method: "DELETE" });
-                  load();
-                }}
-                className="flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-semibold text-stone-500 hover:bg-stone-100"
+                onClick={() => { void disconnect(s.itemId); }}
+                disabled={disconnectingId !== null}
+                className="flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-semibold text-stone-500 hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                <Unplug className="h-4 w-4" aria-hidden="true" /> Disconnect {s.institution}
+                <Unplug className="h-4 w-4" aria-hidden="true" /> {disconnectingId === s.itemId ? "Disconnecting…" : `Disconnect ${s.institution}`}
               </button>
             ))}
           </div>
@@ -324,19 +399,21 @@ function FlowRow({ icon, label, value, prev }: { icon: React.ReactNode; label: s
 }
 
 /** Opens Plaid Link. The link token is fetched only when you click. */
-export function ConnectButton({ label, variant = "primary", kind = "bank", className, onConnected }: { label: string; variant?: "primary" | "secondary"; kind?: "bank" | "investments" | "all"; className?: string; onConnected: () => void }) {
+export function ConnectButton({ label, variant = "primary", kind = "bank", className, onConnected }: { label: string; variant?: "primary" | "secondary"; kind?: ConnectKind; className?: string; onConnected: () => void }) {
   const [token, setToken] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // First connection: a short NorthStar explanation before Plaid's window opens.
+  const [intro, setIntro] = useState(false);
   const { open, ready } = usePlaidLink({
     token,
     onSuccess: async (publicToken, meta) => {
       setBusy(true);
       try {
-        // With the unified connector, persist the product that matches the
-        // selected account type so the server fetches transactions or holdings.
-        const selectedKind = kind === "all" && meta.accounts.some((account) => account.type === "investment") ? "investments" : kind === "all" ? "bank" : kind;
-        await post("/api/plaid/exchange", { public_token: publicToken, institution: meta.institution?.name, kind: selectedKind });
+        // A unified Link session can include both a bank and a brokerage. Keep
+        // it as "all" so the server loads transactions *and* holdings instead
+        // of silently discarding one side of the connection.
+        await finishConnection(publicToken, meta, kind);
         onConnected();
       } catch (e) {
         setError(e instanceof Error ? e.message : "Couldn't save that connection.");
@@ -351,28 +428,54 @@ export function ConnectButton({ label, variant = "primary", kind = "bank", class
     if (token && ready) open();
   }, [token, ready, open]);
 
+  const start = async () => {
+    setIntro(false);
+    markIntroSeen();
+    setError(null);
+    setBusy(true);
+    try {
+      const linkToken = (await post<{ link_token: string }>("/api/plaid/link-token", { kind })).link_token;
+      // Kept for banks that log in on their own site and send the user back (see PlaidOAuthResume).
+      rememberLinkSession(linkToken, kind);
+      setToken(linkToken);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Couldn't start Plaid.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   return (
     <span className="inline-flex flex-col">
-      <Button
+      {!intro && <Button
         variant={variant}
         className={className}
         disabled={busy || !!token}
-        onClick={async () => {
-          setError(null);
-          setBusy(true);
-          try {
-            setToken((await post<{ link_token: string }>("/api/plaid/link-token", { kind })).link_token);
-          } catch (e) {
-            setError(e instanceof Error ? e.message : "Couldn't start Plaid.");
-          } finally {
-            setBusy(false);
-          }
-        }}
+        onClick={() => { if (introSeen()) void start(); else setIntro(true); }}
       >
         <span className="inline-flex items-center gap-2"><Wallet className="h-4 w-4" aria-hidden="true" /> {busy || token ? "Opening…" : label}</span>
-      </Button>
+      </Button>}
+      {intro && <PlaidIntro onContinue={() => { void start(); }} onCancel={() => setIntro(false)} />}
       {error && <span className="mt-1 text-xs text-red-700" role="alert">{error}</span>}
     </span>
+  );
+}
+
+/** What happens when you connect, in NorthStar's voice, before Plaid's own window opens. */
+function PlaidIntro({ onContinue, onCancel }: { onContinue: () => void; onCancel: () => void }) {
+  return (
+    <div className="plaid-intro" role="group" aria-labelledby="plaid-intro-title">
+      <strong id="plaid-intro-title"><ShieldCheck size={18} aria-hidden="true" /> Connect securely with Plaid</strong>
+      <ul>
+        <li><Lock size={15} aria-hidden="true" /><span>You sign in on Plaid’s or your bank’s own screen. NorthStar never sees your password.</span></li>
+        <li><Eye size={15} aria-hidden="true" /><span>NorthStar can read balances, transactions, and holdings. It can’t move money.</span></li>
+        <li><Unplug size={15} aria-hidden="true" /><span>Disconnect anytime from <b>Edit accounts</b>.</span></li>
+      </ul>
+      <div className="plaid-intro-actions">
+        <button type="button" className="wealth-secondary" onClick={onCancel}>Not now</button>
+        <button type="button" className="wealth-primary" onClick={onContinue}>Continue to Plaid</button>
+      </div>
+    </div>
   );
 }
 

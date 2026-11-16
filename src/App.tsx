@@ -8,6 +8,8 @@ import { Profile } from "./components/Profile";
 import { Settings } from "./components/Settings";
 import { TopNav, type NavPage } from "./components/TopNav";
 import SoftAurora from "./components/SoftAurora";
+import { Toast } from "./components/Toast";
+import { PlaidOAuthResume } from "./components/PlaidOAuthResume";
 import { todayISO } from "./lib/dates";
 import { applyTheme, savedTheme, type Theme } from "./lib/theme";
 import { EMPTY_STATE, type SavedState, demoState, loadState, saveState } from "./lib/storage";
@@ -18,8 +20,9 @@ import { celebrateNewlyReached } from "./lib/celebrate";
 import { activeGoals, boughtGoals, cashOnHand, envelopes, markBought, unmarkBought } from "./lib/envelopes";
 import { bankDataForPlan, includedItems } from "./lib/planningAccounts";
 import { readPlan } from "./components/WealthDashboard";
+import { accountIdRemapper } from "./lib/accountMatch";
 
-const pageHashes: Record<NavPage, string> = { Overview: "overview", Accounts: "accounts", Plan: "plan", Goals: "my-goals", "Price check": "price-check", Profile: "profile" };
+const pageHashes: Record<NavPage, string> = { Overview: "overview", Accounts: "accounts", Activity: "activity", Plan: "plan", Goals: "my-goals", "Price check": "price-check", Profile: "profile" };
 const pageFromHash = (): NavPage => {
   const hash = window.location.hash.slice(1);
   // Keep previously shared retirement and budget links useful after their merger.
@@ -80,14 +83,20 @@ export default function App() {
   useEffect(() => {
     const data = bank.data;
     if (!data) return;
-    const excluded = readPlan().excludedAccountIds;
+    // A reconnected bank gives its accounts new IDs: follow each goal to the same account.
+    const remap = accountIdRemapper(data.accounts);
+    const excluded = readPlan().excludedAccountIds.map(remap);
     setState((s) => ({
       ...s,
       bank: { cash: spendableCash(bankDataForPlan(data, excluded)?.accounts ?? []), fetchedAt: data.fetchedAt },
       goals: s.goals.map((g) => {
-        if (g.kind !== "money" || !g.linkedAccountId || excluded.includes(g.linkedAccountId)) return g;
-        const a = data.accounts.find((x) => x.id === g.linkedAccountId);
-        return a ? { ...g, saved: Math.round(a.current * 100) / 100 } : g;
+        if (g.kind !== "money" || !g.linkedAccountId) return g;
+        const linkedAccountId = remap(g.linkedAccountId);
+        const moved = linkedAccountId === g.linkedAccountId ? g : { ...g, linkedAccountId };
+        if (excluded.includes(linkedAccountId)) return moved;
+        const a = data.accounts.find((x) => x.id === linkedAccountId);
+        // Disconnected: keep the last synced balance until the bank comes back.
+        return a ? { ...moved, saved: Math.round(a.current * 100) / 100 } : moved;
       }),
     }));
   }, [bank.data]);
@@ -161,11 +170,14 @@ export default function App() {
             onCreateGoal={addGoal}
             onUpdateGoal={updateGoal}
             onOpenGoal={(id) => setScreen({ name: "goal", id })}
-            onSettings={() => setScreen({ name: "settings" })} />}
+            onSettings={() => setScreen({ name: "settings" })}
+            onFreshBalances={() => { void bank.ensureFreshBalances(); }}
+            refreshingBalances={bank.loading} />}
           selectedTab={dashboardTab}
-          onTabChange={(page) => { if (page === "Activity") setDashboardTab(page); else navigate(page); }}
+          onTabChange={navigate}
           onCheck={() => navigate("Price check")}
           onSettings={() => setScreen({ name: "settings" })}
+          profileName={state.profile.name?.trim() || "Michael"}
           hourlyWage={state.profile.hourlyWage}
           goals={moneyGoals}
           completedGoals={completedGoals}
@@ -209,7 +221,8 @@ export default function App() {
           otherGoals={moneyGoals.filter((x) => x.id !== g.id)}
           onBuy={(paid, to) => buyGoal(g, paid, to)}
           onRestore={() => updateGoal(unmarkBought(g))}
-          linkedAccount={(() => { const a = bank.data?.accounts.find((x) => x.id === g.linkedAccountId); return a ? { name: a.name, balance: a.current } : undefined; })()} />;
+          linkedAccount={(() => { const a = bank.data?.accounts.find((x) => x.id === g.linkedAccountId); return a ? { name: a.name, balance: a.current } : undefined; })()}
+          linkPaused={g.kind === "money" && !!g.linkedAccountId && !!bank.status && !bank.loading && !bank.data?.accounts.some((x) => x.id === g.linkedAccountId)} />;
       }
       break;
     }
@@ -227,6 +240,7 @@ export default function App() {
             goHome();
           }}
           onBack={goGoals}
+          snapshots={bank.data?.netWorthSnapshots}
         />
       );
       break;
@@ -259,8 +273,10 @@ export default function App() {
         lightMode={theme === "light"}
         className="soft-aurora-background"
       />
-      <TopNav profile={state.profile} onNavigate={navigate} active={screen.name === "profile" ? "Profile" : screen.name === "goal" || screen.name === "new-money" ? "Goals" : screen.name === "settings" ? null : dashboardTab === "Activity" ? "Accounts" : dashboardTab} />
+      <TopNav profile={state.profile} onNavigate={navigate} active={screen.name === "profile" ? "Profile" : screen.name === "goal" || screen.name === "new-money" ? "Goals" : screen.name === "settings" ? null : dashboardTab} />
       {isLanding ? body : <main id="main" className="mx-auto max-w-md px-4 pb-16 pt-6 sm:max-w-2xl">{body}</main>}
+      <PlaidOAuthResume onConnected={() => { void bank.reload(); }} />
+      <Toast />
     </div>
   );
 }
