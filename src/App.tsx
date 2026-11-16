@@ -22,7 +22,7 @@ import { bankDataForPlan, includedItems } from "./lib/planningAccounts";
 import { readPlan } from "./components/WealthDashboard";
 import { accountIdRemapper } from "./lib/accountMatch";
 
-const pageHashes: Record<NavPage, string> = { Overview: "overview", Accounts: "accounts", Plan: "plan", Goals: "my-goals", "Price check": "price-check", Profile: "profile" };
+const pageHashes: Record<NavPage, string> = { Overview: "overview", Accounts: "accounts", Activity: "activity", Plan: "plan", Goals: "my-goals", "Price check": "price-check", Profile: "profile" };
 const pageFromHash = (): NavPage => {
   const hash = window.location.hash.slice(1);
   // Keep previously shared retirement and budget links useful after their merger.
@@ -174,7 +174,7 @@ export default function App() {
             onFreshBalances={() => { void bank.ensureFreshBalances(); }}
             refreshingBalances={bank.loading} />}
           selectedTab={dashboardTab}
-          onTabChange={(page) => { if (page === "Activity") setDashboardTab(page); else navigate(page); }}
+          onTabChange={navigate}
           onCheck={() => navigate("Price check")}
           onSettings={() => setScreen({ name: "settings" })}
           profileName={state.profile.name?.trim() || "Michael"}
@@ -273,7 +273,7 @@ export default function App() {
         lightMode={theme === "light"}
         className="soft-aurora-background"
       />
-      <TopNav profile={state.profile} onNavigate={navigate} active={screen.name === "profile" ? "Profile" : screen.name === "goal" || screen.name === "new-money" ? "Goals" : screen.name === "settings" ? null : dashboardTab === "Activity" ? "Accounts" : dashboardTab} />
+      <TopNav profile={state.profile} onNavigate={navigate} active={screen.name === "profile" ? "Profile" : screen.name === "goal" || screen.name === "new-money" ? "Goals" : screen.name === "settings" ? null : dashboardTab} />
       {isLanding ? body : <main id="main" className="mx-auto max-w-md px-4 pb-16 pt-6 sm:max-w-2xl">{body}</main>}
       <PlaidOAuthResume onConnected={() => { void bank.reload(); }} />
       <Toast />

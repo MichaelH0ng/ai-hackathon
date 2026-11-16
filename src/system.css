@@ -147,11 +147,16 @@
 :root[data-theme="dark"] .home-sync { color: #d0def0; }
 :root[data-theme="dark"] .home-sync button { background: #0f213d; color: #edf6ff; }
 
-/* The graph gets the same calm aurora language as the page, kept behind data. */
-.net-worth-aurora { transform-origin: center; animation: net-worth-aurora-drift 14s ease-in-out infinite alternate; }
-@keyframes net-worth-aurora-drift { from { transform: translateX(-28px) translateY(0); } to { transform: translateX(28px) translateY(9px); } }
-@media (prefers-reduced-motion: reduce) { .net-worth-aurora { animation: none; } }
 :root[data-theme="dark"] .home-sync button.home-sync-link { border: 0; background: transparent; color: var(--ns-accent); }
+
+/* Range recap: one-step-lighter cards, using the same restrained night-sky system as every panel. */
+.net-worth-recap-card { border: 1px solid var(--ns-line); background: var(--ns-surface-inset); }
+.net-worth-recap-card dt, .net-worth-recap-card span { color: var(--ns-label); }
+.net-worth-recap-card dd { color: var(--ns-secondary-text); }
+.net-worth-recap-card--mint { border-top: 2px solid #54e2c2; }
+.net-worth-recap-card--blue { border-top: 2px solid #74b9ff; }
+.net-worth-recap-card--violet { border-top: 2px solid #c294ff; }
+.net-worth-recap-card--sky { border-top: 2px solid #74b9ff; }
 
 /* ---------- Page-specific fixes ---------- */
 /* Budget: the over/under box and divider used light-theme colors in dark mode. */

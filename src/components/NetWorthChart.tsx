@@ -16,17 +16,24 @@ const PERIODS = [
 ] as const;
 type Period = (typeof PERIODS)[number]["key"];
 
+const CHART_BLUE = "#74b9ff";
 const UP = "#54e2c2";
-const DOWN = "#ffb47a";
+const MOONLIGHT = "#c0cde0";
 const money = (n: number) => formatMoney(n, true);
 type ChartTransaction = Pick<BankTransaction, "id" | "date" | "name" | "amount" | "category" | "pending">;
+export interface NetWorthQuickLook {
+  label: string;
+  value: string;
+  detail: string;
+  tone: "mint" | "blue" | "violet" | "sky";
+}
 
-function RecapMetric({ label, value, detail }: { label: string; value: string; detail?: string }) {
+function RecapMetric({ label, value, detail, tone }: NetWorthQuickLook) {
   return (
-    <div className="rounded-xl border border-stone-100 bg-white/45 px-3 py-2.5">
-      <dt className="text-[11px] font-bold uppercase tracking-[0.08em] text-stone-500">{label}</dt>
-      <dd className="mt-1 text-sm font-bold tabular-nums text-ink">{value}</dd>
-      {detail && <span className="mt-0.5 block text-[11px] text-stone-500">{detail}</span>}
+    <div className={`net-worth-recap-card net-worth-recap-card--${tone} rounded-xl px-3 py-2.5`}>
+      <dt className="text-[11px] font-bold uppercase tracking-[0.08em]">{label}</dt>
+      <dd className="mt-1 text-sm font-bold tabular-nums">{value}</dd>
+      {detail && <span className="mt-0.5 block text-[11px]">{detail}</span>}
     </div>
   );
 }
@@ -35,7 +42,7 @@ function RecapMetric({ label, value, detail }: { label: string; value: string; d
  * Robinhood-style net worth chart: big number on top, one clean line, period tabs below.
  * Hover or drag across the line and the number swaps to that day's value.
  */
-export function NetWorthChart({ series, transactions = [] }: { series: NetWorthPoint[]; transactions?: ChartTransaction[] }) {
+export function NetWorthChart({ series, transactions = [], quickLook = [] }: { series: NetWorthPoint[]; transactions?: ChartTransaction[]; quickLook?: NetWorthQuickLook[] }) {
   const [period, setPeriod] = useState<Period>("1M");
   const [hover, setHover] = useState<number | null>(null);
   const [activeMarker, setActiveMarker] = useState<{ index: number; name: string; amount: number } | null>(null);
@@ -56,10 +63,8 @@ export function NetWorthChart({ series, transactions = [] }: { series: NetWorthP
   const last = pts.at(-1)?.value ?? 0;
   const shown = hover != null ? pts[hover] : pts.at(-1);
   const change = (shown?.value ?? 0) - first;
-  const periodChange = last - first;
   const pct = first !== 0 ? (change / Math.abs(first)) * 100 : 0;
-  const up = last >= first;
-  const color = up ? UP : DOWN;
+  const color = CHART_BLUE;
 
   const values = pts.map((x) => x.value);
   const min = Math.min(...values, first);
@@ -91,8 +96,6 @@ export function NetWorthChart({ series, transactions = [] }: { series: NetWorthP
   }
 
   if (pts.length < 2) return null;
-  const high = pts.reduce((best, point) => point.value > best.value ? point : best, pts[0]);
-  const low = pts.reduce((best, point) => point.value < best.value ? point : best, pts[0]);
   const hx = hover != null ? x(hover) : null;
   const hy = hover != null ? y(pts[hover].value) : null;
 
@@ -102,7 +105,7 @@ export function NetWorthChart({ series, transactions = [] }: { series: NetWorthP
       <p className="font-display text-5xl font-bold tabular-nums text-ink sm:text-6xl" aria-live="polite">
         <CountUp value={shown?.value ?? 0} format={money} />
       </p>
-      <p className="mt-1 text-sm font-bold tabular-nums" style={{ color: change >= 0 ? UP : DOWN }}>
+      <p className="mt-1 text-sm font-bold tabular-nums" style={{ color: change >= 0 ? UP : MOONLIGHT }}>
         {change >= 0 ? "▲" : "▼"} {money(Math.abs(change))} ({Math.abs(pct).toFixed(2)}%)
         <span className="ml-1.5 font-semibold text-stone-500">{hover != null ? formatDate(pts[hover].date) : p.label}</span>
       </p>
@@ -124,15 +127,7 @@ export function NetWorthChart({ series, transactions = [] }: { series: NetWorthP
               <stop offset="0%" stopColor={color} stopOpacity={0.16} />
               <stop offset="100%" stopColor={color} stopOpacity={0} />
             </linearGradient>
-            <linearGradient id={`aurora-${gid}`} x1="0" y1="0" x2="1" y2="1">
-              <stop offset="0%" stopColor="#54e2c2" stopOpacity=".24" />
-              <stop offset="52%" stopColor="#74b9ff" stopOpacity=".12" />
-              <stop offset="100%" stopColor="#c294ff" stopOpacity="0" />
-            </linearGradient>
           </defs>
-          <g className="net-worth-aurora" aria-hidden="true">
-            <path d="M-80,130 C70,8 205,142 365,58 C530,-26 654,99 880,6 L880,-20 L-80,-20 Z" fill={`url(#aurora-${gid})`} />
-          </g>
           {/* where the period started, like Robinhood's dotted "previous close" line */}
           <line x1={PAD} x2={W - PAD} y1={y(first)} y2={y(first)} stroke="#a8a29e" strokeWidth={1.5} strokeDasharray="2 6" vectorEffect="non-scaling-stroke" />
           <path d={area} fill={`url(#fill-${gid})`} />
@@ -152,7 +147,7 @@ export function NetWorthChart({ series, transactions = [] }: { series: NetWorthP
               aria-label={`Posted activity: ${marker.name}, ${marker.amount < 0 ? "incoming" : "outgoing"} ${money(Math.abs(marker.amount))} on ${formatDate(marker.date)}`}
             >
               <circle cx={x(marker.index)} cy={y(pts[marker.index].value)} r="6" fill="#0d1d35" opacity=".8" />
-              <circle cx={x(marker.index)} cy={y(pts[marker.index].value)} r="3" fill={marker.amount < 0 ? UP : DOWN} />
+              <circle cx={x(marker.index)} cy={y(pts[marker.index].value)} r="3" fill={marker.amount < 0 ? UP : "#c294ff"} />
             </g>
           ))}
         </svg>
@@ -185,12 +180,9 @@ export function NetWorthChart({ series, transactions = [] }: { series: NetWorthP
           </button>
         ))}
       </div>
-      <dl className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label={`${p.label} recap`}>
-        <RecapMetric label="Started" value={money(first)} detail={formatDate(pts[0].date)} />
-        <RecapMetric label="High" value={money(high.value)} detail={formatDate(high.date)} />
-        <RecapMetric label="Low" value={money(low.value)} detail={formatDate(low.date)} />
-        <RecapMetric label="Net change" value={`${periodChange >= 0 ? "+" : "−"}${money(Math.abs(periodChange))}`} detail={periodChange >= 0 ? "Gained this period" : "Down this period"} />
-      </dl>
+      {quickLook.length > 0 && <dl className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label="Your money at a glance">
+        {quickLook.map((item) => <RecapMetric key={item.label} {...item} />)}
+      </dl>}
     </div>
   );
 }

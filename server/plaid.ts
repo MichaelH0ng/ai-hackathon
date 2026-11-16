@@ -111,9 +111,9 @@ plaidRouter.use("/api/plaid", (_req, res, next) => {
 
 // Step 1 of connecting: a short-lived link token for the Plaid Link popup.
 plaidRouter.post("/api/plaid/link-token", async (req, res) => {
-  // Update mode: re-open Link for a connection that already exists (an expired login, or to add card and
-  // loan details). It uses the saved access token and no products. Link then fixes the same connection
-  // in place, so nothing is exchanged and no second, separately billed connection is created.
+  // Update mode: re-open Link for a connection that already exists (an expired login, or to add card,
+  // loan, or investment details). It uses the saved access token and no products. Link then fixes the
+  // same connection in place, so nothing is exchanged and no second, separately billed connection is created.
   if (typeof req.body?.itemId === "string") {
     const item = getItems().find((i) => i.itemId === req.body.itemId);
     if (!item) {
@@ -121,13 +121,17 @@ plaidRouter.post("/api/plaid/link-token", async (req, res) => {
       return;
     }
     try {
+      const additionalConsent = [
+        ...(req.body?.addInvestments ? [Products.Investments] : []),
+        ...(req.body?.addDebts ? [Products.Liabilities] : []),
+      ];
       const r = await plaid.linkTokenCreate({
         user: { client_user_id: "tradeoff-local-user" },
         client_name: "NorthStar",
         language: "en",
         country_codes: [CountryCode.Us],
         access_token: item.accessToken,
-        ...(req.body?.addDebts ? { additional_consented_products: [Products.Liabilities] } : {}),
+        ...(additionalConsent.length ? { additional_consented_products: additionalConsent } : {}),
         ...(process.env.PLAID_LINK_CUSTOMIZATION ? { link_customization_name: process.env.PLAID_LINK_CUSTOMIZATION } : {}),
         ...(process.env.PLAID_REDIRECT_URI ? { redirect_uri: process.env.PLAID_REDIRECT_URI } : {}),
       });

@@ -1,13 +1,14 @@
 import { ArrowRight, CalendarClock, PiggyBank, Plus, RefreshCw, Sparkles, Target } from "lucide-react";
 import { useMemo } from "react";
-import { daysBetween, todayISO } from "../lib/dates";
-import { formatExact } from "../lib/finance";
+import { daysBetween, formatDate, todayISO } from "../lib/dates";
+import { formatExact, formatMoney, weeklyNeededForDeadline } from "../lib/finance";
 import { assetsByInstitution, billsFor, detectTransferIds, netWorthSeries } from "../lib/money";
+import { buildForecast, cashFromAccounts } from "../lib/safeToSpend";
 import type { MoneyGoal } from "../lib/types";
 import { balancesAreFresh, type Bank } from "../lib/useBank";
 import { AssetSplit } from "./AssetSplit";
 import { ConnectCard } from "./MoneyDashboard";
-import { NetWorthChart } from "./NetWorthChart";
+import { NetWorthChart, type NetWorthQuickLook } from "./NetWorthChart";
 import { SavingsPlanner } from "./SavingsPlanner";
 
 /**
@@ -42,7 +43,7 @@ export function Landing({
   return (
     <main id="main">
       {bank.connected ? (
-        <HomeOverview data={bank.data!} goal={goal} onCheck={onCheck} onMoney={onMoney} />
+        <HomeOverview data={bank.data!} goal={goal} goals={moneyGoals} onCheck={onCheck} onMoney={onMoney} />
       ) : bank.loading && !bank.status ? (
         <section className="px-4 pt-6">
           <div className="clay mx-auto h-[28rem] max-w-6xl animate-pulse" aria-label="Loading your accounts" />
@@ -108,6 +109,75 @@ export function HomeOverview({ data, goals = [], profileName = "Michael", onChec
   // Unfinished goals first, so the snapshot shows what still needs saving.
   const topGoals = [...goals].sort((a, b) => Number(a.saved >= a.target) - Number(b.saved >= b.target)).slice(0, 3);
   const billsTotal = view.bills.reduce((sum, b) => sum + b.amount, 0);
+  const quickLook = useMemo<NetWorthQuickLook[]>(() => {
+    const cash = cashFromAccounts(data.accounts);
+    const forecast = buildForecast({
+      cash: cash.checking,
+      savings: cash.savings,
+      transactions: data.transactions,
+      cashAccountIds: cash.cashAccountIds,
+      goals,
+      today: todayISO(),
+    });
+    const comfortableToday = Math.floor(Math.max(0, forecast.headroom) / 2);
+    const nextBill = view.bills[0];
+    const nextIncome = forecast.nextIncome;
+    const activeGoal = [...goals]
+      .filter((goal) => goal.saved < goal.target)
+      .sort((a, b) => (a.deadline ?? "9999-12-31").localeCompare(b.deadline ?? "9999-12-31"))[0];
+    const goalPace = (() => {
+      if (!activeGoal) return { value: "No active goal", detail: "Create one when you are ready." };
+      if (!activeGoal.deadline) return activeGoal.weekly > 0
+        ? { value: `${formatMoney(activeGoal.weekly)}/week`, detail: `${activeGoal.name} · add a date to check pace` }
+        : { value: "Set a weekly amount", detail: activeGoal.name };
+      const needed = weeklyNeededForDeadline(activeGoal.target, activeGoal.saved, activeGoal.deadline);
+      const gap = Math.max(0, needed - activeGoal.weekly);
+      return gap <= 0.01
+        ? { value: "On track", detail: `${activeGoal.name} · ${formatMoney(activeGoal.weekly)}/week` }
+        : { value: `${formatMoney(gap)}/week short`, detail: `${activeGoal.name} by ${formatDate(activeGoal.deadline)}` };
+    })();
+    const newestDate = view.chartTransactions.reduce<string | null>((newest, transaction) => !newest || transaction.date > newest ? transaction.date : newest, null);
+    const newestActivity = newestDate
+      ? view.chartTransactions.filter((transaction) => transaction.date === newestDate).sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))[0]
+      : null;
+
+    return [
+      {
+        label: "Safe to spend today",
+        value: comfortableToday > 0 ? formatMoney(comfortableToday) : "$0",
+        detail: comfortableToday > 0 ? "Comfortable room after the next 30 days." : "Bills, goals, or everyday spending use the available room.",
+        tone: "mint",
+      },
+      nextBill ? {
+        label: "Coming up next",
+        value: formatMoney(nextBill.amount),
+        detail: `${nextBill.name} · ${nextBill.daysUntil === 0 ? "due today" : nextBill.daysUntil === 1 ? "due tomorrow" : `due in ${nextBill.daysUntil} days`}`,
+        tone: "blue",
+      } : nextIncome ? {
+        label: "Coming up next",
+        value: formatMoney(nextIncome.amount),
+        detail: `${nextIncome.name} · expected ${formatDate(nextIncome.date)}`,
+        tone: "blue",
+      } : {
+        label: "Coming up next",
+        value: "Nothing scheduled",
+        detail: "We will show recurring bills or income here.",
+        tone: "blue",
+      },
+      { label: "Goal check-in", ...goalPace, tone: "violet" },
+      newestActivity ? {
+        label: "Recent money move",
+        value: `${newestActivity.amount < 0 ? "+" : "−"}${formatMoney(Math.abs(newestActivity.amount))}`,
+        detail: `${newestActivity.name} · ${formatDate(newestActivity.date)}`,
+        tone: "sky",
+      } : {
+        label: "Recent money move",
+        value: "No posted activity",
+        detail: "New transactions will appear here once they settle.",
+        tone: "sky",
+      },
+    ];
+  }, [data.accounts, data.transactions, goals, view.bills, view.chartTransactions]);
   const lastBankUpdate = data.status
     .map((status) => status.lastUpdatedAt)
     .filter((stamp): stamp is string => !!stamp && !Number.isNaN(Date.parse(stamp)))
@@ -138,7 +208,7 @@ export function HomeOverview({ data, goals = [], profileName = "Michael", onChec
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] min-[1600px]:gap-6 [&>*]:min-w-0">
         <div className="clay wealth-accent p-5 sm:p-7">
           <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_230px]">
-            <NetWorthChart series={view.series} transactions={view.chartTransactions} />
+            <NetWorthChart series={view.series} transactions={view.chartTransactions} quickLook={quickLook} />
             <div className="border-t border-stone-100 pt-5 xl:border-l xl:border-t-0 xl:pt-0 xl:pl-6">
               <AssetSplit slices={view.slices} />
               <div className="mt-4 border-t border-stone-100 pt-4">

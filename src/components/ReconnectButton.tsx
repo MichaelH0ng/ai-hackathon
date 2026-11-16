@@ -6,10 +6,10 @@ import { Button } from "./ui";
 
 /**
  * Fixes a connection that already exists, without removing it: signing in again when the bank
- * asks for it, or agreeing to share card and loan details (`addDebts`). Plaid Link opens in
+ * asks for it, or agreeing to share card/loan (`addDebts`) or investment (`addInvestments`) details. Plaid Link opens in
  * "update mode", so the same connection keeps its history and is not billed a second time.
  */
-export function ReconnectButton({ itemId, institution, addDebts = false, label, onDone }: { itemId: string; institution: string; addDebts?: boolean; label: string; onDone: () => void }) {
+export function ReconnectButton({ itemId, institution, addDebts = false, addInvestments = false, label, onDone }: { itemId: string; institution: string; addDebts?: boolean; addInvestments?: boolean; label: string; onDone: () => void }) {
   const [token, setToken] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -39,7 +39,7 @@ export function ReconnectButton({ itemId, institution, addDebts = false, label, 
     setError(null);
     setBusy(true);
     try {
-      const linkToken = (await post<{ link_token: string }>("/api/plaid/link-token", { itemId, addDebts })).link_token;
+      const linkToken = (await post<{ link_token: string }>("/api/plaid/link-token", { itemId, addDebts, addInvestments })).link_token;
       // Banks that log in on their own site send the user back; remember this is a fix, not a new connection.
       rememberLinkSession(linkToken, "bank", itemId);
       setToken(linkToken);

@@ -270,6 +270,10 @@ describe("reconnecting an existing bank", () => {
     await invoke("/api/plaid/link-token", { itemId: "bank-item", addDebts: true });
     expect(mocks.client.linkTokenCreate.mock.calls[0][0].additional_consented_products).toEqual(["liabilities"]);
   });
+  it("can ask for investment holdings on the same connection", async () => {
+    await invoke("/api/plaid/link-token", { itemId: "bank-item", addInvestments: true });
+    expect(mocks.client.linkTokenCreate.mock.calls[0][0].additional_consented_products).toEqual(["investments"]);
+  });
   it("says so when the connection is no longer saved", async () => {
     const result = await invoke<{ error: string }>("/api/plaid/link-token", { itemId: "missing" });
     expect(result.status).toBe(404);

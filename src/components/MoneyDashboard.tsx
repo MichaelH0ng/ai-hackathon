@@ -96,6 +96,11 @@ export function MoneyDashboard({
   const needLogin = data.status.filter((s) => s.problem === "ITEM_LOGIN_REQUIRED");
   const recent = data.transactions.slice(0, 10);
   const accountName = new Map(data.accounts.map((a) => [a.id, a.name]));
+  const holdingsByAccount = new Map<string, NonNullable<typeof data.holdings>>();
+  for (const holding of data.holdings ?? []) {
+    holdingsByAccount.set(holding.accountId, [...(holdingsByAccount.get(holding.accountId) ?? []), holding]);
+  }
+  for (const holdings of holdingsByAccount.values()) holdings.sort((a, b) => b.value - a.value);
   const problems = data.status.filter((s) => s.problem);
   const latestActivityUpdate = data.status
     .map((status) => status.lastUpdatedAt)
@@ -307,12 +312,35 @@ export function MoneyDashboard({
                     <span className={isLiability(list[0]) ? "text-amber-700" : "text-stone-700"}>{formatExact(total)}</span>
                   </p>
                   <ul className="mt-1 space-y-1 text-sm">
-                    {list.map((a) => (
-                      <li key={a.id} className="flex justify-between gap-2">
-                        <span className="truncate text-stone-700">{a.name}{a.mask ? <span className="text-stone-400"> ••{a.mask}</span> : null}</span>
-                        <span className="shrink-0 font-semibold text-ink">{formatExact(a.current)}</span>
-                      </li>
-                    ))}
+                    {list.map((a) => {
+                      const holdings = holdingsByAccount.get(a.id) ?? [];
+                      const isPortfolio = a.type === "investment" || a.type === "brokerage";
+                      return (
+                        <li key={a.id} className="wealth-account-block">
+                          <div className="flex justify-between gap-2">
+                            <span className="truncate text-stone-700">{a.name}{a.mask ? <span className="text-stone-400"> ••{a.mask}</span> : null}</span>
+                            <span className="shrink-0 font-semibold text-ink">{formatExact(a.current)}</span>
+                          </div>
+                          {isPortfolio && holdings.length > 0 && (
+                            <details className="wealth-account-holdings">
+                              <summary>View holdings <span>{holdings.length}</span></summary>
+                              <ul aria-label={`${a.name} holdings`}>
+                                {holdings.map((holding) => (
+                                  <li key={holding.id} className="flex items-start justify-between gap-3">
+                                    <span className="min-w-0">
+                                      <span className="block truncate font-semibold">{holding.name}</span>
+                                      <small className="block truncate">{holding.ticker ? `${holding.ticker} · ` : ""}{holding.quantity.toLocaleString(undefined, { maximumFractionDigits: 4 })} units</small>
+                                    </span>
+                                    <span className="shrink-0 text-right font-semibold tabular-nums">{formatExact(holding.value)}</span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </details>
+                          )}
+                          {isPortfolio && holdings.length === 0 && <p className="mt-1 text-xs text-stone-500">Holdings are not available from this connection yet.</p>}
+                        </li>
+                      );
+                    })}
                   </ul>
                 </div>
               );
