@@ -117,6 +117,42 @@
 :root[data-theme] .northstar-copy .northstar-current { font-size: 14px; line-height: 1.7; }
 :root[data-theme] .wealth-retirement > .wealth-note:last-child { margin-top: 24px; }
 
+/* ---------- Personalized home welcome ---------- */
+.home-welcome { position: relative; display: flex; align-items: end; justify-content: space-between; gap: 24px; overflow: hidden; margin-bottom: 22px; padding: 26px 28px; border: 1px solid var(--ns-line); border-left: 4px solid var(--ns-accent); border-radius: var(--ns-radius-card); background: linear-gradient(125deg, var(--ns-secondary-bg), var(--ns-surface-inset)); }
+.home-welcome-copy { position: relative; z-index: 1; max-width: 720px; }
+.home-welcome-kicker { display: flex; align-items: center; gap: 7px; margin: 0 0 6px; color: var(--ns-accent); font-size: 11px; font-weight: 800; letter-spacing: .1em; }
+.home-welcome h1 { margin: 0; color: var(--ns-secondary-text); font-family: var(--font-display); font-size: clamp(32px, 4vw, 52px); font-weight: 750; letter-spacing: -.045em; line-height: 1.05; }
+.home-welcome-name { position: relative; display: inline-block; padding: 0 .08em; color: transparent; background: linear-gradient(105deg, #117275 8%, #4c84eb 53%, #9a5dd4 95%); background-clip: text; -webkit-background-clip: text; }
+.home-welcome-name::after { content: ""; position: absolute; right: -.28em; top: -.18em; width: .5em; height: .5em; clip-path: polygon(50% 0, 60% 40%, 100% 50%, 60% 60%, 50% 100%, 40% 60%, 0 50%, 40% 40%); background: #54e2c2; filter: drop-shadow(0 0 8px rgb(84 226 194 / 80%)); animation: home-star-pulse 2.8s ease-in-out infinite; }
+.home-welcome-name i { position: absolute; bottom: -.12em; left: .08em; right: .08em; height: 3px; border-radius: 50%; background: linear-gradient(90deg, transparent, #54e2c2 18%, #74b9ff 56%, #c294ff 88%, transparent); opacity: .8; }
+.home-welcome-orbit { position: absolute; border: 1px solid rgb(84 226 194 / 22%); border-radius: 50%; pointer-events: none; }
+.home-welcome-orbit-one { width: 280px; height: 280px; right: -100px; top: -175px; }
+.home-welcome-orbit-two { width: 190px; height: 190px; right: 48px; bottom: -150px; border-color: rgb(116 185 255 / 22%); }
+.home-sync { position: relative; z-index: 1; display: grid; justify-items: end; gap: 8px; flex: 0 0 auto; color: var(--ns-label); font-size: 12px; font-weight: 650; text-align: right; }
+.home-sync > span { display: flex; align-items: center; justify-content: end; gap: 7px; }
+.home-sync > span > i { width: 7px; height: 7px; border-radius: 50%; background: var(--ns-accent); box-shadow: 0 0 0 4px rgb(84 226 194 / 12%); }
+.home-sync button { display: inline-flex; min-height: 38px; align-items: center; gap: 6px; padding: 7px 10px; border: 1px solid var(--ns-line); border-radius: var(--ns-radius-control); background: var(--ns-secondary-bg); color: var(--ns-secondary-text); font: inherit; }
+.home-sync button:hover:not(:disabled) { background: var(--ns-secondary-hover); }
+.home-sync-spin { animation: home-sync-spin .8s linear infinite; }
+/* A quiet link, not a button: balances refresh on their own before purchase checks. */
+.home-sync > small { color: var(--ns-label); font-size: 11px; font-weight: 600; opacity: .8; }
+.home-sync button.home-sync-link { min-height: 36px; padding: 4px 6px; border: 0; background: transparent; color: var(--ns-accent); font-size: 12px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: color-mix(in srgb, currentColor 40%, transparent); }
+.home-sync button.home-sync-link:hover:not(:disabled) { background: transparent; text-decoration-color: currentColor; }
+.home-sync button.home-sync-link:disabled { cursor: default; text-decoration: none; opacity: .75; }
+@keyframes home-star-pulse { 50% { transform: scale(1.25) rotate(10deg); filter: drop-shadow(0 0 13px rgb(84 226 194)); } }
+@keyframes home-sync-spin { to { transform: rotate(360deg); } }
+@media (max-width: 700px) { .home-welcome { align-items: flex-start; flex-direction: column; gap: 18px; padding: 22px 20px; } .home-sync { justify-items: start; text-align: left; } .home-sync > span { justify-content: start; } }
+:root[data-theme="dark"] .home-welcome { background: linear-gradient(125deg, #0d1d35, #132a4b); border-color: var(--ns-line); border-left-color: #54e2c2; }
+:root[data-theme="dark"] .home-welcome h1 { color: #f4f8ff; }
+:root[data-theme="dark"] .home-sync { color: #d0def0; }
+:root[data-theme="dark"] .home-sync button { background: #0f213d; color: #edf6ff; }
+
+/* The graph gets the same calm aurora language as the page, kept behind data. */
+.net-worth-aurora { transform-origin: center; animation: net-worth-aurora-drift 14s ease-in-out infinite alternate; }
+@keyframes net-worth-aurora-drift { from { transform: translateX(-28px) translateY(0); } to { transform: translateX(28px) translateY(9px); } }
+@media (prefers-reduced-motion: reduce) { .net-worth-aurora { animation: none; } }
+:root[data-theme="dark"] .home-sync button.home-sync-link { border: 0; background: transparent; color: var(--ns-accent); }
+
 /* ---------- Page-specific fixes ---------- */
 /* Budget: the over/under box and divider used light-theme colors in dark mode. */
 :root[data-theme="dark"] .wealth-budget-remainder { background: rgb(84 226 194 / 10%); color: #bffdf1; border: 1px solid rgb(84 226 194 / 30%); }

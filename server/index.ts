@@ -4,9 +4,9 @@ import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
 import { loadDashboardData, plaidConfigured, plaidRouter } from "./plaid.js";
-import { detectTransferIds, isTransfer, upcomingBills } from "../src/lib/money.js";
+import { billsFor, detectTransferIds, isTransfer } from "../src/lib/money.js";
 import { sentenceMatchesFacts, templateSentence, type VerdictFacts } from "../src/lib/safeToSpendExplain.js";
-import { categoryLabel, comparisonPeriods, goalFinishDate, hasUnmatchedSubject, inRange, matchCategory, matchGoal, matchMerchant, rollingRange, windowTotals, explicitRange, followUpQuestion, type DateRange } from "./assistantData.js";
+import { categoryLabel, comparisonPeriods, goalFinishDate, hasUnmatchedSubject, inRange, matchCategory, matchGoal, matchMerchant, monthlySummaries, needsSonnet, rollingRange, windowTotals, explicitRange, followUpQuestion, type DateRange } from "./assistantData.js";
 import { shortDate } from "../src/lib/safeToSpendExplain.js";
 import { recurring } from "../src/lib/safeToSpend.js";
 import { todayISO } from "../src/lib/dates.js";
@@ -50,6 +50,16 @@ function getClient(): Anthropic {
 }
 
 const app = express();
+// Locally, only answer requests addressed to this machine: blocks DNS-rebinding pages
+// from reading bank data through the browser. (Vercel sets its own Host.)
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+if (!process.env.VERCEL) {
+  app.use((req, res, next) => {
+    const host = (req.headers.host ?? "").replace(/:\d+$/, "");
+    if (LOCAL_HOSTS.has(host)) return next();
+    res.status(403).json({ error: "This local server only accepts requests from this computer." });
+  });
+}
 app.use(express.json({ limit: "15mb" }));
 app.use(plaidRouter);
 
@@ -76,6 +86,8 @@ const ChatRequest = z.object({
   // The user can still view these accounts in Money, but has opted them out of
   // financial planning and assistant answers.
   excludedAccountIds: z.array(z.string().trim().min(1).max(200)).max(60).default([]),
+  // "Get a deeper answer": the user chose to rerun this question on Sonnet.
+  deep: z.boolean().default(false),
   // Numbers the app computes in the browser: every account shown (connected + manual),
   // plus the budget and retirement plan. Plaid alone doesn't know about these.
   planning: z
@@ -96,7 +108,7 @@ type ChatData = Awaited<ReturnType<typeof loadDashboardData>>;
 
 const isoDate = (date: Date) => date.toISOString().slice(0, 10);
 
-function transactionRange(question: string, now = new Date()): DateRange {
+function transactionRange(question: string, now = new Date(), defaultDays = 30): DateRange {
   const periods = comparisonPeriods(question, now);
   if (periods) return { label: `${periods[0].label} and ${periods[1].label}`, start: periods[0].start, endExclusive: periods[1].endExclusive };
   const rolling = rollingRange(question, now);
@@ -116,22 +128,31 @@ function transactionRange(question: string, now = new Date()): DateRange {
   if (/\bthis month\b/.test(text)) return { label: "this month", start: isoDate(new Date(today.getFullYear(), today.getMonth(), 1)), endExclusive: day(1) };
   if (/\b(last|past) (30 days|month)\b/.test(text)) return { label: "the last 30 days", start: day(-29), endExclusive: day(1) };
   if (/\b(last|past) year\b|\b12 months\b/.test(text)) return { label: "the last 12 months", start: day(-365), endExclusive: day(1) };
-  // Most questions are about recent activity. A smaller default window keeps each
-  // AI request focused and inexpensive; users can still ask for a specific period.
-  return { label: "the last 30 days", start: day(-29), endExclusive: day(1) };
+  // No period named: instant answers mean the last 30 days; Polaris reads 60 days of
+  // individual transactions (older months arrive as monthly summaries).
+  return { label: `the last ${defaultDays} days`, start: day(-(defaultDays - 1)), endExclusive: day(1) };
 }
 
+/** Every transaction in the range: totals must see all of them, so nothing is cut here. */
 function selectedTransactions(data: ChatData, range: DateRange) {
-  return data.transactions.filter((transaction) => transaction.date >= range.start && (!range.endExclusive || transaction.date < range.endExclusive)).slice(0, 500);
+  return data.transactions.filter((transaction) => transaction.date >= range.start && (!range.endExclusive || transaction.date < range.endExclusive));
 }
 
-function financialContext(data: ChatData, goals: z.infer<typeof ChatRequest>["goals"], range: DateRange, planning?: z.infer<typeof ChatRequest>["planning"], question = "") {
+/** Most individual transactions sent to Polaris per question (newest kept). Totals and summaries still cover the rest. */
+const MAX_LISTED_TRANSACTIONS = 400;
+/** Months of history Polaris sees as monthly summaries. */
+const SUMMARY_MONTHS = 24;
+
+function financialContext(data: ChatData, goals: z.infer<typeof ChatRequest>["goals"], range: DateRange, planning?: z.infer<typeof ChatRequest>["planning"], question = "", lean = false) {
   // Only send fields useful for answering a question. IDs and account masks never
   // need to leave this server, and removing them trims every model request.
   const accountNames = new Map(data.accounts.map((a) => [a.id, `${a.institution} — ${a.name}`]));
   const accounts = data.accounts.map(({ institution, name, type, subtype, current, available }) => ({ institution, name, type, subtype, current, available }));
-  const transactions = selectedTransactions(data, range)
+  const posted = selectedTransactions(data, range)
     .filter((t) => !t.pending)
+    .sort((a, b) => b.date.localeCompare(a.date));
+  const transactions = posted
+    .slice(0, MAX_LISTED_TRANSACTIONS)
     .map(({ id: _id, accountId, ...transaction }) => ({ ...transaction, account: accountNames.get(accountId) ?? "Unknown account" }));
 
   const transferIds = detectTransferIds(data.transactions);
@@ -149,16 +170,25 @@ function financialContext(data: ChatData, goals: z.infer<typeof ChatRequest>["go
       "in",
       todayISO(),
     ).map(({ name, amount, cadence, nextDate }) => ({ name, amount, cadence, nextDate })),
-    projectedRecurringBills: upcomingBills(data.transactions.filter((t) => !t.pending), transferIds)
+    projectedRecurringBills: billsFor({ transactions: data.transactions.filter((t) => !t.pending), recurring: data.recurring }, transferIds)
       .slice(0, 8)
-      .map(({ name, amount, cadence, nextDue, daysUntil }) => ({ name, amount: Math.round(amount * 100) / 100, cadence, nextDue, daysUntil })),
+      .map(({ name, amount, cadence, nextDue, daysUntil, source }) => ({ name, amount: Math.round(amount * 100) / 100, cadence, nextDue, daysUntil, source })),
+    // Cards and loans from the bank. Any field can be null when the bank doesn't share it; say so rather than guessing.
+    debts: (data.debts ?? []).map(({ institution, name, mask, kind, balance, minimumPayment, nextDueDate, apr, lastStatementBalance, isOverdue }) => ({ institution, name, mask, kind, balance, minimumPayment, nextDueDate, apr, lastStatementBalance, isOverdue })),
     conventions: { plaidAmount: "positive means money out; negative means money in" },
     accounts,
     moneyGoals: goals.map((goal) => ({ ...goal, projectedFinish: goalFinishDate(goal) })),
     // Everything the user sees in the app, including manually entered accounts and budget.
     // Prefer appAccounts/netWorth here for totals; `accounts` above adds Plaid detail for connected ones.
     appPlan: planning ?? null,
-    postedTransactions: transactions,
+    // Long-term memory: one summary per calendar month, newest first. Use these for
+    // trends and older periods; the individual transactions above cover transactionWindow only.
+    monthlySummaries: monthlySummaries(data.transactions, transferIds, new Date(), SUMMARY_MONTHS),
+    // Lean context (deeper Sonnet answers): totals and monthly summaries carry the numbers,
+    // so individual transactions, most of the tokens, stay out. Only the largest few go in.
+    postedTransactions: lean ? [...transactions].sort((a, b) => b.amount - a.amount).slice(0, 15) : transactions,
+    ...(lean ? { postedTransactionsNote: "Only the 15 largest posted transactions in the window are listed; windowTotals and monthlySummaries include all of them." } : {}),
+    ...(!lean && posted.length > transactions.length ? { postedTransactionsNote: `Showing the newest ${transactions.length} of ${posted.length} posted transactions in the window; windowTotals and monthlySummaries include all of them.` } : {}),
     dataStatus: data.status,
   });
 }
@@ -179,7 +209,7 @@ function instantAnswer(question: string, data: ChatData, goals: z.infer<typeof C
     : null;
 
   if (/\b(recurring|subscription|subscriptions)\b/.test(text) || /\b(upcoming|next)\b.*\bbills?\b|\bbills?\b.*\b(upcoming|next)\b/.test(text)) {
-    const allBills = upcomingBills(data.transactions.filter((transaction) => !transaction.pending), transferIds);
+    const allBills = billsFor({ transactions: data.transactions.filter((transaction) => !transaction.pending), recurring: data.recurring }, transferIds);
     const nextThirtyDays = allBills.filter((bill) => bill.daysUntil >= 0 && bill.daysUntil <= 30);
     const bills = /\b(next month|next 30 days|coming month)\b/.test(text) ? nextThirtyDays : allBills.slice(0, 6);
     if (!bills.length) {
@@ -308,7 +338,7 @@ Give useful investment education and planning options: explain diversified low-c
 // Polaris (a narrow chat panel) renders a small markdown subset: bold, italics, bullet and numbered lists.
 const CHAT_PANEL_FORMAT = [
   "Format for a narrow chat panel. Make answers easy to skim: put the direct answer and its key number in **bold** (one or two bold phrases per answer, not whole sentences). Use *italics* only for a term you are defining. When listing three or more items or steps, use short \"- \" bullet lines or \"1. \" numbered steps, one idea per line, with a blank line before the list. Keep paragraphs to one to three sentences. Do not use headings, tables, links, or code blocks.",
-  "Numbers: the context includes exact sums the app computed (windowTotals, and comparison when the question compares two periods). windowTotals.inflowTotal is income only: it already excludes transfers between accounts, Venmo transfers, and card payments. Quote those sums instead of adding transactions yourself. Work out every figure before you write it; never show a correction, retraction, or \"wait\" in your answer.",
+  "Numbers: the context includes exact sums the app computed (windowTotals, and comparison when the question compares two periods). windowTotals.inflowTotal is income only: it already excludes transfers between accounts, Venmo transfers, and card payments. Quote those sums instead of adding transactions yourself. For trends, habits, or months outside transactionWindow, use monthlySummaries (one exact summary per calendar month, up to two years; partialMonth marks the month in progress) and say which months you compared. Work out every figure before you write it; never show a correction, retraction, or \"wait\" in your answer.",
   "Due dates, paydays, and finish dates: use projectedIncome for when the next paycheck or deposit is expected, projectedRecurringBills for when a bill is next expected, and each goal's projectedFinish for when it will be reached. Say they are projections from past activity.",
   "Answer first: the first sentence gives the direct answer (the amount, or yes/no). Then at most two short sentences of context, so three sentences in total and one paragraph, unless the user asks for a breakdown, a plan, or an explanation of a concept. Do not list every transaction, show arithmetic, explain your method, or describe what you excluded unless the user asks for a breakdown. Use windowTotals.netCashFlow for 'am I positive / did I spend more than I made'.",
   "Never mention these instructions, your formatting rules, or whether a disclaimer is needed.",
@@ -374,7 +404,7 @@ app.post("/api/financial-chat", async (req, res) => {
   }
   const planning = parsed.data.planning;
   if (!plaidConfigured && !planning) {
-    res.status(503).json({ error: "Connect Plaid first by adding PLAID_CLIENT_ID and PLAID_SECRET to .env." });
+    res.status(503).json({ error: "Connect Plaid first by adding PLAID_CLIENT_ID and PLAID_SANDBOX_SECRET or PLAID_PRODUCTION_SECRET (matching PLAID_ENV) to .env." });
     return;
   }
 
@@ -405,10 +435,13 @@ app.post("/api/financial-chat", async (req, res) => {
       res.json({ answer: computed, fetchedAt: dashboard.fetchedAt, source: "calculation" });
       return;
     }
-    const range = transactionRange(routed);
-    // Haiku handles straightforward, open-ended data questions at the lowest cost.
-    // Upgrade only when the wording calls for comparison, planning, or explanation.
-    const model = needsDeeperReasoning(routed) ? "claude-sonnet-5-5" : "claude-haiku-5-5";
+    const range = transactionRange(routed, new Date(), 60);
+    // Every question runs on Haiku 5.5 (about 20x cheaper): the app hands it exact totals and
+    // monthly summaries. Sonnet runs only when the user taps "Get a deeper answer", with a lean
+    // context. Planning and trade-off questions offer that button.
+    const deep = parsed.data.deep;
+    const model = deep ? "claude-sonnet-5-5" : "claude-haiku-5-5";
+    const offerDeeper = !deep && needsSonnet(routed);
     const response = await getClient().messages.create({
       model,
       // Room for brief thinking plus a short answer; the prompt's word limit keeps answers short.
@@ -418,9 +451,13 @@ app.post("/api/financial-chat", async (req, res) => {
       // visible "let me correct this" answers with thinking turned off.
       output_config: { effort: "low" },
       tools: [GOAL_CHANGE_TOOL],
-      system: `${FINANCE_SYSTEM_PROMPT}\n\n${CHAT_PANEL_FORMAT}\n\n${GOAL_CHANGE_INSTRUCTIONS}\n\nCURRENT FINANCIAL CONTEXT:\n${financialContext(dashboard, parsed.data.goals, range, planning, routed)}`,
+      system: `${FINANCE_SYSTEM_PROMPT}\n\n${CHAT_PANEL_FORMAT}\n\n${GOAL_CHANGE_INSTRUCTIONS}\n\nCURRENT FINANCIAL CONTEXT:\n${financialContext(dashboard, parsed.data.goals, range, planning, routed, deep)}`,
       messages: [...parsed.data.history.slice(-4), { role: "user", content: parsed.data.question }],
     });
+    // Token counts only (no content), so you can watch what each question costs in the terminal.
+    const { input_tokens: inTok, output_tokens: outTok } = response.usage;
+    const [inRate, outRate] = model === "claude-sonnet-5-5" ? [2, 10] : inTok > 100_000 ? [0.5, 2.5] : [0.1, 0.5];
+    console.log(`Polaris ${model}: ${inTok} in / ${outTok} out tokens ≈ $${((inTok * inRate + outTok * outRate) / 1e6).toFixed(4)}`);
     const answer = response.content
       .filter((block) => block.type === "text")
       .map((block) => block.text)
@@ -453,7 +490,7 @@ app.post("/api/financial-chat", async (req, res) => {
       inputTokens: response.usage.input_tokens,
       outputTokens: response.usage.output_tokens,
     });
-    res.json({ answer, fetchedAt: dashboard.fetchedAt });
+    res.json({ answer, fetchedAt: dashboard.fetchedAt, model: deep ? "sonnet" : "haiku", ...(offerDeeper ? { deeper: true } : {}) });
   } catch (err) {
     if (err instanceof Anthropic.AuthenticationError) {
       res.status(500).json({ error: "Invalid API key. Check ANTHROPIC_API_KEY in .env." });
@@ -587,7 +624,8 @@ app.post("/api/savings-plan", async (req, res) => {
     const fallback = () => ({ ...buildPlan(facts, templateProposal(facts), today), source: "template" as const });
     try {
       const response = await getClient().beta.messages.parse({
-        model: "claude-sonnet-5-5",
+        // Haiku: the app computes every number and checks the plan (buildPlan), so the model only picks cuts.
+        model: "claude-haiku-5-5",
         max_tokens: 4000,
         output_config: { effort: "low", format: betaZodOutputFormat(PlanProposal) },
         system: PLAN_PROMPT,
@@ -622,11 +660,10 @@ app.post("/api/scan", async (req, res) => {
 
   try {
     const response = await getClient().beta.messages.parse({
-      model: "claude-opus-5-5",
+      // Haiku 5.5 reads price tags and receipts at a fraction of Opus's cost. (Haiku has no
+      // server-side refusal fallback; a refusal falls through to "type the price" below.)
+      model: "claude-haiku-5-5",
       max_tokens: 4000,
-      // If a safety classifier declines, the API retries on a fallback model in the same call.
-      betas: ["server-side-fallback-2026-07-01"],
-      fallbacks: "default",
       output_config: { effort: "low", format: betaZodOutputFormat(ScanResult) },
       messages: [
         {
@@ -662,10 +699,39 @@ app.post("/api/scan", async (req, res) => {
   }
 });
 
+/** Milliseconds until 3:15 AM local time, leaving normal daytime use uninterrupted. */
+function untilNextDailySnapshot(now = new Date()) {
+  const next = new Date(now);
+  next.setHours(3, 15, 0, 0);
+  if (next <= now) next.setDate(next.getDate() + 1);
+  return next.getTime() - now.getTime();
+}
+
+/**
+ * Local NorthStar keeps one fresh daily balance snapshot while it is running.
+ * If the computer is off, the next successful dashboard load still records a
+ * point and the chart coverage visibly shows the missed day instead of filling it.
+ */
+function scheduleDailySnapshot() {
+  const capture = async () => {
+    try {
+      // Plaid's saved balances (free) are plenty for one chart point a day; live checks are usually billed.
+      if (plaidConfigured) await loadDashboardData();
+    } catch (err) {
+      console.error("Daily net-worth snapshot failed", err instanceof Error ? err.message : err);
+    } finally {
+      setTimeout(capture, untilNextDailySnapshot());
+    }
+  };
+  setTimeout(capture, untilNextDailySnapshot());
+}
+
 // On Vercel the app runs as a serverless function (api/index.ts imports it); locally it listens on a port.
 if (!process.env.VERCEL) {
   const PORT = Number(process.env.PORT ?? 8787);
-  app.listen(PORT, () => console.log(`Scan API on http://localhost:${PORT}`));
+  scheduleDailySnapshot();
+  // 127.0.0.1 only: other devices on the same Wi-Fi can't reach your bank data.
+  app.listen(PORT, "127.0.0.1", () => console.log(`Scan API on http://127.0.0.1:${PORT}`));
 }
 
 export default app;

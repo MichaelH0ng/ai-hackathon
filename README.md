@@ -23,7 +23,7 @@ On the home page, tap **Try it with sample data** to load the $1,199 new phone a
 
 Optional:
 - **Photo reading**: `cp .env.example .env`, add an Anthropic API key, then restart. Typed prices work without a key.
-- **Money dashboard (Plaid)**: add `PLAID_CLIENT_ID`, `PLAID_SECRET` and `PLAID_ENV=sandbox` to `.env`. On the Money page, tap **Use a test student bank** (made-up data you can edit in `server/sandboxStudent.ts`), or **Connect a bank** and sign in with `user_good` / `pass_good` for Plaid's own test data. Bank connections are saved in `server/data/` (git-ignored).
+- **Money dashboard (Plaid)**: add `PLAID_CLIENT_ID`, `PLAID_SANDBOX_SECRET` and `PLAID_ENV=sandbox` to `.env`. On the Money page, tap **Use a test student bank** (made-up data you can edit in `server/sandboxStudent.ts`), or **Connect a bank** and sign in with `user_good` / `pass_good` for Plaid's own test data. Bank connections are saved in `server/data/` (git-ignored).
 - **On your phone** (same Wi-Fi): `npm run dev:phone` and open the "Network" URL.
 - **Tests**: `npm test`
 
@@ -65,6 +65,6 @@ Optional:
 
 In **Accounts**, choose **Connect portfolio** to link a brokerage or retirement account through Plaid Investments. Connected account balances appear once, with individual holdings expandable inside the matching account. Holdings are included in account balances and are not added to net worth a second time. **Refresh** retrieves the latest data available from Plaid; this is not a live market-price feed.
 
-Set `PLAID_CLIENT_ID`, `PLAID_SECRET`, and `PLAID_ENV=sandbox` in the ignored server `.env` file, then restart the API. A sandbox secret alone is not enough: the matching Client ID is required. **Test portfolio** creates a Plaid sandbox investment connection without real credentials. **Connect a portfolio** opens Plaid Link for supported investment accounts. Sandbox never connects real accounts.
+Set `PLAID_CLIENT_ID`, `PLAID_SANDBOX_SECRET`, and `PLAID_ENV=sandbox` in the ignored server `.env` file, then restart the API. A sandbox secret alone is not enough: the matching Client ID is required. **Test portfolio** creates a Plaid sandbox investment connection without real credentials. **Connect a portfolio** opens Plaid Link for supported investment accounts. Sandbox never connects real accounts.
 
-Real portfolios require approved Plaid Production access with Investments, the Production secret, and `PLAID_ENV=production`. Production and sandbox connection files are kept separate. This local app uses a single local-user connection store; user authentication and per-user token storage are required before deploying it as a multi-user service.
+Real portfolios require approved Plaid Production access with Investments, the Production secret in `PLAID_PRODUCTION_SECRET`, and `PLAID_ENV=production` (the older single `PLAID_SECRET` name still works). Production and sandbox connection files are kept separate. This local app uses a single local-user connection store; user authentication and per-user token storage are required before deploying it as a multi-user service.

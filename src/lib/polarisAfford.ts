@@ -39,7 +39,7 @@ export function checkAffordability(
   const manualChecking = manual.filter(a => a.kind === "Checking").reduce((sum, a) => sum + a.balance, 0);
   const manualSavings = manual.filter(a => a.kind === "Savings").reduce((sum, a) => sum + a.balance, 0);
   if (!fromBank.cashAccountIds.length && !manualChecking && !manualSavings) return null;
-  const otherGoals = goals.filter(g => g.id !== fund?.id).map(({ name, target, saved, weekly, emergency }) => ({ name, target, saved, weekly, emergency }));
+  const otherGoals = goals.filter(g => g.id !== fund?.id).map(({ name, target, saved, weekly, emergency, linkedAccountId }) => ({ name, target, saved, weekly, emergency, linkedAccountId }));
   const forecast = buildForecast({
     cash: fromBank.checking + fromBank.savings + manualChecking + manualSavings,
     savings: 0,

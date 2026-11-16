@@ -48,6 +48,15 @@ describe("cash flow", () => {
     expect(f.current).toEqual({ in: 1000, out: 40 });
     expect(f.previous).toEqual({ in: 0, out: 60 });
   });
+
+  it("keeps pending activity out of historical cash-flow totals", () => {
+    const txs = [
+      tx({ date: "2026-11-03", amount: 40 }),
+      tx({ date: "2026-11-04", amount: 25, pending: true }),
+      tx({ date: "2026-11-05", amount: -1000, category: "INCOME" }),
+    ];
+    expect(periodFlow(txs, new Set(), "month", NOW).current).toEqual({ in: 1000, out: 40 });
+  });
 });
 
 describe("top categories", () => {
@@ -64,6 +73,28 @@ describe("upcoming bills", () => {
     expect(bill.name).toBe("Spotify");
     expect(bill.cadence).toBe("Monthly");
     expect(bill.nextDue >= "2026-11-14" && bill.nextDue <= "2026-11-16").toBe(true);
+  });
+  it("drops a subscription that stopped (no charge in months)", () => {
+    // $1 monthly through June, nothing since: not due "tomorrow" in November.
+    const txs = ["2026-04-27", "2026-05-28", "2026-06-29"].map((date) => tx({ name: "Acorns", amount: 1, date, category: "GENERAL_SERVICES" }));
+    expect(upcomingBills(txs, new Set(), NOW)).toEqual([]);
+  });
+  it("doesn't turn two charges months apart into a bill", () => {
+    const txs = [tx({ name: "U-Haul", amount: 69.81, date: "2026-06-09", category: "GENERAL_SERVICES" }), tx({ name: "U-Haul", amount: 64.37, date: "2026-09-17", category: "GENERAL_SERVICES" })];
+    expect(upcomingBills(txs, new Set(), NOW)).toEqual([]);
+  });
+  it("doesn't count a favorite restaurant as a bill", () => {
+    // Same order a few weeks running is still eating out, not a subscription.
+    const lunches = [["2026-10-17", 14.79], ["2026-10-24", 17.52], ["2026-10-31", 14.79], ["2026-11-07", 14.79]] as const;
+    expect(upcomingBills(lunches.map(([date, amount]) => tx({ name: "Taqueria Santa Cruz", amount, date })), new Set(), NOW)).toEqual([]);
+  });
+  it("still counts a fixed-price everyday subscription", () => {
+    const txs = ["2026-08-20", "2026-09-20", "2026-10-20"].map((date) => tx({ name: "DashPass", amount: 9.99, date }));
+    expect(upcomingBills(txs, new Set(), NOW)[0]).toMatchObject({ name: "DashPass", cadence: "Monthly", nextDue: "2026-11-20" });
+  });
+  it("counts rent after two months in a row", () => {
+    const txs = ["2026-09-01", "2026-10-01"].map((date) => tx({ name: "Mustang Village", amount: 950, date, category: "RENT_AND_UTILITIES" }));
+    expect(upcomingBills(txs, new Set(), NOW)[0]).toMatchObject({ name: "Mustang Village", nextDue: "2026-11-14", daysUntil: 0 });
   });
   it("ignores irregular amounts", () => {
     const txs = [tx({ name: "Shop", amount: 10, date: "2026-10-01" }), tx({ name: "Shop", amount: 90, date: "2026-11-01" })];
