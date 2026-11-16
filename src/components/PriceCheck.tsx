@@ -1,7 +1,8 @@
-import { ArrowRight, Check, Clock, Lightbulb, PiggyBank, RotateCcw, Tag, Wallet } from "lucide-react";
+import { ArrowRight, Check, Clock, Lightbulb, PiggyBank, RefreshCw, RotateCcw, Tag, Wallet } from "lucide-react";
 import { goalForItem } from "../lib/envelopes";
 import { formatDate, todayISO } from "../lib/dates";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { onPriceCheckRequest, takePriceCheckRequest } from "../lib/priceCheckRequest";
 import { formatDelay, formatMoney, priceInContext, projectedDate, weeklyNeededForDeadline, whatIfSpend } from "../lib/finance";
 import type { BankSnapshot, MoneyGoal, Profile } from "../lib/types";
 import type { BankData } from "../lib/money";
@@ -24,6 +25,8 @@ export function PriceCheck({
   onUpdateGoal,
   onOpenGoal,
   onSettings,
+  onFreshBalances,
+  refreshingBalances = false,
 }: {
   moneyGoals: MoneyGoal[];
   profile: Profile;
@@ -36,6 +39,9 @@ export function PriceCheck({
   onUpdateGoal: (g: MoneyGoal) => void;
   onOpenGoal: (id: string) => void;
   onSettings: () => void;
+  /** Before a verdict: get live balances unless they were checked in the last 15 minutes. */
+  onFreshBalances?: () => void;
+  refreshingBalances?: boolean;
 }) {
   const [name, setName] = useState("");
   const [price, setPrice] = useState<number | "">("");
@@ -54,7 +60,7 @@ export function PriceCheck({
   // Keyed on the goals' numbers so a re-render with equal goals doesn't rebuild it.
   const plan = readPlan();
   const planningBankData = bankDataForPlan(bankData, plan.excludedAccountIds);
-  const goalsSig = JSON.stringify(moneyGoals.filter((g) => g.id !== fund?.id).map(({ name, target, saved, weekly, emergency }) => ({ name, target, saved, weekly, emergency })));
+  const goalsSig = JSON.stringify(moneyGoals.filter((g) => g.id !== fund?.id).map(({ name, target, saved, weekly, emergency, linkedAccountId }) => ({ name, target, saved, weekly, emergency, linkedAccountId })));
   const forecast = useMemo(() => {
     const accounts = planningBankData?.accounts ?? [];
     const fromBank = cashFromAccounts(accounts);
@@ -84,8 +90,24 @@ export function PriceCheck({
 
   function show(next: WhatIfItem) {
     setItem(next);
+    // The verdict depends on today's balance: refresh it (the forecast updates when it arrives).
+    onFreshBalances?.();
     setTimeout(() => document.getElementById("price-result")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
   }
+
+  // Polaris "Open the full check": fill in the item and price and run it, whether this was just
+  // opened (the request waits) or was already on screen (the event).
+  useEffect(() => {
+    const run = () => {
+      const request = takePriceCheckRequest();
+      if (!request) return;
+      setName(request.item);
+      setPrice(request.price);
+      show({ label: request.item, price: request.price, alternative: null });
+    };
+    run();
+    return onPriceCheckRequest(run);
+  }, []);
 
   function reset() {
     setItem(null);
@@ -120,6 +142,7 @@ export function PriceCheck({
       {/* 2. Result */}
       {item && (
         <div id="price-result" className="scroll-mt-20 space-y-4">
+          {refreshingBalances && <p className="purchase-check-refreshing" role="status"><RefreshCw className="h-4 w-4 animate-spin" aria-hidden="true" /> Checking your latest balance…</p>}
           <Card>
             <div className="flex items-start justify-between gap-3">
               <div className="min-w-0">

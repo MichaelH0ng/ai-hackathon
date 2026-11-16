@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowDownLeft, ArrowRight, ArrowUpRight, Check, ChevronRight, CircleCheck, CircleDollarSign, Landmark, Plus, ShieldCheck, SlidersHorizontal, Sparkles, Target, Trash2, X } from "lucide-react";
+import { ArrowDownLeft, ArrowRight, ArrowUpRight, Check, ChevronRight, CircleCheck, CircleDollarSign, Landmark, Pencil, Plus, ShieldCheck, SlidersHorizontal, Sparkles, Target, Trash2, X } from "lucide-react";
 import type { Bank } from "../lib/useBank";
 import type { MoneyGoal } from "../lib/types";
 import { HomeOverview } from "./Landing";
@@ -22,6 +22,8 @@ import { MoneyAssistant } from "./MoneyAssistant";
 import { GoalReminders } from "./GoalReminders";
 import type { MoneyAssistantContext } from "../lib/moneyAssistant";
 import { ConnectButton, MoneyDashboard } from "./MoneyDashboard";
+import { ConnectedBanks } from "./ConnectedBanks";
+import { accountIdRemapper } from "../lib/accountMatch";
 
 export type DashboardTab = "Overview" | "Accounts" | "Plan" | "Goals" | "Activity";
 
@@ -87,7 +89,7 @@ function holdingMoney(value: number, currency: string | null) {
   catch { return `${value.toLocaleString()} ${currency}`; }
 }
 
-export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; completedGoals?: MoneyGoal[]; priceCheck: React.ReactNode; hourlyWage?: number | null; onUpdateGoal: (g: MoneyGoal) => void; onAddGoal?: (g: MoneyGoal) => void; onRemoveGoal?: (id: string) => void; onOpenGoal: (id: string) => void; onNewGoal: () => void; onCheck: () => void; onSettings: () => void; selectedTab: DashboardTab; onTabChange: (tab: DashboardTab) => void }) {
+export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; completedGoals?: MoneyGoal[]; priceCheck: React.ReactNode; profileName?: string; hourlyWage?: number | null; onUpdateGoal: (g: MoneyGoal) => void; onAddGoal?: (g: MoneyGoal) => void; onRemoveGoal?: (id: string) => void; onOpenGoal: (id: string) => void; onNewGoal: () => void; onCheck: () => void; onSettings: () => void; selectedTab: DashboardTab; onTabChange: (tab: DashboardTab) => void }) {
   const { bank, goals, onNewGoal, onOpenGoal } = props;
   const [plan, setPlan] = useState<Plan>(readPlan);
   const tab = props.selectedTab;
@@ -116,6 +118,15 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; complet
   }, [modalOpen]);
   useEffect(() => { try { localStorage.setItem(KEY, JSON.stringify(plan)); } catch { /* Storage unavailable: changes last for this session. */ } }, [plan]);
   const update = (patch: Partial<Plan>) => setPlan(p => ({ ...p, ...patch }));
+  // After a bank is reconnected, keep accounts you left out of your plan left out (Plaid issues new IDs).
+  useEffect(() => {
+    if (!bank.data) return;
+    const remap = accountIdRemapper(bank.data.accounts);
+    setPlan(p => {
+      const next = [...new Set(p.excludedAccountIds.map(remap))];
+      return next.join() === p.excludedAccountIds.join() ? p : { ...p, excludedAccountIds: next };
+    });
+  }, [bank.data]);
   const linked: Asset[] = (bank.data?.accounts ?? []).map(a => {
     const retirementType = a.subtype?.includes("roth")
       ? "Roth IRA"
@@ -193,8 +204,8 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; complet
     ].map(a => ({ ...a, id: crypto.randomUUID(), sample: true, updatedAt: new Date().toISOString() }))] });
   }
   const addAsset = () => setAssetForm({ id: crypto.randomUUID(), name: "", institution: "", kind: "Checking", balance: 0 });
-  /** Animated "Add account" button: in the Accounts header, and beside "View accounts and activity" on Overview. */
-  const addAccountButton = (extraClass = "") => <StarBorder onClick={addAsset} className={`wealth-add-account ${extraClass}`} backgroundColor="linear-gradient(115deg, #168e90, #4b7fe0 60%, #9e64df)" textColor="#ffffff" borderColor="rgb(223 254 255 / 22%)" color="#dffeff" trailColor="#54e2c2" radius={10} thickness={1.5} duration={5} glow={0.8} hover="none"><Plus size={16} aria-hidden="true" /> Add account</StarBorder>;
+  /** Animated "Edit accounts" button (connect, disconnect, or add a manual account): in the Accounts header, and beside "View accounts and activity" on Overview. */
+  const addAccountButton = (extraClass = "") => <StarBorder onClick={addAsset} className={`wealth-add-account ${extraClass}`} backgroundColor="linear-gradient(115deg, #168e90, #4b7fe0 60%, #9e64df)" textColor="#ffffff" borderColor="rgb(223 254 255 / 22%)" color="#dffeff" trailColor="#54e2c2" radius={10} thickness={1.5} duration={5} glow={0.8} hover="none"><Pencil size={16} aria-hidden="true" /> Edit accounts</StarBorder>;
   const groupTotal = (kind: (k: string) => boolean) => planningAssets.filter(a => kind(a.kind)).reduce((sum, a) => sum + a.balance, 0);
   const accountRow = (a: Asset) => {
     const isLinked = linked.some(account => account.id === a.id);
@@ -220,7 +231,7 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; complet
     </div>
   </section>;
   const accountList = <section className="wealth-card"><div className="wealth-section-head"><div><h2>Your accounts</h2><p>Choose which accounts NorthStar uses for goals, purchase checks, and planning. Every account stays visible here.</p></div>{linked.length > 0 && <button className="wealth-text-button" onClick={() => setTab("Activity")}>View all activity <ArrowRight size={15} /></button>}</div>
-    {!assets.length ? <div className="wealth-empty"><Landmark size={30} /><h3>Bring your money together</h3><p>Use <strong>Add account</strong> above to connect your bank or enter a balance yourself.</p></div> : <div className="wealth-accounts">{accountGroups.map(group => {
+    {!assets.length ? <div className="wealth-empty"><Landmark size={30} /><h3>Bring your money together</h3><p>Use <strong>Edit accounts</strong> above to connect your bank or enter a balance yourself.</p></div> : <div className="wealth-accounts">{accountGroups.map(group => {
       const list = assets.filter(a => group.match(a.kind));
       if (!list.length) return null;
       const subtotal = list.reduce((sum, a) => sum + a.balance, 0);
@@ -317,9 +328,9 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; complet
     tab === "Accounts" || tab === "Activity" ? (assets.length ? `${assets.length} account${assets.length === 1 ? "" : "s"} · ${formatMoney(total - debts)} net worth` : "No accounts yet")
         : tab === "Plan" ? (plan.income > 0 ? `${formatMoney(plan.income)} monthly income · ${available >= 0 ? `${formatMoney(available)} left to plan` : `${formatMoney(-available)} over budget`}` : `${formatMoney(retirementBalance)} in retirement accounts`)
           : plan.income > 0 ? `${formatMoney(plan.income)} monthly income · ${available >= 0 ? `${formatMoney(available)} left to plan` : `${formatMoney(-available)} over budget`}` : "No monthly income entered yet";
-  const pageTitle = tab === "Overview" ? "Today" : tab === "Goals" ? "My goals" : tab === "Plan" ? "Plan" : tab === "Activity" ? "Account activity" : tab;
+  const pageTitle = tab === "Overview" ? "Today" : tab === "Goals" ? "My goals" : tab === "Plan" ? "Plan" : tab === "Activity" ? "Activity" : tab;
   return <main id="main" className={`wealth-dashboard${tab === "Goals" ? " goals-page" : tab === "Overview" ? " overview-page" : ""}`}>
-    <div className="wealth-page-head"><div><h1>{pageTitle}</h1>{tab !== "Overview" && tab !== "Goals" && tab !== "Plan" && <p>{pageFact}</p>}</div>{(tab === "Overview" || tab === "Accounts") && addAccountButton()}{tab === "Goals" && goals.length > 0 && <button type="button" className="wealth-primary goals-new-button" onClick={onNewGoal}><Plus size={17} aria-hidden="true" /> New goal</button>}</div>
+    {tab !== "Overview" && <div className="wealth-page-head"><div><h1>{pageTitle}</h1>{tab !== "Goals" && tab !== "Plan" && <p>{pageFact}</p>}</div>{tab === "Accounts" && addAccountButton()}{tab === "Goals" && goals.length > 0 && <button type="button" className="wealth-primary goals-new-button" onClick={onNewGoal}><Plus size={17} aria-hidden="true" /> New goal</button>}</div>}
     {tab === "Overview" && <>
       {bank.loading && !bank.data && !assets.length ? <OverviewSkeleton /> : <HomeOverview data={{
         env: bank.data?.env ?? "manual",
@@ -329,9 +340,11 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; complet
           subtype: a.kind === "Checking" ? "checking" : a.kind === "Savings" ? "savings" : null,
           current: a.balance, available: null,
         }))],
-        transactions: planningBankData?.transactions ?? [], status: bank.data?.status ?? [],
+        // Plaid's own bill detection: without it Overview fell back to a rough estimate.
+        transactions: planningBankData?.transactions ?? [], recurring: planningBankData?.recurring, status: bank.data?.status ?? [],
         fetchedAt: bank.data?.fetchedAt ?? new Date().toISOString(),
-      }} goal={goals.find(g => g.saved < g.target) ?? goals[0]} goals={goals} onCheck={props.onCheck} onMoney={() => setTab("Accounts")} onGoals={() => setTab("Goals")} onNewGoal={onNewGoal} onOpenGoal={onOpenGoal} />}
+        balancesCheckedAt: bank.data?.balancesCheckedAt ?? null,
+      }} profileName={props.profileName} goal={goals.find(g => g.saved < g.target) ?? goals[0]} goals={goals} onCheck={props.onCheck} onMoney={() => setTab("Accounts")} onGoals={() => setTab("Goals")} onNewGoal={onNewGoal} onOpenGoal={onOpenGoal} onRefresh={() => { void bank.reload({ liveBalances: true }); }} refreshing={bank.loading} />}
       {!assets.length && <div className="wealth-sample"><Sparkles size={18} /><span>Start with your own numbers, or explore with clearly labeled sample accounts.</span><button onClick={sample}>Try sample accounts <ArrowRight size={15} /></button></div>}
       {assets.some(a => a.sample) && <div className="wealth-sample"><Sparkles size={17} /><span>Sample accounts are included in these totals.</span><button onClick={() => update({ assets: plan.assets.filter(a => !a.sample) })}>Remove sample accounts <X size={14} /></button></div>}
 
@@ -381,9 +394,9 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; complet
       <section className="wealth-card wealth-monthly-plan"><div className="wealth-section-head"><div><h2>Your monthly plan</h2><p>Every number used in your budget is shown below.</p></div></div><div className="wealth-stack"><Amount label="Monthly income (after tax)" value={plan.income} onChange={income => update({ income })} /><Amount label="Monthly essentials · rent, groceries, bills" value={plan.essentials} onChange={essentials => update({ essentials })} /><Amount label="Monthly lifestyle · shopping, dining, fun" value={plan.lifestyle} onChange={lifestyle => update({ lifestyle })} /><div className="wealth-budget-breakdown" aria-label="Monthly plan calculation"><div className="wealth-budget-line"><span><strong>Income used</strong><small>{planCapacity.incomeSource === "detected" ? "Recurring deposits from connected accounts" : planCapacity.incomeSource === "manual" ? "Your entered monthly income" : "No income available yet"}</small></span><strong>{planCapacity.incomeSource === "none" ? "—" : `${usd(planCapacity.monthlyIncome)} / mo`}</strong></div><div className="wealth-budget-line"><span><strong>Spending used</strong><small>{planCapacity.spendingSource === "observed" ? "Observed activity is higher than your entered budget" : planCapacity.spendingSource === "manual" ? "Your entered essentials and lifestyle" : "No spending data yet"}</small></span><strong>{usd(planCapacity.monthlySpending)} / mo</strong></div><div className="wealth-budget-line wealth-budget-goal-line"><span><strong>Active goal contributions</strong><small>Weekly amount × 52 ÷ 12. Completed goals are excluded.</small></span><strong>{usd(monthlyGoals)} / mo</strong></div>{activeGoals.length > 0 && <ul className="wealth-budget-goals">{activeGoals.map((goal) => <li key={goal.id}><span>{goal.name}<small>{usd(goal.weekly)} / week</small></span><strong>{usd(goal.weekly * 52 / 12)} / mo</strong></li>)}</ul>}<div className="wealth-budget-line"><span><strong>Safety buffer</strong><small>Reserved for normal surprises before new savings are assigned.</small></span><strong>{usd(planCapacity.monthlyBuffer)} / mo</strong></div></div><div className={`wealth-budget-remainder ${available < 0 ? "over" : ""} ${planCapacity.status === "missing-income" ? "needs-income" : ""}`}><span>{planCapacity.status === "missing-income" ? "Income needed" : available < 0 ? "Over budget after buffer" : "Monthly room after buffer"}</span><strong>{planCapacity.status === "missing-income" ? "—" : usd(Math.abs(available))}</strong></div>{planCapacity.status === "missing-income" ? <p className="wealth-note">Connect the account where your pay lands, or enter monthly after-tax income above. NorthStar will not guess a positive savings amount without it.</p> : available < 0 ? <p className="wealth-note">Your income is short by {usd(Math.abs(available))} after spending, active goals, and your buffer. Lower a cost, adjust a goal, or change the timeline.</p> : <p className="wealth-note">That is about {usd(planCapacity.weeklyLimit)} per week available for a new or adjusted savings goal.</p>}</div></section>
     </div>
     </div>}
-    {tab === "Activity" && <div className="wealth-stack"><button className="wealth-text-button" onClick={() => setTab("Accounts")}>← Back to your accounts</button><MoneyDashboard {...props} /></div>}
-    <MoneyAssistant context={assistantContext} goals={goals} budget={{ income: plan.income, essentials: plan.essentials, lifestyle: plan.lifestyle }} plan={{ ...plan, assets: planningAssets }} bankData={planningBankData} onUpdateGoal={props.onUpdateGoal} onAddGoal={props.onAddGoal} onRemoveGoal={props.onRemoveGoal} onUpdateBudget={update} onOpenPriceCheck={props.onCheck} />
-    {assetForm && <div className="wealth-modal-backdrop"><section ref={modalRef} className="wealth-modal" role="dialog" aria-modal="true" aria-labelledby="asset-title"><div className="wealth-section-head"><h2 id="asset-title">{plan.assets.some(a => a.id === assetForm.id) ? "Edit account" : "Add an account"}</h2><button className="wealth-icon-button" aria-label="Close account form" onClick={() => setAssetForm(null)}><X size={20} /></button></div>{!plan.assets.some(a => a.id === assetForm.id) && <><div className="add-account-connect"><div><strong>Connect a bank or brokerage</strong><span>Balances and activity update automatically through Plaid.</span></div><ConnectButton label="Connect" kind="all" variant="secondary" onConnected={() => { setAssetForm(null); bank.reload(); }} /></div><p className="add-account-divider"><span>or enter a balance manually</span></p></>}<p className="wealth-note">Manual accounts are saved on this device.</p><form className="wealth-stack" onSubmit={e => { e.preventDefault(); const before = plan.assets.find(a => a.id === assetForm.id); update({ assets: [...plan.assets.filter(a => a.id !== assetForm.id), { ...assetForm, name: assetForm.name.trim(), institution: assetForm.institution.trim(), updatedAt: !before || before.balance !== assetForm.balance || !before.updatedAt ? new Date().toISOString() : before.updatedAt }] }); setAssetForm(null); }}><Field label="Account name"><input autoFocus required maxLength={80} value={assetForm.name} onChange={e => setAssetForm({ ...assetForm, name: e.target.value })} placeholder="My Roth IRA" pattern=".*\S.*" /></Field><Field label="Institution (optional)"><input maxLength={80} value={assetForm.institution} onChange={e => setAssetForm({ ...assetForm, institution: e.target.value })} placeholder="Fidelity" /></Field><Field label="Account type"><select value={assetForm.kind} onChange={e => setAssetForm({ ...assetForm, kind: e.target.value })}>{kinds.map(k => <option key={k}>{k}</option>)}</select></Field><Amount label={debt(assetForm.kind) ? "Amount owed" : "Current balance"} value={assetForm.balance} onChange={balance => setAssetForm({ ...assetForm, balance })} /><div className="wealth-modal-actions">{plan.assets.some(a => a.id === assetForm.id) && <button type="button" className="wealth-delete" onClick={() => { update({ assets: plan.assets.filter(a => a.id !== assetForm.id) }); setAssetForm(null); }}><Trash2 size={16} /> Remove</button>}<button type="button" className="wealth-secondary" onClick={() => setAssetForm(null)}>Cancel</button><button className="wealth-primary" type="submit">Save account <Check size={16} /></button></div></form></section></div>}
+    {tab === "Activity" && <div className="wealth-stack"><MoneyDashboard {...props} /></div>}
+    <MoneyAssistant context={assistantContext} goals={goals} budget={{ income: plan.income, essentials: plan.essentials, lifestyle: plan.lifestyle }} plan={{ ...plan, assets: planningAssets }} bankData={planningBankData} freshBankData={() => bank.ensureFreshBalances().then(fresh => bankDataForPlan(fresh, plan.excludedAccountIds))} onUpdateGoal={props.onUpdateGoal} onAddGoal={props.onAddGoal} onRemoveGoal={props.onRemoveGoal} onUpdateBudget={update} onOpenPriceCheck={props.onCheck} />
+    {assetForm && <div className="wealth-modal-backdrop"><section ref={modalRef} className="wealth-modal" role="dialog" aria-modal="true" aria-labelledby="asset-title"><div className="wealth-section-head"><h2 id="asset-title">{plan.assets.some(a => a.id === assetForm.id) ? "Edit account" : "Edit accounts"}</h2><button className="wealth-icon-button" aria-label="Close account form" onClick={() => setAssetForm(null)}><X size={20} /></button></div>{!plan.assets.some(a => a.id === assetForm.id) && <><ConnectedBanks bank={bank} /><div className="add-account-connect"><div><strong>Connect a bank or brokerage</strong><span>Balances and activity update automatically through Plaid.</span></div><ConnectButton label="Connect" kind="all" variant="secondary" onConnected={() => { setAssetForm(null); bank.reload(); }} /></div><p className="add-account-divider"><span>or add a balance manually</span></p></>}<p className="wealth-note">Manual accounts are saved on this device.</p><form className="wealth-stack" onSubmit={e => { e.preventDefault(); const before = plan.assets.find(a => a.id === assetForm.id); update({ assets: [...plan.assets.filter(a => a.id !== assetForm.id), { ...assetForm, name: assetForm.name.trim(), institution: assetForm.institution.trim(), updatedAt: !before || before.balance !== assetForm.balance || !before.updatedAt ? new Date().toISOString() : before.updatedAt }] }); setAssetForm(null); }}><Field label="Account name"><input autoFocus required maxLength={80} value={assetForm.name} onChange={e => setAssetForm({ ...assetForm, name: e.target.value })} placeholder="My Roth IRA" pattern=".*\S.*" /></Field><Field label="Institution (optional)"><input maxLength={80} value={assetForm.institution} onChange={e => setAssetForm({ ...assetForm, institution: e.target.value })} placeholder="Fidelity" /></Field><Field label="Account type"><select value={assetForm.kind} onChange={e => setAssetForm({ ...assetForm, kind: e.target.value })}>{kinds.map(k => <option key={k}>{k}</option>)}</select></Field><Amount label={debt(assetForm.kind) ? "Amount owed" : "Current balance"} value={assetForm.balance} onChange={balance => setAssetForm({ ...assetForm, balance })} /><div className="wealth-modal-actions">{plan.assets.some(a => a.id === assetForm.id) && <button type="button" className="wealth-delete" onClick={() => { update({ assets: plan.assets.filter(a => a.id !== assetForm.id) }); setAssetForm(null); }}><Trash2 size={16} /> Remove</button>}<button type="button" className="wealth-secondary" onClick={() => setAssetForm(null)}>Cancel</button><button className="wealth-primary" type="submit">Save account <Check size={16} /></button></div></form></section></div>}
   </main>;
 }
 

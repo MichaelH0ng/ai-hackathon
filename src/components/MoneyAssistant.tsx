@@ -8,6 +8,9 @@ import { canSpeak, speakAsPolaris } from "../lib/polarisVoice";
 import { answerMoneyQuestion, type MoneyAssistantContext } from "../lib/moneyAssistant";
 import { apply, check, describe, dueReminders, findGoal, money, parseAffordQuestion, parseCommand, WEEKDAYS, type ActionSummary, type Budget, type BudgetField, type Command, type PolarisAction, type Reminder, type Undo, type World } from "../lib/goalActions";
 import { checkAffordability, type AffordResult } from "../lib/polarisAfford";
+import { bestAlternative, fixVoiceText } from "../lib/voiceFix";
+import { billHeadsUp, WHAT_CHANGED, weeklyCheckIn, whatChanged } from "../lib/polarisInsights";
+import { requestPriceCheck } from "../lib/priceCheckRequest";
 import { useReminders } from "../lib/polarisReminders";
 import type { BankData } from "../lib/money";
 import type { MoneyGoal } from "../lib/types";
@@ -27,6 +30,12 @@ interface ChatMessage {
   undone?: boolean;
   // "Can I afford…?" answers carry the verdict for a small card.
   afford?: AffordResult;
+  /** A purchase question: the item and price to open Check a purchase with. */
+  checkItem?: { item: string; price: number };
+  /** A planning or trade-off answer from Haiku: the question to rerun on Sonnet if the user asks. */
+  deeperQuestion?: string;
+  /** This answer came from Sonnet ("Get a deeper answer"). */
+  deep?: boolean;
 }
 
 // Remembered per browser; storage can be unavailable (private mode), so every access is guarded.
@@ -38,6 +47,7 @@ interface SpeechRecognitionLike {
   lang: string;
   interimResults: boolean;
   continuous: boolean;
+  maxAlternatives: number;
   onresult: ((event: { results: ArrayLike<ArrayLike<{ transcript: string }> & { isFinal: boolean }> }) => void) | null;
   onerror: ((event: { error: string }) => void) | null;
   onend: (() => void) | null;
@@ -74,7 +84,12 @@ function readChat(): ChatMessage[] {
 // Starter chips: two show what Polaris can do for you, two are classic questions.
 const MOOD_KEY = "northstar:polaris-mood-dismissed";
 
-const prompts = ["Can I afford $80 shoes?", "Make a $500 trip goal by June", "How do I start investing?", "Roth IRA vs traditional IRA"];
+const prompts = ["Can I afford $80 shoes?", "What changed this month?", "Make a $500 trip goal by June", "How do I start investing?"];
+
+// Weekly check-ins and bill heads-ups appear once each; these remember what was already shown.
+const CHECKIN_KEY = "northstar:polaris-checkin-week";
+const BILLS_SHOWN_KEY = "northstar:polaris-bills-shown";
+const readShownBills = () => { try { const v = JSON.parse(localStorage.getItem(BILLS_SHOWN_KEY) ?? "[]"); return new Set<string>(Array.isArray(v) ? v : []); } catch { return new Set<string>(); } };
 
 /** What the server's AI proposes (goal names, not ids); mapped to a PolarisAction here. */
 interface AIAction {
@@ -94,10 +109,12 @@ interface AIAction {
 interface AIReply {
   answer: string;
   action?: AIAction;
+  /** The server suggests offering "Get a deeper answer" (planning and trade-off questions). */
+  deeper?: boolean;
 }
 
 /** Asks the server's AI assistant. Throws on any failure so the caller can fall back. */
-async function askAI(question: string, history: ChatMessage[], context: MoneyAssistantContext): Promise<AIReply> {
+async function askAI(question: string, history: ChatMessage[], context: MoneyAssistantContext, deep = false): Promise<AIReply> {
   const res = await fetch("/api/financial-chat", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -106,6 +123,7 @@ async function askAI(question: string, history: ChatMessage[], context: MoneyAss
       history: history.filter(m => m.id !== "welcome" && !m.pending && !m.offline).slice(-4).map(m => ({ role: m.role, content: m.text.slice(0, 2000) })),
       goals: context.goals.map(g => ({ kind: "money", ...g })),
       excludedAccountIds: context.excludedAccountIds ?? [],
+      deep,
       planning: {
         accounts: context.accounts,
         netWorth: context.netWorth,
@@ -120,7 +138,7 @@ async function askAI(question: string, history: ChatMessage[], context: MoneyAss
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok || typeof body.answer !== "string") throw new Error(body.error ?? "Assistant unavailable");
-  return { answer: body.answer, action: body.action };
+  return { answer: body.answer, action: body.action, deeper: body.deeper === true };
 }
 
 const PROPOSE_TEXT = "Here’s the change. Tap **Confirm** to save it.";
@@ -194,6 +212,8 @@ interface MoneyAssistantProps {
   /** Accounts and budget used by "Can I afford…?" (the same forecast as the Can I afford it? page). */
   plan?: { assets: { kind: string; balance: number }[]; essentials: number; lifestyle: number };
   bankData?: BankData | null;
+  /** Live balances (unless checked in the last 15 minutes), for "can I afford…?" answers. */
+  freshBankData?: () => Promise<BankData | null>;
   onUpdateGoal?: (goal: MoneyGoal) => void;
   onAddGoal?: (goal: MoneyGoal) => void;
   onRemoveGoal?: (id: string) => void;
@@ -201,7 +221,7 @@ interface MoneyAssistantProps {
   onOpenPriceCheck?: () => void;
 }
 
-export function MoneyAssistant({ context, goals = [], budget = { income: 0, essentials: 0, lifestyle: 0 }, plan, bankData, onUpdateGoal, onAddGoal, onRemoveGoal, onUpdateBudget, onOpenPriceCheck }: MoneyAssistantProps) {
+export function MoneyAssistant({ context, goals = [], budget = { income: 0, essentials: 0, lifestyle: 0 }, plan, bankData, freshBankData, onUpdateGoal, onAddGoal, onRemoveGoal, onUpdateBudget, onOpenPriceCheck }: MoneyAssistantProps) {
   const canAct = !!(onUpdateGoal && onAddGoal && onRemoveGoal && onUpdateBudget);
   const world: World = { goals, budget };
   const [reminders, setReminders] = useReminders();
@@ -215,6 +235,16 @@ export function MoneyAssistant({ context, goals = [], budget = { income: 0, esse
     try { localStorage.setItem(TUCK_KEY, next ? "1" : "0"); } catch { /* keep the choice for this visit only */ }
   }
   const [question, setQuestion] = useState("");
+  // Names voice input should spell right: goals, accounts, and places you shop at often.
+  const voiceNames = useMemo(() => {
+    const recent = bankData?.transactions.filter(t => t.amount > 0).slice(0, 1500) ?? [];
+    const counts = new Map<string, number>();
+    for (const t of recent) counts.set(t.name, (counts.get(t.name) ?? 0) + 1);
+    const merchants = [...counts].filter(([, count]) => count >= 2).sort(([, a], [, b]) => b - a).slice(0, 150).map(([name]) => name);
+    return [...goals.map(g => g.name), ...(bankData?.accounts.map(a => a.name) ?? []), ...merchants];
+  }, [goals, bankData]);
+  const voiceNamesRef = useRef(voiceNames);
+  useEffect(() => { voiceNamesRef.current = voiceNames; }, [voiceNames]);
   // null while checking; true when this machine's server has an API key.
   const [aiReady, setAiReady] = useState<boolean | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>(readChat);
@@ -319,18 +349,21 @@ export function MoneyAssistant({ context, goals = [], budget = { income: 0, esse
       recognition.lang = navigator.language || "en-US";
       recognition.interimResults = true;
       recognition.continuous = true;
+      // Several guesses per phrase: the one that mentions your own names wins.
+      recognition.maxAlternatives = 3;
       const startedAt = performance.now();
       let sessionFinal = "";
       recognition.onresult = event => {
         let finals = "";
         let interim = "";
         for (const result of Array.from(event.results)) {
-          if (result.isFinal) finals += result[0].transcript;
+          if (result.isFinal) finals += bestAlternative(Array.from(result, alt => alt.transcript), voiceNamesRef.current);
           else interim += result[0].transcript;
         }
         sessionFinal = finals;
         quickEnds = 0;
-        setQuestion(join(before, committedVoiceRef.current, finals, interim));
+        // Finished phrases are cleaned up (names, amounts); the words still coming in show as heard.
+        setQuestion(join(before, fixVoiceText(join(committedVoiceRef.current, finals), voiceNamesRef.current), interim));
       };
       recognition.onerror = event => {
         if (event.error === "not-allowed" || event.error === "service-not-allowed") {
@@ -402,10 +435,21 @@ export function MoneyAssistant({ context, goals = [], budget = { income: 0, esse
     // "Can I afford $80 shoes?": the same forecast as the Can I afford it? page, answered right here.
     const affordQ = plan ? parseAffordQuestion(text) : null;
     if (affordQ && plan) {
-      const result = checkAffordability(affordQ.item, affordQ.price, goals, bankData, plan);
-      say(result
-        ? { text: `**${AFFORD_HEADLINE[result.verdict]}** ${result.sentence}`, afford: result }
-        : { text: "I need a checking or savings balance to check that. Add or connect an account on **Money**, then ask again." });
+      // The answer depends on today's balance: check it live first (reused for 15 minutes).
+      const replyId = crypto.randomUUID();
+      setMessages(current => [...current, { id: crypto.randomUUID(), role: "user", text }, { id: replyId, role: "assistant", text: "Checking your latest balance…", pending: true }]);
+      const data = freshBankData ? await freshBankData().catch(() => bankData) : bankData;
+      const result = checkAffordability(affordQ.item, affordQ.price, goals, data, plan);
+      const checkItem = { item: affordQ.item, price: affordQ.price };
+      const reply: Partial<ChatMessage> & Pick<ChatMessage, "text"> = result
+        ? { text: `**${AFFORD_HEADLINE[result.verdict]}** ${result.sentence}`, afford: result, checkItem }
+        : { text: "I can’t see a checking or savings balance yet, so I can’t say if it’s safe to spend. Check a purchase can still show what it does to your goals.", checkItem };
+      setMessages(current => current.map(m => (m.id === replyId ? { ...m, ...reply, pending: false } : m)));
+      return;
+    }
+    // "What changed this month?": computed here from your transactions, no AI needed.
+    if (WHAT_CHANGED.test(text) && bankData?.transactions.length) {
+      say({ text: whatChanged(bankData) });
       return;
     }
     // "Add $20 to my car goal", "Make a laptop goal", "Move $100 from trip to car"…: understood on this
@@ -436,11 +480,34 @@ export function MoneyAssistant({ context, goals = [], budget = { income: 0, esse
         // The AI names goals; match them to ours before showing the confirmation card.
         reply = proposal(world, fromAI(ai.action, goals), ai.answer || PROPOSE_TEXT);
       } else {
-        reply = { text: ai.answer };
+        reply = { text: ai.answer, ...(ai.deeper ? { deeperQuestion: text } : {}) };
       }
     } catch {
       // Network, key, or provider trouble: answer on-device rather than leave the user hanging.
       reply = { text: answerMoneyQuestion(text, context, history), offline: true };
+    }
+    setMessages(current => current.map(m => (m.id === replyId ? { ...m, ...reply, pending: false } : m)));
+  }
+
+  /** "Get a deeper answer": the same question again on Sonnet (about 2 cents), added below the first answer. */
+  async function askDeeper(message: ChatMessage) {
+    const question = message.deeperQuestion;
+    if (!question || busy) return;
+    const at = messages.findIndex(m => m.id === message.id);
+    // The conversation as it was when the question was asked (before the question itself).
+    const history = messages.slice(0, Math.max(0, at - 1));
+    const replyId = crypto.randomUUID();
+    setMessages(current => [
+      ...current.map(m => (m.id === message.id ? { ...m, deeperQuestion: undefined } : m)),
+      { id: replyId, role: "assistant", text: "Thinking…", pending: true },
+    ]);
+    let reply: Partial<ChatMessage> & Pick<ChatMessage, "text">;
+    try {
+      const ai = await askAI(question, history, context, true);
+      reply = ai.action && canAct ? proposal(world, fromAI(ai.action, goals), ai.answer || PROPOSE_TEXT) : { text: ai.answer, deep: true };
+    } catch {
+      reply = { text: "I couldn’t get a deeper answer right now. Try again in a moment." };
+      setMessages(current => current.map(m => (m.id === message.id ? { ...m, deeperQuestion: question } : m)));
     }
     setMessages(current => current.map(m => (m.id === replyId ? { ...m, ...reply, pending: false } : m)));
   }
@@ -509,6 +576,32 @@ export function MoneyAssistant({ context, goals = [], budget = { income: 0, esse
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, due.length]);
 
+  // A weekly check-in (once a week) and heads-ups for bills due in the next 3 days (once per bill),
+  // added the first time Polaris opens. Computed on this device: no AI cost.
+  const checkIn = useMemo(() => (bankData?.transactions.length ? weeklyCheckIn(bankData, goals) : null), [bankData, goals]);
+  const [checkInShown, setCheckInShown] = useState(() => { try { return localStorage.getItem(CHECKIN_KEY) ?? ""; } catch { return ""; } });
+  const [billsShown, setBillsShown] = useState(readShownBills);
+  const heads = useMemo(() => (bankData ? billHeadsUp(bankData, billsShown) : null), [bankData, billsShown]);
+  const freshCheckIn = checkIn && checkIn.key !== checkInShown ? checkIn : null;
+  const hasNews = !!freshCheckIn || !!heads;
+  useEffect(() => {
+    if (!open || !hasNews) return;
+    const cards: ChatMessage[] = [];
+    if (freshCheckIn) {
+      cards.push({ id: crypto.randomUUID(), role: "assistant", text: freshCheckIn.text });
+      setCheckInShown(freshCheckIn.key);
+      try { localStorage.setItem(CHECKIN_KEY, freshCheckIn.key); } catch { /* shown again next visit */ }
+    }
+    if (heads) {
+      cards.push({ id: crypto.randomUUID(), role: "assistant", text: heads.text });
+      const next = new Set([...billsShown, ...heads.keys]);
+      setBillsShown(next);
+      try { localStorage.setItem(BILLS_SHOWN_KEY, JSON.stringify([...next].slice(-60))); } catch { /* shown again next visit */ }
+    }
+    setMessages(current => [...current, ...cards]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, hasNews]);
+
   const avatarMood = busy ? "thinking" : mood?.mood ?? "idle";
   const mode = aiReady ? "AI answers from your NorthStar data" : "Private, on-device answers";
   return <>
@@ -556,8 +649,10 @@ export function MoneyAssistant({ context, goals = [], budget = { income: 0, esse
                 <span className="polaris-afford-badge">{message.afford.verdict === "safe" || message.afford.verdict === "covered" ? "Safe" : message.afford.verdict === "tight" ? "Tight" : "Not yet"}</span>
                 <span className="polaris-afford-item">{message.afford.item} · {money(message.afford.price)}</span>
                 {message.afford.comfortableLimit !== undefined && message.afford.verdict !== "safe" && message.afford.comfortableLimit > 0 && <small>You could comfortably spend up to {money(Math.floor(message.afford.comfortableLimit))} today.</small>}
-                {onOpenPriceCheck && <button type="button" className="polaris-afford-open" onClick={() => { setOpen(false); onOpenPriceCheck(); }}>See the full check <ArrowRight size={14} aria-hidden="true" /></button>}
               </div>}
+              {message.checkItem && onOpenPriceCheck && <button type="button" className="polaris-afford-open" onClick={() => { requestPriceCheck(message.checkItem!); setOpen(false); onOpenPriceCheck(); }}>Open the full check for {message.checkItem.item} <ArrowRight size={14} aria-hidden="true" /></button>}
+              {message.deep && <small className="polaris-deep-tag"><Sparkles size={12} aria-hidden="true" /> Deeper answer</small>}
+              {message.deeperQuestion && aiReady && <button type="button" className="polaris-deeper" disabled={busy} onClick={() => { void askDeeper(message); }} title="Runs this question on a more capable model (about 2 cents)"><Sparkles size={14} aria-hidden="true" /> Get a deeper answer</button>}
               {message.undo && !message.undone && <button type="button" className="polaris-undo" onClick={() => undoAction(message)}><Undo2 size={14} aria-hidden="true" /> {message.undo.label}</button>}
               {message.offline && <small className="money-assistant-offline">Answered on this device. The AI assistant was unavailable.</small>}
               {canSpeak && message.role === "assistant" && <button type="button" className={`money-assistant-speak${speakingId === message.id ? " speaking" : ""}`} aria-pressed={speakingId === message.id} aria-label={speakingId === message.id ? "Stop reading aloud" : "Read this answer aloud"} title={speakingId === message.id ? "Stop" : "Read aloud"} onClick={() => toggleSpeak(message)}>
@@ -592,7 +687,7 @@ export function MoneyAssistant({ context, goals = [], budget = { income: 0, esse
         {tucked ? <ChevronLeft size={18} aria-hidden="true" /> : <ChevronRight size={18} aria-hidden="true" />}
       </button>
       <button className="money-assistant-launch" inert={tucked} aria-expanded={open} aria-controls="money-assistant-panel" onClick={() => setOpen(value => !value)}>
-        {open ? <X size={20} /> : <PolarisAvatar size={28} mood={mood?.mood ?? "idle"} className="money-assistant-launch-avatar" />}<span>{open ? "Close Polaris" : "Ask Polaris"}</span>
+        {open ? <X size={20} /> : <PolarisAvatar size={28} mood={mood?.mood ?? "idle"} className="money-assistant-launch-avatar" />}<span>{open ? "Close Polaris" : "Ask Polaris"}</span>{!open && hasNews && <span className="money-assistant-news" aria-label="New check-in from Polaris" />}
         {!open && due.length > 0 && <span className="money-assistant-dot" aria-label={`${due.length} savings reminder${due.length === 1 ? "" : "s"} today`} />}
       </button>
     </div>

@@ -4,8 +4,8 @@
 // is testable and identical everywhere it appears. The AI only explains a result
 // computed here; it never decides it. Kept free of React so it can also serve as an
 // agent tool later.
-import { addDays, todayISO } from "./dates.ts";
-import { detectTransferIds, isTransfer, type BankAccount, type BankTransaction } from "./money.ts";
+import { addDays, todayISO } from "./dates.js";
+import { detectTransferIds, findRepeating, isTransfer, type BankAccount, type BankTransaction } from "./money.js";
 
 export const FORECAST_DAYS = 30;
 const SPENDING_LOOKBACK_DAYS = 60;
@@ -54,7 +54,7 @@ export interface SafeToSpendInputs {
   transactions: BankTransaction[];
   /** Accounts whose deposits count as income (checking/savings). */
   cashAccountIds: string[];
-  goals: { name: string; target: number; saved: number; weekly: number; emergency?: boolean }[];
+  goals: { name: string; target: number; saved: number; weekly: number; emergency?: boolean; linkedAccountId?: string }[];
   /** Used only when there's no transaction history (manual accounts): monthly spending from Budget. */
   fallbackMonthlySpending?: number;
   today?: string;
@@ -122,44 +122,32 @@ export function emergencyReserve(goals: SafeToSpendInputs["goals"]): { amount: n
  */
 export function goalReserve(goals: SafeToSpendInputs["goals"]): { amount: number; name: string | null } {
   const funded = goals.filter((g) => g.saved > 0);
-  const amount = funded.reduce((sum, g) => sum + g.saved, 0);
-  return { amount: Math.round(amount * 100) / 100, name: funded.length === 1 ? funded[0].name : null };
+  // A linked goal follows an account's whole balance. Older saved states can
+  // contain two goals pointing at one account; reserve that balance only once.
+  const linked = new Map<string, (typeof funded)[number]>();
+  const unlinked: (typeof funded)[number][] = [];
+  for (const goal of funded) {
+    if (!goal.linkedAccountId) {
+      unlinked.push(goal);
+      continue;
+    }
+    const current = linked.get(goal.linkedAccountId);
+    if (!current || goal.saved > current.saved) linked.set(goal.linkedAccountId, goal);
+  }
+  const claims = [...unlinked, ...linked.values()];
+  const amount = claims.reduce((sum, goal) => sum + goal.saved, 0);
+  return { amount: Math.round(amount * 100) / 100, name: claims.length === 1 ? claims[0].name : null };
 }
 
-const CADENCE_DAYS: Record<string, number> = { Weekly: 7, "Every 2 weeks": 14, Monthly: 30, Quarterly: 91 };
 const round2 = (n: number) => Math.round(n * 100) / 100;
 const daysApart = (a: string, b: string) => Math.round((Date.parse(b) - Date.parse(a)) / 86_400_000);
 
 /**
- * Repeating transactions in one direction: same name, similar amount, steady gap.
- * Mirrors upcomingBills() in money.ts, but works for deposits too.
+ * Repeating transactions in one direction, from the same rules as the bill list
+ * (findRepeating in money.ts): an evenly spaced recent run, steady amounts, still active.
  */
 export function recurring(transactions: BankTransaction[], direction: "out" | "in", today: string): Recurring[] {
-  const byName = new Map<string, BankTransaction[]>();
-  for (const t of transactions) {
-    if (t.pending || (direction === "out" ? t.amount <= 0 : t.amount >= 0)) continue;
-    const list = byName.get(t.name) ?? [];
-    list.push(t);
-    byName.set(t.name, list);
-  }
-  const found: Recurring[] = [];
-  for (const [name, list] of byName) {
-    if (list.length < 2) continue;
-    const amounts = list.map((t) => Math.abs(t.amount));
-    const avg = amounts.reduce((s, v) => s + v, 0) / amounts.length;
-    if ((Math.max(...amounts) - Math.min(...amounts)) / avg >= 0.2) continue;
-    const dates = list.map((t) => t.date).sort();
-    let gapSum = 0;
-    for (let i = 1; i < dates.length; i++) gapSum += daysApart(dates[i - 1], dates[i]);
-    const gap = gapSum / (dates.length - 1);
-    const cadence = gap >= 5 && gap <= 9 ? "Weekly" : gap >= 12 && gap <= 16 ? "Every 2 weeks" : gap >= 25 && gap <= 35 ? "Monthly" : gap >= 85 && gap <= 100 ? "Quarterly" : null;
-    if (!cadence) continue;
-    const everyDays = CADENCE_DAYS[cadence];
-    let next = addDays(dates[dates.length - 1], everyDays);
-    while (next < today) next = addDays(next, everyDays);
-    found.push({ name, amount: round2(avg), cadence, everyDays, nextDate: next });
-  }
-  return found.sort((a, b) => a.nextDate.localeCompare(b.nextDate));
+  return findRepeating(transactions, direction, today).map(({ name, amount, cadence, everyDays, nextDate }) => ({ name, amount, cadence, everyDays, nextDate }));
 }
 
 /** Take-home pay per month from repeating deposits into checking or savings (0 if none found). */

@@ -33,3 +33,12 @@ dist-ssr
 
 # Saved Plaid bank connections (access tokens)
 server/data/
+
+# Vercel CLI project link
+.vercel
+
+# Local voice cloning (OpenVoice): downloads, models, your voice sample and generated audio stay on this computer.
+voice/vendor/
+voice/samples/
+voice/cache/
+voice/speaker/

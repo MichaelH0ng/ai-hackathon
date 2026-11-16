@@ -2,10 +2,10 @@
 // spending from real transactions and offers "levers" (places money could come from);
 // the model only chooses levers and words the plan, and every amount it proposes is
 // capped here so a plan can't promise money the student doesn't spend.
-import { addDays } from "../src/lib/dates.ts";
-import { detectTransferIds, isTransfer, type BankAccount, type BankTransaction } from "../src/lib/money.ts";
-import { recurring } from "../src/lib/safeToSpend.ts";
-import { categoryLabel } from "./assistantData.ts";
+import { addDays } from "../src/lib/dates.js";
+import { detectTransferIds, isTransfer, type BankAccount, type BankTransaction } from "../src/lib/money.js";
+import { recurring } from "../src/lib/safeToSpend.js";
+import { categoryLabel } from "./assistantData.js";
 
 const LOOKBACK_DAYS = 60;
 /** Spending that can't be trimmed this month: housing, utilities, debt payments. */

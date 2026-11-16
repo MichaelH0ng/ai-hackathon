@@ -25,7 +25,7 @@ export function checkAffordability(
   price: number,
   goals: MoneyGoal[],
   bankData: BankData | null | undefined,
-  plan: { assets: { kind: string; balance: number }[]; essentials: number; lifestyle: number },
+  plan: { assets: { id?: string; kind: string; balance: number }[]; essentials: number; lifestyle: number },
 ): AffordResult | null {
   // A purchase with its own goal ("AirPods") is paid from that goal.
   const fund = goalForItem(item, goals);
@@ -34,10 +34,12 @@ export function checkAffordability(
   }
   const accounts = bankData?.accounts ?? [];
   const fromBank = cashFromAccounts(accounts);
-  const manualChecking = plan.assets.filter(a => a.kind === "Checking").reduce((sum, a) => sum + a.balance, 0);
-  const manualSavings = plan.assets.filter(a => a.kind === "Savings").reduce((sum, a) => sum + a.balance, 0);
+  // The plan's account list can include the linked bank accounts too; count those once, from the bank.
+  const manual = plan.assets.filter(a => !accounts.some(acc => acc.id === a.id));
+  const manualChecking = manual.filter(a => a.kind === "Checking").reduce((sum, a) => sum + a.balance, 0);
+  const manualSavings = manual.filter(a => a.kind === "Savings").reduce((sum, a) => sum + a.balance, 0);
   if (!fromBank.cashAccountIds.length && !manualChecking && !manualSavings) return null;
-  const otherGoals = goals.filter(g => g.id !== fund?.id).map(({ name, target, saved, weekly, emergency }) => ({ name, target, saved, weekly, emergency }));
+  const otherGoals = goals.filter(g => g.id !== fund?.id).map(({ name, target, saved, weekly, emergency, linkedAccountId }) => ({ name, target, saved, weekly, emergency, linkedAccountId }));
   const forecast = buildForecast({
     cash: fromBank.checking + fromBank.savings + manualChecking + manualSavings,
     savings: 0,
