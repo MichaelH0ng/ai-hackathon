@@ -123,6 +123,110 @@ export function speakAsPolaris(text: string, persona?: VoicePersona): SpeechSynt
   return utterance;
 }
 
+// ---------- "Michael": your own cloned voice ----------
+// Michael is read by the local voice service (voice/server.py) when it's running. Without it
+// (another computer, or the service stopped), Michael falls back to a deep built-in voice.
+
+let serviceCheck: { at: number; available: Promise<boolean> } | null = null;
+/** Whether the local voice service is up (rechecked at most every 30 seconds). */
+export function myVoiceAvailable(): Promise<boolean> {
+  if (serviceCheck && Date.now() - serviceCheck.at < 30_000) return serviceCheck.available;
+  const available = fetch("/api/voice/status")
+    .then(r => r.json())
+    .then((body: { available?: boolean }) => body.available === true)
+    .catch(() => false);
+  serviceCheck = { at: Date.now(), available };
+  return available;
+}
+
+/** Answer text as speakable pieces: one or two sentences each, so playback starts quickly. Exported for tests. */
+export function speechChunks(text: string): string[] {
+  const plain = text.replace(/[*_#`>]/g, "").replace(/^\s*[-•]\s+/gm, "").replace(/\s*\n+\s*/g, ". ").replace(/\.\s*\./g, ".").replace(/([:!?])\./g, "$1").trim();
+  const sentences = plain.split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(Boolean);
+  const chunks: string[] = [];
+  for (const sentence of sentences) {
+    const last = chunks[chunks.length - 1];
+    // Very short sentences ride along with the next one so the voice doesn't sound choppy.
+    if (last && last.length < 25 && last.length + sentence.length < 280) chunks[chunks.length - 1] = `${last} ${sentence}`;
+    else chunks.push(sentence.slice(0, 600));
+  }
+  return chunks;
+}
+
+// A silent clip played straight from the tap, so Safari lets the same player continue after loading.
+const SILENT_WAV = "data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=";
+let current: { stop: () => void } | null = null;
+
+/** Stops whatever Polaris is saying, in any voice. */
+export function stopPolarisSpeech() {
+  current?.stop();
+  current = null;
+  if (canSpeak) window.speechSynthesis.cancel();
+}
+
+/**
+ * Reads text aloud in the chosen voice. Call it straight from a tap. onEnd runs when it finishes
+ * (not when stopped); onError gets a message if no voice can play.
+ */
+export function speak(text: string, options: { persona?: VoicePersona; onEnd?: () => void; onError?: (message: string) => void } = {}) {
+  stopPolarisSpeech();
+  const voices = canSpeak ? rankVoices(window.speechSynthesis.getVoices()) : [];
+  const persona = options.persona ?? selectedPersona(voices);
+  const browserVoice = (from: string) => {
+    try {
+      const utterance = speakAsPolaris(from, persona);
+      utterance.onend = () => options.onEnd?.();
+      utterance.onerror = () => options.onEnd?.();
+    } catch (error) {
+      options.onError?.(error instanceof Error ? error.message : "This voice is unavailable. Choose another in Settings.");
+    }
+  };
+  if (persona !== "Michael") { browserVoice(text); return; }
+
+  const audio = new Audio();
+  audio.src = SILENT_WAV;
+  audio.play().catch(() => { /* only unlocking the player */ });
+  let stopped = false;
+  let wake: () => void = () => {};
+  const urls: string[] = [];
+  const handle = { stop: () => { stopped = true; audio.pause(); wake(); urls.forEach(url => URL.revokeObjectURL(url)); } };
+  current = handle;
+  const clip = (piece: string) => fetch("/api/voice/speak", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text: piece }) })
+    .then(r => { if (!r.ok) throw new Error("voice unavailable"); return r.blob(); });
+
+  void (async () => {
+    const pieces = speechChunks(text);
+    if (!pieces.length || !(await myVoiceAvailable())) {
+      if (!stopped) { current = null; browserVoice(text); }
+      return;
+    }
+    let next = clip(pieces[0]);
+    for (let i = 0; i < pieces.length; i++) {
+      let blob: Blob;
+      try { blob = await next; } catch {
+        // The service went away mid-answer: finish in the built-in voice.
+        if (!stopped) { current = null; browserVoice(pieces.slice(i).join(" ")); }
+        return;
+      }
+      if (stopped) return;
+      if (i + 1 < pieces.length) next = clip(pieces[i + 1]); // make the next sentence while this one plays
+      const url = URL.createObjectURL(blob);
+      urls.push(url);
+      audio.src = url;
+      await new Promise<void>(resolve => {
+        wake = resolve;
+        audio.onended = () => resolve();
+        audio.onerror = () => resolve();
+        audio.play().catch(() => resolve());
+      });
+      if (stopped) return;
+    }
+    if (current === handle) current = null;
+    urls.forEach(url => URL.revokeObjectURL(url));
+    options.onEnd?.();
+  })();
+}
+
 /** Ranked voices; browsers load the list asynchronously, so this updates when it arrives. */
 export function useVoices(): SpeechSynthesisVoice[] {
   const [voices, setVoices] = useState<SpeechSynthesisVoice[]>(() => (canSpeak ? rankVoices(window.speechSynthesis.getVoices()) : []));

@@ -4,8 +4,8 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently -k -n web,api -c green,blue \"vite\" \"tsx watch server/index.ts\"",
-    "dev:phone": "concurrently -k -n web,api \"vite --host\" \"tsx watch server/index.ts\"",
+    "dev": "concurrently -k -n web,api,voice -c green,blue,magenta \"vite\" \"tsx watch server/index.ts\" \"node scripts/voice.mjs\"",
+    "dev:phone": "concurrently -k -n web,api,voice \"vite --host\" \"tsx watch server/index.ts\" \"node scripts/voice.mjs\"",
     "build": "tsc -b && vite build",
     "test": "vitest run",
     "lint": "oxlint",

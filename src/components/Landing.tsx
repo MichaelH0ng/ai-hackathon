@@ -1,6 +1,6 @@
 import { ArrowRight, CalendarClock, PiggyBank, Plus, RefreshCw, Sparkles, Target } from "lucide-react";
 import { useMemo } from "react";
-import { daysBetween, formatDate, todayISO } from "../lib/dates";
+import { addDays, daysBetween, formatDate, formatWeekday, parseISO, todayISO } from "../lib/dates";
 import { formatExact, formatMoney, weeklyNeededForDeadline } from "../lib/finance";
 import { assetsByInstitution, billsFor, detectTransferIds, netWorthSeries } from "../lib/money";
 import { buildForecast, cashFromAccounts } from "../lib/safeToSpend";
@@ -136,10 +136,18 @@ export function HomeOverview({ data, goals = [], profileName = "Michael", onChec
         ? { value: "On track", detail: `${activeGoal.name} · ${formatMoney(activeGoal.weekly)}/week` }
         : { value: `${formatMoney(gap)}/week short`, detail: `${activeGoal.name} by ${formatDate(activeGoal.deadline)}` };
     })();
-    const newestDate = view.chartTransactions.reduce<string | null>((newest, transaction) => !newest || transaction.date > newest ? transaction.date : newest, null);
-    const newestActivity = newestDate
-      ? view.chartTransactions.filter((transaction) => transaction.date === newestDate).sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))[0]
-      : null;
+    const today = todayISO();
+    // This investing cadence is every other Friday. Anchor that schedule to the
+    // latest posted Friday Robinhood transfer, rather than Plaid's broader stream cadence.
+    const latestRobinhoodFriday = data.transactions
+      .filter((transaction) => !transaction.pending && transaction.category === "TRANSFER_OUT" && /robinhood/i.test(transaction.name) && parseISO(transaction.date).getDay() === 5)
+      .sort((a, b) => b.date.localeCompare(a.date))[0] ?? null;
+    const nextRobinhoodInvestment = (() => {
+      if (!latestRobinhoodFriday) return null;
+      let nextDate = addDays(latestRobinhoodFriday.date, 14);
+      while (nextDate < today) nextDate = addDays(nextDate, 14);
+      return nextDate;
+    })();
 
     return [
       {
@@ -165,15 +173,15 @@ export function HomeOverview({ data, goals = [], profileName = "Michael", onChec
         tone: "blue",
       },
       { label: "Goal check-in", ...goalPace, tone: "violet" },
-      newestActivity ? {
-        label: "Recent money move",
-        value: `${newestActivity.amount < 0 ? "+" : "−"}${formatMoney(Math.abs(newestActivity.amount))}`,
-        detail: `${newestActivity.name} · ${formatDate(newestActivity.date)}`,
+      nextRobinhoodInvestment ? {
+        label: "Next Robinhood investment",
+        value: nextRobinhoodInvestment === today ? "Today" : formatWeekday(nextRobinhoodInvestment),
+        detail: "Every other Friday · based on your latest Robinhood investment.",
         tone: "sky",
       } : {
-        label: "Recent money move",
-        value: "No posted activity",
-        detail: "New transactions will appear here once they settle.",
+        label: "Next Robinhood investment",
+        value: "No date detected",
+        detail: "We will add it once a Friday Robinhood investment is detected.",
         tone: "sky",
       },
     ];

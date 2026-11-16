@@ -350,6 +350,33 @@ app.get("/api/assistant/status", (_req, res) => {
   res.json({ ai: Boolean(process.env.ANTHROPIC_API_KEY || process.env.ANTHROPIC_AUTH_TOKEN) });
 });
 
+// ---------- the "Michael" voice ----------
+// A local voice-cloning service (voice/server.py, started by `npm run dev` when set up) reads
+// Polaris's answers aloud. When it isn't running, the app uses a built-in browser voice instead.
+const VOICE_URL = `http://127.0.0.1:${Number(process.env.VOICE_PORT ?? 8790)}`;
+app.get("/api/voice/status", async (_req, res) => {
+  try {
+    const r = await fetch(`${VOICE_URL}/health`, { signal: AbortSignal.timeout(1500) });
+    res.json({ available: r.ok });
+  } catch {
+    res.json({ available: false });
+  }
+});
+app.post("/api/voice/speak", async (req, res) => {
+  const text = typeof req.body?.text === "string" ? req.body.text.trim().slice(0, 600) : "";
+  if (!text) {
+    res.status(400).json({ error: "Nothing to say." });
+    return;
+  }
+  try {
+    const r = await fetch(`${VOICE_URL}/speak`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ text }), signal: AbortSignal.timeout(30_000) });
+    if (!r.ok) throw new Error(`voice service ${r.status}`);
+    res.type("audio/wav").send(Buffer.from(await r.arrayBuffer()));
+  } catch {
+    res.status(503).json({ error: "The Michael voice isn't running. Using a built-in voice instead." });
+  }
+});
+
 // ---------- Polaris goal changes ----------
 // Polaris can propose a change to a savings goal. The server never changes anything: it returns the
 // proposal, and the app shows a confirmation card that the user must accept.

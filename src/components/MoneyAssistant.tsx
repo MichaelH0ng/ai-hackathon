@@ -4,7 +4,7 @@ import { PolarisAvatar } from "./PolarisAvatar";
 import { MicLevelButton } from "./MicLevelButton";
 import { PolarisText } from "./PolarisText";
 import { polarisMood } from "../lib/polarisMood";
-import { canSpeak, speakAsPolaris } from "../lib/polarisVoice";
+import { canSpeak, speak, stopPolarisSpeech } from "../lib/polarisVoice";
 import { answerMoneyQuestion, type MoneyAssistantContext } from "../lib/moneyAssistant";
 import { apply, check, describe, dueReminders, findGoal, money, parseAffordQuestion, parseCommand, WEEKDAYS, type ActionSummary, type Budget, type BudgetField, type Command, type PolarisAction, type Reminder, type Undo, type World } from "../lib/goalActions";
 import { checkAffordability, type AffordResult } from "../lib/polarisAfford";
@@ -269,25 +269,21 @@ export function MoneyAssistant({ context, goals = [], budget = { income: 0, esse
   // only new answers fade in word by word.
   const [shownAtOpen] = useState(() => new Set(messages.map(m => m.id)));
 
-  // Read a reply out loud with the browser's built-in voice. Click again to stop.
+  // Read a reply out loud in the chosen voice (Michael's own voice, or a built-in one). Click again to stop.
   const [speakingId, setSpeakingId] = useState<string | null>(null);
   function stopSpeaking() {
-    if (canSpeak) window.speechSynthesis.cancel();
+    stopPolarisSpeech();
     setSpeakingId(null);
   }
   function toggleSpeak(message: ChatMessage) {
     if (!canSpeak) return;
     if (speakingId === message.id) { stopSpeaking(); return; }
-    try {
-      const utterance = speakAsPolaris(message.text);
-      utterance.onend = utterance.onerror = () => setSpeakingId(current => (current === message.id ? null : current));
-      setSpeakingId(message.id);
-      setVoiceError("");
-    } catch (error) {
-      setVoiceError(error instanceof Error ? error.message : "This voice is unavailable. Choose another in Settings.");
-    }
+    setSpeakingId(message.id);
+    setVoiceError("");
+    const done = () => setSpeakingId(current => (current === message.id ? null : current));
+    speak(message.text, { onEnd: done, onError: (error) => { done(); setVoiceError(error); } });
   }
-  useEffect(() => () => { if (canSpeak) window.speechSynthesis.cancel(); }, []);
+  useEffect(() => () => stopPolarisSpeech(), []);
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
   // Keep the newest message in view: jump to the bottom when Polaris opens, glide there when
@@ -320,7 +316,7 @@ export function MoneyAssistant({ context, goals = [], budget = { income: 0, esse
 
   // Stop listening when the panel closes or the component unmounts.
   useEffect(() => {
-    if (!open) { wantVoiceRef.current = false; recognitionRef.current?.stop(); if (canSpeak) window.speechSynthesis.cancel(); }
+    if (!open) { wantVoiceRef.current = false; recognitionRef.current?.stop(); stopPolarisSpeech(); }
   }, [open]);
   useEffect(() => () => { wantVoiceRef.current = false; recognitionRef.current?.stop(); }, []);
 

@@ -42,3 +42,10 @@ voice/vendor/
 voice/samples/
 voice/cache/
 voice/speaker/
+
+# Local "Michael" voice (voice/README.md): downloads, models, the voice recording and its fingerprint,
+# and generated audio stay on this computer.
+voice/vendor/
+voice/samples/
+voice/speaker/
+voice/cache/tts/
