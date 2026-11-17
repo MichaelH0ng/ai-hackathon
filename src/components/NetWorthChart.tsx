@@ -3,6 +3,7 @@ import { useId, useMemo, useRef, useState } from "react";
 import { addDays, formatDate } from "../lib/dates";
 import { formatMoney } from "../lib/finance";
 import type { BankTransaction, NetWorthPoint } from "../lib/money";
+import { Segmented } from "./Segmented";
 
 const W = 800;
 const H = 240;
@@ -166,19 +167,8 @@ export function NetWorthChart({ series, transactions = [], quickLook = [] }: { s
         )}
       </div>
 
-      <div className="mt-3 flex items-center gap-1 border-b border-stone-200 pb-2" role="tablist" aria-label="Chart period">
-        {PERIODS.map((x) => (
-          <button
-            key={x.key}
-            role="tab"
-            aria-selected={period === x.key}
-            onClick={() => { setPeriod(x.key); setHover(null); setActiveMarker(null); }}
-            className="min-h-10 min-w-12 rounded-lg px-3 text-sm font-bold transition-colors duration-200"
-            style={period === x.key ? { color, background: `${color}1a` } : { color: "#a8b9cf" }}
-          >
-            {x.key}
-          </button>
-        ))}
+      <div className="mt-3 border-b border-stone-200 pb-2">
+        <Segmented label="Chart period" options={PERIODS.map((x) => ({ value: x.key, label: x.key }))} value={period} onChange={(next) => { setPeriod(next); setHover(null); setActiveMarker(null); }} />
       </div>
       {quickLook.length > 0 && <dl className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4" aria-label="Your money at a glance">
         {quickLook.map((item) => <RecapMetric key={item.label} {...item} />)}

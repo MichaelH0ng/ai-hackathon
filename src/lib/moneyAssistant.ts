@@ -1,4 +1,4 @@
-import { formatMoney } from "./finance";
+import { formatMoneyRaw } from "./finance";
 import { answerAccountEducation } from "./accountEducation";
 import { answerInvestingFollowUp, type AssistantTurn } from "./investingConversation";
 
@@ -18,7 +18,7 @@ export interface MoneyAssistantContext {
   excludedAccountIds?: string[];
 }
 
-const money = (amount: number) => formatMoney(amount, true);
+const money = (amount: number) => formatMoneyRaw(amount, true);
 
 /** "around Feb 6" for a goal saving `weekly` per week; null when it's funded or has no weekly amount. */
 function finishDate(goal: { target: number; saved: number; weekly: number }, now = new Date()): string | null {

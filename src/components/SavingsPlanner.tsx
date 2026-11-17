@@ -96,7 +96,7 @@ export function SavingsPlanner({ goals, financials = {}, onUpdate, onOpen, onOpe
               momentum={1}
               cometReach={180}
               cometWidth={12}
-              format={(v) => `$${Math.round(v)}`}
+              format={(v) => formatMoney(Math.round(v))}
               caption={() => "each week"}
               valueText={(v) => `${formatMoney(v)} per week`}
               onChange={(v) => {

@@ -10,6 +10,8 @@ export interface BankAccount {
   current: number;
   available: number | null;
   institution: string;
+  /** Credit limit, for cards, when the bank shares it. */
+  limit?: number | null;
 }
 
 export interface BankTransaction {
@@ -82,6 +84,9 @@ export interface BankData {
     lastUpdatedAt?: string | null;
     /** This connection was made before card and loan details were requested; reconnecting adds them. */
     needsDebtConsent?: boolean;
+    /** The bank's logo (a PNG data URL) and brand color from Plaid, when Plaid has them. */
+    logo?: string | null;
+    color?: string | null;
   }[];
   fetchedAt: string;
   /** When balances were last checked live with the banks (within 15 minutes), or null for Plaid's saved balances. */
@@ -219,6 +224,14 @@ const FREQUENCY_LABEL: Record<RecurringStream["frequency"], string> = {
   UNKNOWN: "Repeats",
 };
 export const frequencyLabel = (f: RecurringStream["frequency"]) => FREQUENCY_LABEL[f] ?? "Repeats";
+
+/** How many times a month each cadence happens. An unknown "Repeats" counts as monthly. */
+const PER_MONTH: Record<string, number> = { "Weekly": 52 / 12, "Every 2 weeks": 26 / 12, "Twice a month": 2, "Monthly": 1, "Yearly": 1 / 12, "Repeats": 1 };
+
+/** What a set of bills costs per month, with weekly, every-2-weeks, and yearly bills converted to a monthly amount. */
+export function monthlyBillTotal(bills: Pick<Bill, "amount" | "cadence">[]): number {
+  return bills.reduce((sum, b) => sum + b.amount * (PER_MONTH[b.cadence] ?? 1), 0);
+}
 
 /** Active repeating charges from Plaid's detection, soonest first. Skips income and transfers between your accounts. */
 export function billsFromStreams(streams: RecurringStream[], now = new Date()): Bill[] {
@@ -396,6 +409,31 @@ export function netWorthSeries(accounts: BankAccount[], transactions: BankTransa
     const date = localISO(d);
     points.push({ date, value: Math.round(running * 100) / 100 });
     running -= dailyNet.get(date) ?? 0;
+  }
+  return points.reverse();
+}
+
+/**
+ * One account's balance for each of the last `days` days, worked backward from today's balance
+ * through its posted transactions. Transfers count here (they do move this account's balance).
+ * Cards and loans give what's owed, which spending raises. Not for investments: their value
+ * also moves with the market, which transactions don't show.
+ */
+export function accountBalanceSeries(account: BankAccount, transactions: BankTransaction[], days = 90, now = new Date()): NetWorthPoint[] {
+  const owed = isLiability(account);
+  const daily = new Map<string, number>();
+  for (const t of transactions) {
+    if (t.accountId !== account.id || t.pending) continue;
+    daily.set(t.date, (daily.get(t.date) ?? 0) + t.amount);
+  }
+  const points: NetWorthPoint[] = [];
+  let running = account.current;
+  for (let i = 0; i <= days; i++) {
+    const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
+    const date = localISO(d);
+    points.push({ date, value: Math.round(running * 100) / 100 });
+    const flow = daily.get(date) ?? 0; // > 0 is money out
+    running = owed ? running - flow : running + flow; // undo this day's activity
   }
   return points.reverse();
 }

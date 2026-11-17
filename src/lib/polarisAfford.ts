@@ -1,7 +1,7 @@
 import { buildForecast, cashFromAccounts, evaluatePurchase, type Verdict } from "./safeToSpend";
 import { templateSentence, verdictFacts } from "./safeToSpendExplain";
 import { goalForItem } from "./envelopes";
-import { formatMoney } from "./finance";
+import { formatMoneyRaw } from "./finance";
 import type { BankData } from "./money";
 import type { MoneyGoal } from "./types";
 
@@ -30,7 +30,7 @@ export function checkAffordability(
   // A purchase with its own goal ("AirPods") is paid from that goal.
   const fund = goalForItem(item, goals);
   if (fund && fund.saved >= price) {
-    return { verdict: "covered", item, price, sentence: `Your ${fund.name} goal already has ${formatMoney(fund.saved)} saved, so it covers this.` };
+    return { verdict: "covered", item, price, sentence: `Your ${fund.name} goal already has ${formatMoneyRaw(fund.saved)} saved, so it covers this.` };
   }
   const accounts = bankData?.accounts ?? [];
   const fromBank = cashFromAccounts(accounts);

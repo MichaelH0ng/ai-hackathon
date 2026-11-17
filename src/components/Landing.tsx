@@ -8,6 +8,8 @@ import type { MoneyGoal } from "../lib/types";
 import { balancesAreFresh, type Bank } from "../lib/useBank";
 import { AssetSplit } from "./AssetSplit";
 import { ConnectCard } from "./MoneyDashboard";
+import { PageBanner } from "./PageBanner";
+import { useMoneyHidden } from "../lib/privacy";
 import { NetWorthChart, type NetWorthQuickLook } from "./NetWorthChart";
 import { SavingsPlanner } from "./SavingsPlanner";
 
@@ -69,7 +71,7 @@ export function Landing({
 
 // ---------- connected: the dashboard ----------
 
-export function HomeOverview({ data, goals = [], profileName = "Michael", onCheck, onMoney, addAccount, onGoals, onNewGoal, onOpenGoal, onRefresh, refreshing = false }: {
+export function HomeOverview({ data, goals = [], profileName = "", onCheck, onMoney, addAccount, onGoals, onNewGoal, onOpenGoal, onRefresh, refreshing = false }: {
   data: import("../lib/money").BankData;
   profileName?: string;
   goal?: MoneyGoal;
@@ -109,6 +111,7 @@ export function HomeOverview({ data, goals = [], profileName = "Michael", onChec
   // Unfinished goals first, so the snapshot shows what still needs saving.
   const topGoals = [...goals].sort((a, b) => Number(a.saved >= a.target) - Number(b.saved >= b.target)).slice(0, 3);
   const billsTotal = view.bills.reduce((sum, b) => sum + b.amount, 0);
+  const hidden = useMoneyHidden(); // quick-look amounts are cached; refresh them when amounts are hidden or shown
   const quickLook = useMemo<NetWorthQuickLook[]>(() => {
     const cash = cashFromAccounts(data.accounts);
     const forecast = buildForecast({
@@ -152,7 +155,7 @@ export function HomeOverview({ data, goals = [], profileName = "Michael", onChec
     return [
       {
         label: "Safe to spend today",
-        value: comfortableToday > 0 ? formatMoney(comfortableToday) : "$0",
+        value: formatMoney(Math.max(0, comfortableToday)),
         detail: comfortableToday > 0 ? "Comfortable room after the next 30 days." : "Bills, goals, or everyday spending use the available room.",
         tone: "mint",
       },
@@ -185,7 +188,7 @@ export function HomeOverview({ data, goals = [], profileName = "Michael", onChec
         tone: "sky",
       },
     ];
-  }, [data.accounts, data.transactions, goals, view.bills, view.chartTransactions]);
+  }, [data.accounts, data.transactions, goals, view.bills, view.chartTransactions, hidden]);
   const lastBankUpdate = data.status
     .map((status) => status.lastUpdatedAt)
     .filter((stamp): stamp is string => !!stamp && !Number.isNaN(Date.parse(stamp)))
@@ -197,21 +200,25 @@ export function HomeOverview({ data, goals = [], profileName = "Michael", onChec
     return minutes < 1 ? "just now" : minutes < 60 ? `${minutes} min ago` : formatTime(stamp);
   };
   const formatTime = (stamp: string) => new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(stamp));
-  const firstName = profileName.trim().split(/\s+/)[0] || "Michael";
+  // Each person's name comes from their own Profile (saved in their browser). No name yet: a general welcome.
+  const firstName = profileName.trim().split(/\s+/)[0] ?? "";
 
   return (
     <section className="dashboard-home-overview" aria-label="Money overview">
-      <header className="home-welcome">
-        <span className="home-welcome-orbit home-welcome-orbit-one" aria-hidden="true" />
-        <span className="home-welcome-orbit home-welcome-orbit-two" aria-hidden="true" />
-        <div className="home-welcome-copy"><p className="home-welcome-kicker"><Sparkles size={15} aria-hidden="true" /> YOUR NORTHSTAR</p><h1>Welcome, <span className="home-welcome-name">{firstName}<i aria-hidden="true" /></span></h1></div>
-        <div className="home-sync">
-          {/* Balances and transactions update separately: say which is which. */}
-          <span><i aria-hidden="true" />{data.balancesCheckedAt ? `Balances checked ${sinceLabel(data.balancesCheckedAt)}` : lastBankUpdate ? `Bank data updated ${formatTime(lastBankUpdate)}` : `NorthStar checked ${formatTime(data.fetchedAt)}`}</span>
-          {data.balancesCheckedAt && lastBankUpdate && <small>Transactions updated {formatTime(lastBankUpdate)}</small>}
-          {onRefresh && <button type="button" className="home-sync-link" onClick={onRefresh} disabled={refreshing || balancesAreFresh(data)} title={balancesAreFresh(data) ? "Checked with your banks in the last 15 minutes" : "Ask your banks for current balances"}><RefreshCw size={14} className={refreshing ? "home-sync-spin" : ""} aria-hidden="true" />{refreshing ? "Checking…" : balancesAreFresh(data) ? "Balances up to date" : "Update balances"}</button>}
-        </div>
-      </header>
+      <PageBanner
+        icon={<Sparkles size={15} aria-hidden="true" />}
+        kicker="YOUR NORTHSTAR"
+        lead={firstName ? "Welcome," : "Welcome to"}
+        highlight={firstName || "NorthStar"}
+        aside={
+          <div className="home-sync">
+            {/* Balances and transactions update separately: say which is which. */}
+            <span><i aria-hidden="true" />{data.balancesCheckedAt ? `Balances checked ${sinceLabel(data.balancesCheckedAt)}` : lastBankUpdate ? `Bank data updated ${formatTime(lastBankUpdate)}` : `NorthStar checked ${formatTime(data.fetchedAt)}`}</span>
+            {data.balancesCheckedAt && lastBankUpdate && <small>Transactions updated {formatTime(lastBankUpdate)}</small>}
+            {onRefresh && <button type="button" className="home-sync-link" onClick={onRefresh} disabled={refreshing || balancesAreFresh(data)} title={balancesAreFresh(data) ? "Checked with your banks in the last 15 minutes" : "Ask your banks for current balances"}><RefreshCw size={14} className={refreshing ? "home-sync-spin" : ""} aria-hidden="true" />{refreshing ? "Checking…" : balancesAreFresh(data) ? "Balances up to date" : "Update balances"}</button>}
+          </div>
+        }
+      />
       {/* The trend and allocation share the primary card; action cards remain compact at right. */}
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)] min-[1600px]:gap-6 [&>*]:min-w-0">
         <div className="clay wealth-accent p-5 sm:p-7">
@@ -236,10 +243,10 @@ export function HomeOverview({ data, goals = [], profileName = "Michael", onChec
             <CardHead title="Savings goals" action={goals.length && onGoals ? { label: "See all", onClick: onGoals } : undefined} />
             {topGoals.length ? (
               <ul className="mt-1 divide-y divide-stone-100">
-                {topGoals.map((g) => {
+                {topGoals.map((g, i) => {
                   const pct = g.target > 0 ? Math.min(100, (g.saved / g.target) * 100) : 0;
                   return (
-                    <li key={g.id}>
+                    <li key={g.id} className="ns-enter" style={{ "--i": i } as React.CSSProperties}>
                       <button onClick={() => onOpenGoal?.(g.id)} className="overview-row block w-full py-3 text-left">
                         <span className="flex items-baseline justify-between gap-2">
                           <span className="truncate text-sm font-bold text-ink">{g.name}</span>
@@ -273,8 +280,8 @@ export function HomeOverview({ data, goals = [], profileName = "Michael", onChec
             <CardHead title="Upcoming bills" />
             {view.bills.length ? (
               <ul className="mt-1 divide-y divide-stone-100">
-                {view.bills.map((b) => (
-                  <li key={b.name} className="flex items-center justify-between gap-3 py-2.5">
+                {view.bills.map((b, i) => (
+                  <li key={b.name} style={{ "--i": i } as React.CSSProperties} className="ns-enter flex items-center justify-between gap-3 py-2.5">
                     <span className="min-w-0">
                       <span className="block truncate text-sm font-bold text-ink">{b.name}</span>
                       <span className="block text-xs text-stone-500">{b.cadence}</span>

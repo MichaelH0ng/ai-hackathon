@@ -7,6 +7,7 @@ import { PriceCheck } from "./components/PriceCheck";
 import { Profile } from "./components/Profile";
 import { Settings } from "./components/Settings";
 import { TopNav, type NavPage } from "./components/TopNav";
+import { useMoneyHidden } from "./lib/privacy";
 import SoftAurora from "./components/SoftAurora";
 import { Toast } from "./components/Toast";
 import { PlaidOAuthResume } from "./components/PlaidOAuthResume";
@@ -46,6 +47,7 @@ const screenForPage = (page: NavPage): Screen =>
 const isDashboardTab = (page: NavPage): page is Exclude<NavPage, "Price check" | "Profile"> => page !== "Price check" && page !== "Profile";
 
 export default function App() {
+  useMoneyHidden(); // "Hide amounts": re-render every page when it's turned on or off
   const [state, setState] = useState<SavedState>(loadState);
   const [screen, setScreen] = useState<Screen>(() => screenForPage(pageFromHash()));
 
@@ -177,7 +179,7 @@ export default function App() {
           onTabChange={navigate}
           onCheck={() => navigate("Price check")}
           onSettings={() => setScreen({ name: "settings" })}
-          profileName={state.profile.name?.trim() || "Michael"}
+          profileName={state.profile.name?.trim() ?? ""}
           hourlyWage={state.profile.hourlyWage}
           goals={moneyGoals}
           completedGoals={completedGoals}

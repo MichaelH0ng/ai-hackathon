@@ -1,4 +1,5 @@
 import type { CSSProperties, ReactNode } from "react";
+import { maskMoneyText, useMoneyHidden } from "../lib/privacy";
 
 /**
  * Renders a Polaris answer with light formatting, without ever injecting HTML:
@@ -9,7 +10,9 @@ import type { CSSProperties, ReactNode } from "react";
  * look, done in CSS so it works with bold text and lists). Long answers speed up so the
  * whole reveal stays under about 1.5 seconds.
  */
-export function PolarisText({ text, animate = false }: { text: string; animate?: boolean }) {
+export function PolarisText({ text: raw, animate = false }: { text: string; animate?: boolean }) {
+  useMoneyHidden(); // re-render when "Hide amounts" changes
+  const text = maskMoneyText(raw);
   const totalWords = text.split(/\s+/).filter(Boolean).length;
   const step = Math.min(35, 1500 / Math.max(1, totalWords));
   const counter = { i: 0 };

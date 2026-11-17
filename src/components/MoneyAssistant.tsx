@@ -3,6 +3,7 @@ import { ArrowRight, Check, ChevronLeft, ChevronRight, RotateCcw, Send, Sparkles
 import { PolarisAvatar } from "./PolarisAvatar";
 import { MicLevelButton } from "./MicLevelButton";
 import { PolarisText } from "./PolarisText";
+import { maskMoneyText, useMoneyHidden } from "../lib/privacy";
 import { polarisMood } from "../lib/polarisMood";
 import { canSpeak, speak, stopPolarisSpeech } from "../lib/polarisVoice";
 import { answerMoneyQuestion, type MoneyAssistantContext } from "../lib/moneyAssistant";
@@ -222,6 +223,7 @@ interface MoneyAssistantProps {
 }
 
 export function MoneyAssistant({ context, goals = [], budget = { income: 0, essentials: 0, lifestyle: 0 }, plan, bankData, freshBankData, onUpdateGoal, onAddGoal, onRemoveGoal, onUpdateBudget, onOpenPriceCheck }: MoneyAssistantProps) {
+  useMoneyHidden(); // re-render when "Hide amounts" changes
   const canAct = !!(onUpdateGoal && onAddGoal && onRemoveGoal && onUpdateBudget);
   const world: World = { goals, budget };
   const [reminders, setReminders] = useReminders();
@@ -610,7 +612,7 @@ export function MoneyAssistant({ context, goals = [], budget = { income: 0, esse
         </div>
       </header>
       {mood && showNote && <div className={`money-assistant-mood ${mood.mood}`}>
-        <p>{mood.text}</p>
+        <p>{maskMoneyText(mood.text)}</p>
         <div className="money-assistant-mood-actions">
           {mood.mood === "worried"
             ? <>
@@ -625,15 +627,15 @@ export function MoneyAssistant({ context, goals = [], budget = { income: 0, esse
           const bubble = message.pending
             ? <p className="money-assistant-message assistant typing" aria-label="Polaris is typing"><span className="money-assistant-dots" aria-hidden="true"><span /><span /><span /></span></p>
             : <div className={`money-assistant-message ${message.role}`}>
-              {message.role === "assistant" ? <PolarisText text={message.text} animate={!shownAtOpen.has(message.id)} /> : message.text}
+              {message.role === "assistant" ? <PolarisText text={message.text} animate={!shownAtOpen.has(message.id)} /> : maskMoneyText(message.text)}
               {message.actionSummary && <div className={`polaris-action ${message.actionState ?? "proposed"}`}>
-                <strong className="polaris-action-title">{message.actionSummary.title}</strong>
+                <strong className="polaris-action-title">{maskMoneyText(message.actionSummary.title)}</strong>
                 {message.actionSummary.rows.map((row, i) => <span key={i} className="polaris-action-change">
                   {row.label && <span className="polaris-action-label">{row.label}</span>}
-                  {row.before && <><span className="polaris-action-before">{row.before}</span><span aria-hidden="true">→</span><span className="sr-only">becomes</span></>}
-                  <strong>{row.after}</strong>
+                  {row.before && <><span className="polaris-action-before">{maskMoneyText(row.before)}</span><span aria-hidden="true">→</span><span className="sr-only">becomes</span></>}
+                  <strong>{maskMoneyText(row.after)}</strong>
                 </span>)}
-                {message.actionSummary.note && message.actionState === "proposed" && <small>{message.actionSummary.note}</small>}
+                {message.actionSummary.note && message.actionState === "proposed" && <small>{maskMoneyText(message.actionSummary.note)}</small>}
                 {message.actionState === "proposed"
                   ? <span className="polaris-action-buttons">
                     <button type="button" className="wealth-primary" onClick={() => confirmAction(message)}><Check size={15} aria-hidden="true" /> Confirm</button>
@@ -643,13 +645,13 @@ export function MoneyAssistant({ context, goals = [], budget = { income: 0, esse
               </div>}
               {message.afford && <div className={`polaris-afford ${message.afford.verdict}`}>
                 <span className="polaris-afford-badge">{message.afford.verdict === "safe" || message.afford.verdict === "covered" ? "Safe" : message.afford.verdict === "tight" ? "Tight" : "Not yet"}</span>
-                <span className="polaris-afford-item">{message.afford.item} · {money(message.afford.price)}</span>
-                {message.afford.comfortableLimit !== undefined && message.afford.verdict !== "safe" && message.afford.comfortableLimit > 0 && <small>You could comfortably spend up to {money(Math.floor(message.afford.comfortableLimit))} today.</small>}
+                <span className="polaris-afford-item">{message.afford.item} · {maskMoneyText(money(message.afford.price))}</span>
+                {message.afford.comfortableLimit !== undefined && message.afford.verdict !== "safe" && message.afford.comfortableLimit > 0 && <small>You could comfortably spend up to {maskMoneyText(money(Math.floor(message.afford.comfortableLimit)))} today.</small>}
               </div>}
               {message.checkItem && onOpenPriceCheck && <button type="button" className="polaris-afford-open" onClick={() => { requestPriceCheck(message.checkItem!); setOpen(false); onOpenPriceCheck(); }}>Open the full check for {message.checkItem.item} <ArrowRight size={14} aria-hidden="true" /></button>}
               {message.deep && <small className="polaris-deep-tag"><Sparkles size={12} aria-hidden="true" /> Deeper answer</small>}
               {message.deeperQuestion && aiReady && <button type="button" className="polaris-deeper" disabled={busy} onClick={() => { void askDeeper(message); }} title="Runs this question on a more capable model (about 2 cents)"><Sparkles size={14} aria-hidden="true" /> Get a deeper answer</button>}
-              {message.undo && !message.undone && <button type="button" className="polaris-undo" onClick={() => undoAction(message)}><Undo2 size={14} aria-hidden="true" /> {message.undo.label}</button>}
+              {message.undo && !message.undone && <button type="button" className="polaris-undo" onClick={() => undoAction(message)}><Undo2 size={14} aria-hidden="true" /> {maskMoneyText(message.undo.label)}</button>}
               {message.offline && <small className="money-assistant-offline">Answered on this device. The AI assistant was unavailable.</small>}
               {canSpeak && message.role === "assistant" && <button type="button" className={`money-assistant-speak${speakingId === message.id ? " speaking" : ""}`} aria-pressed={speakingId === message.id} aria-label={speakingId === message.id ? "Stop reading aloud" : "Read this answer aloud"} title={speakingId === message.id ? "Stop" : "Read aloud"} onClick={() => toggleSpeak(message)}>
                 {speakingId === message.id ? <><Square size={11} fill="currentColor" aria-hidden="true" /> Stop</> : <><Volume2 size={14} aria-hidden="true" /> Listen</>}

@@ -29,7 +29,7 @@ function shade(hex: string, target: number, amount: number) {
 }
 
 /** A compact, keyboard-friendly institution pie with a readable value legend. */
-export function AssetSplit({ slices }: { slices: InstitutionSlice[] }) {
+export function AssetSplit({ slices, title = "Institutions", label }: { slices: Pick<InstitutionSlice, "name" | "value" | "pct">[]; title?: string; label?: string }) {
   const [hot, setHot] = useState<number | null>(null);
   const pieId = useId().replaceAll(":", "");
   if (!slices.length) return null;
@@ -41,7 +41,7 @@ export function AssetSplit({ slices }: { slices: InstitutionSlice[] }) {
   });
 
   return (
-    <section aria-label={`Assets across ${slices.length} institutions`} className="asset-split-pie">
+    <section aria-label={label ?? `Assets across ${slices.length} institutions`} className="asset-split-pie">
       <div className="flex justify-center py-1">
         <svg viewBox="0 0 120 120" className="h-32 w-32 shrink-0 overflow-visible" role="img" aria-label="Asset allocation. Hover over a slice or institution label to inspect it." onMouseLeave={() => setHot(null)}>
           <defs>
@@ -72,8 +72,8 @@ export function AssetSplit({ slices }: { slices: InstitutionSlice[] }) {
           })}
         </svg>
       </div>
-      <p className="mt-2 text-sm font-bold uppercase tracking-[0.09em] text-stone-500">Institutions</p>
-      <ul className="mt-2 space-y-1.5" aria-label="Institution legend">
+      <p className="mt-2 text-sm font-bold uppercase tracking-[0.09em] text-stone-500">{title}</p>
+      <ul className="mt-2 space-y-1.5" aria-label={`${title} legend`}>
         {slices.map((slice, index) => (
           <li key={slice.name}>
             <button type="button" onMouseEnter={() => setHot(index)} onMouseLeave={() => setHot(null)} onFocus={() => setHot(index)} onBlur={() => setHot(null)} className={`flex min-h-12 w-full items-center gap-2.5 rounded-lg border px-3 py-2 text-left transition-[background-color,border-color,box-shadow] duration-200 hover:bg-stone-50 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500${hot === index ? " bg-stone-50 shadow-sm" : " border-transparent"}`} style={hot === index ? { borderColor: COLORS[index % COLORS.length] } : undefined}>

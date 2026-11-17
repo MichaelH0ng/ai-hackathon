@@ -1,3 +1,4 @@
+import { maskedAmount, moneyHidden } from "./privacy";
 // Pure money math. No React, no storage — easy to test.
 
 import { addDays, daysBetween, todayISO } from "./dates";
@@ -165,7 +166,14 @@ export function priceInContext(price: number, pay: { hourlyWage?: number | null;
 
 // ---------- Formatting ----------
 
+/** A dollar amount for display. With "Hide amounts" on, shows "$•••••" (see privacy.ts). */
 export function formatMoney(n: number, cents = false): string {
+  const text = formatMoneyRaw(n, cents);
+  return moneyHidden() ? maskedAmount(text) : text;
+}
+
+/** The real amount even when amounts are hidden: for text that's saved or sent to Polaris. */
+export function formatMoneyRaw(n: number, cents = false): string {
   return n.toLocaleString("en-US", {
     style: "currency",
     currency: "USD",
@@ -181,6 +189,10 @@ export function formatMoney(n: number, cents = false): string {
  */
 export function formatExact(n: number): string {
   return formatMoney(n, Math.round(Math.abs(n) * 100) % 100 !== 0);
+}
+
+export function formatExactRaw(n: number): string {
+  return formatMoneyRaw(n, Math.round(Math.abs(n) * 100) % 100 !== 0);
 }
 
 export function formatWeeks(weeks: number): string {

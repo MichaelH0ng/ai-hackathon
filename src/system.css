@@ -140,6 +140,13 @@
 .home-sync button.home-sync-link:hover:not(:disabled) { background: transparent; text-decoration-color: currentColor; }
 .home-sync button.home-sync-link:disabled { cursor: default; text-decoration: none; opacity: .75; }
 @keyframes home-star-pulse { 50% { transform: scale(1.25) rotate(10deg); filter: drop-shadow(0 0 13px rgb(84 226 194)); } }
+/* Page banner (Accounts, Activity, Plan, My goals): Home's welcome header with a fact line and an action. */
+.page-banner-fact { display: flex; align-items: center; gap: 8px; margin: 12px 0 0; color: var(--ns-label); font-size: 14px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.page-banner-fact > i { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--ns-accent); box-shadow: 0 0 0 4px rgb(84 226 194 / 12%); }
+.page-banner-aside { position: relative; z-index: 1; flex: 0 0 auto; }
+.home-welcome .page-banner-aside .wealth-add-account, .home-welcome .page-banner-aside .goals-new-button { margin: 0; }
+:root[data-theme="dark"] .page-banner-fact { color: #d0def0; }
+@media (prefers-reduced-motion: reduce) { .home-welcome-name::after { animation: none; } }
 @keyframes home-sync-spin { to { transform: rotate(360deg); } }
 @media (max-width: 700px) { .home-welcome { align-items: flex-start; flex-direction: column; gap: 18px; padding: 22px 20px; } .home-sync { justify-items: start; text-align: left; } .home-sync > span { justify-content: start; } }
 :root[data-theme="dark"] .home-welcome { background: linear-gradient(125deg, #0d1d35, #132a4b); border-color: var(--ns-line); border-left-color: #54e2c2; }

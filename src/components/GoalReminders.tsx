@@ -1,5 +1,6 @@
 import { BellRing, X } from "lucide-react";
 import { dayLabel, money } from "../lib/goalActions";
+import { maskMoneyText } from "../lib/privacy";
 import { useReminders } from "../lib/polarisReminders";
 import type { MoneyGoal } from "../lib/types";
 
@@ -13,7 +14,7 @@ export function GoalReminders({ goals }: { goals: MoneyGoal[] }) {
     <ul>
       {shown.map(r => {
         const goal = goals.find(g => g.id === r.goalId)!;
-        const label = `Add ${money(r.amount)} to ${goal.name} ${dayLabel(r.weekday)}`;
+        const label = `Add ${maskMoneyText(money(r.amount))} to ${goal.name} ${dayLabel(r.weekday)}`;
         return <li key={r.id}>
           <span>{label}</span>
           <button type="button" className="wealth-icon-button" aria-label={`Remove reminder: ${label}`} title="Remove reminder" onClick={() => setReminders(reminders.filter(x => x.id !== r.id))}><X size={16} aria-hidden="true" /></button>

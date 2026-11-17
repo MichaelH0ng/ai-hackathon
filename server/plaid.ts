@@ -43,6 +43,44 @@ const FILE = path.join(DATA_DIR, ENV === "sandbox" ? "plaid-items.json" : `plaid
 const ARCHIVE_FILE = path.join(DATA_DIR, ENV === "sandbox" ? "transaction-archive.json" : `transaction-archive-${ENV}.json`);
 const SNAPSHOT_FILE = path.join(DATA_DIR, ENV === "sandbox" ? "net-worth-snapshots.json" : `net-worth-snapshots-${ENV}.json`);
 const SNAPSHOT_LIMIT = 730;
+/** Bank logos and colors from Plaid (public branding, not account data), cached so each bank is looked up once. */
+const LOGO_FILE = path.join(DATA_DIR, "institution-logos.json");
+type Branding = { logo: string | null; color: string | null; at: number };
+let brandingCache: Record<string, Branding> | null = null;
+/** Logos added by hand for banks Plaid has none for: server/logos/<Plaid institution id>.png (Wells Fargo is ins_127991). */
+const LOGO_OVERRIDE_DIR = path.join(path.dirname(fileURLToPath(import.meta.url)), "logos");
+function logoOverride(institutionId: string): string | null {
+  try {
+    return `data:image/png;base64,${fs.readFileSync(path.join(LOGO_OVERRIDE_DIR, `${institutionId}.png`)).toString("base64")}`;
+  } catch {
+    return null;
+  }
+}
+async function branding(institutionId: string | null | undefined): Promise<Branding | null> {
+  if (!institutionId) return null;
+  const found = await plaidBranding(institutionId);
+  const own = logoOverride(institutionId);
+  return own ? { logo: own, color: found?.color ?? null, at: found?.at ?? Date.now() } : found;
+}
+async function plaidBranding(institutionId: string): Promise<Branding | null> {
+  if (!brandingCache) {
+    try { brandingCache = JSON.parse(fs.readFileSync(LOGO_FILE, "utf8")) as Record<string, Branding>; } catch { brandingCache = {}; }
+  }
+  const known = brandingCache[institutionId];
+  // Re-check about monthly; a failed lookup is retried after a day.
+  if (known && Date.now() - known.at < (known.logo || known.color ? 30 : 1) * 86_400_000) return known;
+  try {
+    const r = await plaid.institutionsGetById({ institution_id: institutionId, country_codes: [CountryCode.Us], options: { include_optional_metadata: true } });
+    const found: Branding = { logo: r.data.institution.logo ? `data:image/png;base64,${r.data.institution.logo}` : null, color: r.data.institution.primary_color ?? null, at: Date.now() };
+    brandingCache[institutionId] = found;
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+    fs.writeFileSync(LOGO_FILE, JSON.stringify(brandingCache));
+    return found;
+  } catch {
+    brandingCache[institutionId] = { logo: null, color: null, at: Date.now() };
+    return null;
+  }
+}
 
 function getItems(): Item[] {
   try {
@@ -366,8 +404,10 @@ export async function loadDashboardData({ liveBalances = false }: { liveBalances
       let problem: string | undefined;
       let ready = true;
       let lastUpdatedAt: string | null = null;
+      let brand: Branding | null = null;
       try {
         const itemStatus = await plaid.itemGet({ access_token: item.accessToken });
+        brand = await branding(itemStatus.data.item.institution_id);
         // Plaid's generated type changes with API versions; only this optional
         // freshness field is needed for the dashboard label.
         lastUpdatedAt = ((itemStatus.data.item as unknown as { status?: { transactions?: { last_successful_update?: string | null } } }).status?.transactions?.last_successful_update) ?? null;
@@ -397,6 +437,7 @@ export async function loadDashboardData({ liveBalances = false }: { liveBalances
             current: a.balances.current ?? 0,
             available: a.balances.available ?? null,
             institution: item.institution,
+            limit: a.balances.limit ?? null,
           });
         }
         if (r && liveBalances) liveBalanceCache.set(item.itemId, { at: liveAt!, accounts: [...accounts] });
@@ -440,7 +481,7 @@ export async function loadDashboardData({ liveBalances = false }: { liveBalances
         holdings,
         debts: extras.debts,
         recurring: extras.recurring,
-        status: { itemId: item.itemId, institution: item.institution, problem, ready, lastUpdatedAt, ...(extras.needsDebtConsent ? { needsDebtConsent: true } : {}) },
+        status: { itemId: item.itemId, institution: item.institution, problem, ready, lastUpdatedAt, ...(extras.needsDebtConsent ? { needsDebtConsent: true } : {}), ...(brand?.logo || brand?.color ? { logo: brand.logo, color: brand.color } : {}) },
       };
     }),
   );

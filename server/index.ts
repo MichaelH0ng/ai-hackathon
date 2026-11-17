@@ -128,7 +128,7 @@ function transactionRange(question: string, now = new Date(), defaultDays = 30):
   if (/\bthis month\b/.test(text)) return { label: "this month", start: isoDate(new Date(today.getFullYear(), today.getMonth(), 1)), endExclusive: day(1) };
   if (/\b(last|past) (30 days|month)\b/.test(text)) return { label: "the last 30 days", start: day(-29), endExclusive: day(1) };
   if (/\b(last|past) year\b|\b12 months\b/.test(text)) return { label: "the last 12 months", start: day(-365), endExclusive: day(1) };
-  // No period named: instant answers mean the last 30 days; Polaris reads 60 days of
+  // No period named: instant answers mean the last 30 days; Polaris reads 90 days of
   // individual transactions (older months arrive as monthly summaries).
   return { label: `the last ${defaultDays} days`, start: day(-(defaultDays - 1)), endExclusive: day(1) };
 }
@@ -140,6 +140,8 @@ function selectedTransactions(data: ChatData, range: DateRange) {
 
 /** Most individual transactions sent to Polaris per question (newest kept). Totals and summaries still cover the rest. */
 const MAX_LISTED_TRANSACTIONS = 400;
+/** Days of individual transactions Polaris reads when a question names no period (older months come as summaries). */
+const POLARIS_DEFAULT_DAYS = 90;
 /** Months of history Polaris sees as monthly summaries. */
 const SUMMARY_MONTHS = 24;
 
@@ -462,7 +464,7 @@ app.post("/api/financial-chat", async (req, res) => {
       res.json({ answer: computed, fetchedAt: dashboard.fetchedAt, source: "calculation" });
       return;
     }
-    const range = transactionRange(routed, new Date(), 60);
+    const range = transactionRange(routed, new Date(), POLARIS_DEFAULT_DAYS);
     // Every question runs on Haiku 5.5 (about 20x cheaper): the app hands it exact totals and
     // monthly summaries. Sonnet runs only when the user taps "Get a deeper answer", with a lean
     // context. Planning and trade-off questions offer that button.

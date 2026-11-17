@@ -1,39 +1,47 @@
 import { CategoryIcon } from "./CategoryIcon";
-import { ArrowDownLeft, ArrowUpRight, Eye, Landmark, Lock, RefreshCw, ShieldCheck, Unplug, Wallet } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, Eye, Landmark, Lock, RefreshCw, Search, ShieldCheck, Unplug, Wallet, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePlaidLink } from "react-plaid-link";
 import { formatDate } from "../lib/dates";
 import { formatExact } from "../lib/finance";
 import {
-  ACCOUNT_GROUPS,
   type FlowPeriod,
   categoryLabel,
   detectTransferIds,
-  isLiability,
   isTransfer,
-  netWorth,
   periodFlow,
-  spendableCash,
   billsFor,
+  monthlyBillTotal,
   topCategories,
 } from "../lib/money";
 import type { MoneyGoal } from "../lib/types";
-import { type Bank, api, post } from "../lib/useBank";
+import { interestOrFee, type InterestOrFee } from "../lib/accountInsights";
+import { type Bank, post } from "../lib/useBank";
 import { type ConnectKind, finishConnection, introSeen, markIntroSeen, rememberLinkSession } from "../lib/plaidConnect";
-import { DebtPanel } from "./DebtPanel";
 import { ReconnectButton } from "./ReconnectButton";
 import { Button, Card, Notice } from "./ui";
+import { Segmented } from "./Segmented";
 
 const money = (n: number) => formatExact(n);
+/** Transactions shown at a time; "Show more" adds this many. */
+const PAGE = 30;
+/** Upcoming bills shown before "Show all". */
+const BILLS_SHOWN = 5;
 
 /** Money dashboard: your real balances and spending from Plaid. */
 export function MoneyDashboard({
   bank,
-  goals,
-  onUpdateGoal,
-  onOpenGoal,
-  onNewGoal,
+  accountId,
+  onAccountFilterChange,
+  focus,
+  onFocusChange,
 }: {
+  /** From Accounts' Interest & fees: only interest earned, interest charged, or fees, since a date. */
+  focus?: { kind: InterestOrFee; since: string; label: string } | null;
+  onFocusChange?: (focus: null) => void;
+  /** Opens Activity filtered to one account (from an account's "See all"). */
+  accountId?: string | null;
+  onAccountFilterChange?: (id: string | null) => void;
   bank: Bank;
   goals: MoneyGoal[];
   onUpdateGoal: (g: MoneyGoal) => void;
@@ -42,8 +50,16 @@ export function MoneyDashboard({
 }) {
   const { status, data, loading, error, reload: load } = bank;
   const [flow, setFlow] = useState<FlowPeriod>("month");
-  const [disconnectingId, setDisconnectingId] = useState<string | null>(null);
-  const [disconnectError, setDisconnectError] = useState<string | null>(null);
+  const [query, setQuery] = useState("");
+  const [direction, setDirection] = useState<"all" | "in" | "out">("all");
+  const [accountFilter, setAccountFilterState] = useState(accountId ?? "");
+  const setAccountFilter = (id: string) => { setAccountFilterState(id); onAccountFilterChange?.(id || null); };
+  useEffect(() => { setAccountFilterState(accountId ?? ""); }, [accountId]);
+  const [category, setCategory] = useState<string | null>(null);
+  const clearFocus = () => onFocusChange?.(null);
+  const [shown, setShown] = useState(PAGE);
+  const [showAllBills, setShowAllBills] = useState(false);
+  const listTop = useRef<HTMLDivElement>(null);
   const retries = useRef(0);
 
   // A just-connected sandbox bank needs a few seconds before transactions are ready.
@@ -84,23 +100,40 @@ export function MoneyDashboard({
     );
   }
 
-  const nw = netWorth(data.accounts);
-  const cash = spendableCash(data.accounts);
   const f = periodFlow(data.transactions, transferIds, flow);
   const net = f.current.in - f.current.out;
   const cats = topCategories(data.transactions, transferIds, 30);
   const maxCat = cats[0]?.value ?? 1;
-  const bills = billsFor(data, transferIds).slice(0, 5);
+  const allBills = billsFor(data, transferIds);
+  const bills = showAllBills ? allBills : allBills.slice(0, BILLS_SHOWN);
+  const billsPerMonth = monthlyBillTotal(allBills);
   const billsFromPlaid = bills.some((b) => b.source === "plaid");
-  const needDebtConsent = data.status.filter((s) => s.needsDebtConsent).map((s) => ({ itemId: s.itemId, institution: s.institution.replace(/ \(test\)$/, "") }));
   const needLogin = data.status.filter((s) => s.problem === "ITEM_LOGIN_REQUIRED");
-  const recent = data.transactions.slice(0, 10);
   const accountName = new Map(data.accounts.map((a) => [a.id, a.name]));
-  const holdingsByAccount = new Map<string, NonNullable<typeof data.holdings>>();
-  for (const holding of data.holdings ?? []) {
-    holdingsByAccount.set(holding.accountId, [...(holdingsByAccount.get(holding.accountId) ?? []), holding]);
+  // The transaction list: newest first, narrowed by search, direction, account, and category.
+  const needle = query.trim().toLowerCase();
+  const filtered = [...data.transactions]
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .filter((t) =>
+      (!needle || t.name.toLowerCase().includes(needle) || categoryLabel(t.category).toLowerCase().includes(needle))
+      && (direction === "all" || (direction === "out" ? t.amount > 0 : t.amount < 0))
+      && (!accountFilter || t.accountId === accountFilter)
+      && (!category || (t.category === category && !isTransfer(t, transferIds)))
+      && (!focus || (!t.pending && t.date >= focus.since && interestOrFee(t) === focus.kind)));
+  // Each row's place in the list, for the staggered entrance (later rows wait a little longer, capped).
+  const rowOrder = new Map(filtered.slice(0, shown).map((t, i) => [t.id, i]));
+  const byDay: [string, typeof filtered][] = [];
+  for (const t of filtered.slice(0, shown)) {
+    const last = byDay.at(-1);
+    if (last && last[0] === t.date) last[1].push(t);
+    else byDay.push([t.date, [t]]);
   }
-  for (const holdings of holdingsByAccount.values()) holdings.sort((a, b) => b.value - a.value);
+  /** "Where it went" → the matching transactions, last 30 days' spending in that category. */
+  const showCategory = (key: string) => {
+    setCategory((current) => (current === key ? null : key));
+    setShown(PAGE);
+    listTop.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
   const problems = data.status.filter((s) => s.problem);
   const latestActivityUpdate = data.status
     .map((status) => status.lastUpdatedAt)
@@ -110,19 +143,6 @@ export function MoneyDashboard({
   const freshness = latestActivityUpdate
     ? `most recent bank activity update ${new Date(latestActivityUpdate).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}`
     : `NorthStar checked ${new Date(data.fetchedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
-  const disconnect = async (itemId: string) => {
-    setDisconnectingId(itemId);
-    setDisconnectError(null);
-    try {
-      await api(`/api/plaid/items/${itemId}`, { method: "DELETE" });
-      await load();
-    } catch (cause) {
-      setDisconnectError(cause instanceof Error ? cause.message : "Couldn't disconnect that account. Please try again.");
-    } finally {
-      setDisconnectingId(null);
-    }
-  };
-
   return (
     <Shell
       actions={
@@ -143,84 +163,49 @@ export function MoneyDashboard({
       {problems.filter((p) => p.problem !== "ITEM_LOGIN_REQUIRED").length > 0 && (
         <Notice tone="warn">Couldn't fully refresh {problems.filter((p) => p.problem !== "ITEM_LOGIN_REQUIRED").map((p) => p.institution).join(", ")} ({problems.find((p) => p.problem !== "ITEM_LOGIN_REQUIRED")?.problem}).</Notice>
       )}
-      {disconnectError && <Notice tone="warn">{disconnectError}</Notice>}
       {waiting && <Notice tone="info">Your bank is still sending transactions. This page refreshes on its own in a few seconds.</Notice>}
 
-      <div className="grid gap-4 lg:grid-cols-3 [&>*]:min-w-0">
-        {/* Net worth */}
-        <Card className="lg:col-span-2">
-          <p className="text-sm font-semibold text-stone-500">Net worth</p>
-          <p className="font-display text-4xl font-bold text-ink sm:text-5xl">{formatExact(nw.net)}</p>
-          <div className="mt-4 grid grid-cols-2 gap-2 text-sm sm:grid-cols-3">
-            <Mini label="Assets" value={formatExact(nw.assets)} tone="text-emerald-700" />
-            <Mini label="Debts" value={formatExact(nw.debts)} tone="text-amber-700" />
-            <Mini label="Spendable cash" value={formatExact(cash)} tone="text-brand-700" />
-          </div>
-        </Card>
-
-        {/* Cash flow */}
+      {/* What came in and went out, and what's coming next. */}
+      <div className="grid gap-4 lg:grid-cols-2 [&>*]:min-w-0">
         <Card>
           <div className="flex items-center justify-between gap-2">
             <h2 className="text-lg font-bold text-ink">Cash flow</h2>
-            <div className="flex rounded-full bg-stone-100 p-1 text-xs font-bold" role="tablist" aria-label="Cash flow period">
-              {(["week", "month"] as FlowPeriod[]).map((p) => (
-                <button key={p} role="tab" aria-selected={flow === p} onClick={() => setFlow(p)} className={`min-h-8 rounded-full px-3 ${flow === p ? "bg-white text-ink shadow-sm" : "text-stone-500"}`}>
-                  This {p}
-                </button>
-              ))}
-            </div>
+            <Segmented label="Cash flow period" options={[{ value: "week", label: "This week" }, { value: "month", label: "This month" }]} value={flow} onChange={setFlow} />
           </div>
-          <div className="mt-3 space-y-2 text-sm">
-            <FlowRow icon={<ArrowDownLeft className="h-4 w-4 text-emerald-600" />} label="Money in" value={money(f.current.in)} prev={money(f.previous.in)} />
-            <FlowRow icon={<ArrowUpRight className="h-4 w-4 text-amber-600" />} label="Money out" value={money(f.current.out)} prev={money(f.previous.out)} />
-          </div>
-          <p className={`mt-3 font-display text-2xl font-bold ${net >= 0 ? "text-emerald-700" : "text-amber-700"}`}>
+          <p className={`mt-3 font-display text-3xl font-bold ${net >= 0 ? "text-emerald-700" : "text-amber-700"}`}>
             {net >= 0 ? "+" : "−"}{money(Math.abs(net))} <span className="font-sans text-sm font-semibold text-stone-500">net this {flow}</span>
           </p>
-          <p className="mt-1 text-xs text-stone-500">Posted activity only; pending transactions stay in the list below.</p>
+          <div className="mt-3 space-y-2 text-sm">
+            <FlowRow icon={<ArrowDownLeft className="h-4 w-4 text-emerald-600" />} label="Money in" value={money(f.current.in)} prev={money(f.previous.in)} period={flow} />
+            <FlowRow icon={<ArrowUpRight className="h-4 w-4 text-amber-600" />} label="Money out" value={money(f.current.out)} prev={money(f.previous.out)} period={flow} />
+          </div>
+          <p className="mt-3 text-xs text-stone-500">Posted activity only. Transfers between your own accounts aren't counted.</p>
         </Card>
 
-        {/* Top categories */}
-        <Card className="lg:col-span-2">
-          <h2 className="text-lg font-bold text-ink">Top spending, last 30 days</h2>
-          {cats.length === 0 ? (
-            <p className="mt-2 text-sm text-stone-500">No spending yet.</p>
+        <Card>
+          <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+            <h2 className="text-lg font-bold text-ink">Upcoming bills</h2>
+            {allBills.length > 0 && <p className="text-sm text-stone-500" title="Weekly, every-2-weeks, and yearly bills converted to a monthly amount">About <strong className="tabular-nums text-ink">{money(Math.round(billsPerMonth))}</strong>/month</p>}
+          </div>
+          {bills.length === 0 ? (
+            <p className="mt-2 text-sm text-stone-500">No repeating charges found yet.</p>
           ) : (
-            <ul className="mt-3 space-y-3">
-              {cats.map((c) => (
-                <li key={c.key}>
-                  <div className="flex items-baseline justify-between gap-2 text-sm">
-                    <span className="font-semibold text-stone-800"><CategoryIcon category={c.key} inline /> {c.label}</span>
-                    <span className="shrink-0">
-                      <strong className="text-ink">{money(c.value)}</strong>
-                    </span>
-                  </div>
-                  <div className="mt-1 h-2 rounded-full bg-stone-100">
-                    <div className="h-full rounded-full bg-brand-500" style={{ width: `${(c.value / maxCat) * 100}%` }} />
-                  </div>
+            <ul className="mt-2 divide-y divide-stone-100">
+              {bills.map((b, i) => (
+                <li key={b.name} style={{ "--i": i } as React.CSSProperties} className="ns-enter flex items-center justify-between gap-2 py-2 text-sm">
+                  <span className="min-w-0">
+                    <span className="block truncate font-semibold text-stone-800">{b.name}</span>
+                    <span className="text-xs text-stone-500">{b.cadence} · {b.daysUntil === 0 ? "due today" : b.daysUntil === 1 ? "due tomorrow" : `due ${formatDate(b.nextDue)}`}</span>
+                  </span>
+                  <strong className="shrink-0 tabular-nums text-ink">{money(b.amount)}</strong>
                 </li>
               ))}
             </ul>
           )}
-        </Card>
-
-        {/* Upcoming bills */}
-        <Card>
-          <h2 className="text-lg font-bold text-ink">Upcoming bills</h2>
-          {bills.length === 0 ? (
-            <p className="mt-2 text-sm text-stone-500">No repeating charges found yet.</p>
-          ) : (
-            <ul className="mt-3 divide-y divide-stone-100">
-              {bills.map((b) => (
-                <li key={b.name} className="flex items-center justify-between gap-2 py-2 text-sm">
-                  <span className="min-w-0">
-                    <span className="block truncate font-semibold text-stone-800">{b.name}</span>
-                    <span className="text-xs text-stone-500">{b.cadence} · {b.daysUntil === 0 ? "today" : `in ${b.daysUntil}d (${formatDate(b.nextDue)})`}</span>
-                  </span>
-                  <strong className="shrink-0 text-ink">{money(b.amount)}</strong>
-                </li>
-              ))}
-            </ul>
+          {allBills.length > BILLS_SHOWN && (
+            <button type="button" onClick={() => setShowAllBills((v) => !v)} aria-expanded={showAllBills} className="mt-1 min-h-11 text-sm font-bold text-brand-700 hover:underline">
+              {showAllBills ? "Show fewer" : `Show all ${allBills.length} bills`}
+            </button>
           )}
           {bills.length > 0 && (
             <p className="mt-2 text-xs text-stone-500">
@@ -228,139 +213,106 @@ export function MoneyDashboard({
             </p>
           )}
         </Card>
-
-        <DebtPanel debts={data.debts ?? []} reconnect={needDebtConsent} onReconnected={load} />
-
-        {/* Recent transactions */}
-        <Card className="lg:col-span-2">
-          <h2 className="text-lg font-bold text-ink">Recent transactions</h2>
-          <ul className="mt-2 divide-y divide-stone-100">
-            {recent.map((t) => {
-              const out = t.amount > 0;
-              const transfer = isTransfer(t, transferIds);
-              return (
-                <li key={t.id} className="flex items-center gap-3 py-2.5 text-sm">
-                  <CategoryIcon category={transfer ? (t.amount < 0 ? "TRANSFER_IN" : "TRANSFER_OUT") : t.category} />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate font-semibold text-stone-800">{t.name}</span>
-                    <span className="block truncate text-xs text-stone-500">
-                      {formatDate(t.date)} · {transfer ? "Transfer" : categoryLabel(t.category)} · {accountName.get(t.accountId) ?? "Account"}{t.pending ? " · pending" : ""}
-                    </span>
-                  </span>
-                  <span className="shrink-0 text-right">
-                    <span className={`block font-bold ${out ? "text-ink" : "text-[var(--color-gain)]"}`}>{out ? "−" : "+"}{money(Math.abs(t.amount))}</span>
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-        </Card>
-
-        {/* Goals linked to accounts */}
-        <Card>
-          <h2 className="text-lg font-bold text-ink">Your goals</h2>
-          {goals.length === 0 ? (
-            <Button className="mt-3 w-full" onClick={onNewGoal}>Start a savings goal</Button>
-          ) : (
-            <ul className="mt-3 space-y-4">
-              {goals.map((g) => {
-                const pct = Math.round(Math.min(1, g.saved / g.target) * 100);
-                const linkedElsewhere = (accountId: string) => goals.some((other) => other.id !== g.id && other.linkedAccountId === accountId);
-                return (
-                  <li key={g.id}>
-                    <div className="flex items-baseline justify-between gap-2 text-sm">
-                      <button onClick={() => onOpenGoal(g.id)} className="truncate font-bold text-ink hover:underline">{g.name}</button>
-                      <span className="shrink-0 text-stone-600">{formatExact(g.saved)} / {formatExact(g.target)}</span>
-                    </div>
-                    <div className="mt-1 h-2 rounded-full bg-stone-100"><div className="h-full rounded-full bg-emerald-500" style={{ width: `${pct}%` }} /></div>
-                    <label className="mt-2 block text-xs font-semibold text-stone-600">
-                      Follow an account's whole balance
-                      <select
-                        value={g.linkedAccountId ?? ""}
-                        onChange={(e) => {
-                          const a = data.accounts.find((x) => x.id === e.target.value);
-                          onUpdateGoal({ ...g, linkedAccountId: a?.id, saved: a ? Math.round(a.current * 100) / 100 : g.saved });
-                        }}
-                        className="mt-1 block min-h-10 w-full rounded-xl bg-stone-50 px-2 text-sm font-medium text-stone-800 ring-1 ring-stone-300"
-                      >
-                        <option value="">No: I'll set the amount</option>
-                        {data.accounts.filter((a) => a.type === "depository" && (a.id === g.linkedAccountId || !linkedElsewhere(a.id))).map((a) => (
-                          <option key={a.id} value={a.id}>{a.name}{a.mask ? ` ••${a.mask}` : ""} ({formatExact(a.current)})</option>
-                        ))}
-                      </select>
-                    </label>
-                    {g.linkedAccountId && linkedElsewhere(g.linkedAccountId) && <p className="mt-1 text-xs text-amber-700">Another goal follows this balance. Pick a separate account or set each goal amount manually.</p>}
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </Card>
-
-        {/* Accounts */}
-        <Card className="lg:col-span-3">
-          <h2 className="text-lg font-bold text-ink">Accounts</h2>
-          <div className="mt-3 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-            {ACCOUNT_GROUPS.map((grp) => {
-              const list = data.accounts.filter(grp.match);
-              if (!list.length) return null;
-              const total = list.reduce((s, a) => s + a.current, 0);
-              return (
-                <div key={grp.key}>
-                  <p className="flex justify-between text-xs font-bold uppercase tracking-wider text-stone-500">
-                    <span>{grp.label}</span>
-                    <span className={isLiability(list[0]) ? "text-amber-700" : "text-stone-700"}>{formatExact(total)}</span>
-                  </p>
-                  <ul className="mt-1 space-y-1 text-sm">
-                    {list.map((a) => {
-                      const holdings = holdingsByAccount.get(a.id) ?? [];
-                      const isPortfolio = a.type === "investment" || a.type === "brokerage";
-                      return (
-                        <li key={a.id} className="wealth-account-block">
-                          <div className="flex justify-between gap-2">
-                            <span className="truncate text-stone-700">{a.name}{a.mask ? <span className="text-stone-400"> ••{a.mask}</span> : null}</span>
-                            <span className="shrink-0 font-semibold text-ink">{formatExact(a.current)}</span>
-                          </div>
-                          {isPortfolio && holdings.length > 0 && (
-                            <details className="wealth-account-holdings">
-                              <summary>View holdings <span>{holdings.length}</span></summary>
-                              <ul aria-label={`${a.name} holdings`}>
-                                {holdings.map((holding) => (
-                                  <li key={holding.id} className="flex items-start justify-between gap-3">
-                                    <span className="min-w-0">
-                                      <span className="block truncate font-semibold">{holding.name}</span>
-                                      <small className="block truncate">{holding.ticker ? `${holding.ticker} · ` : ""}{holding.quantity.toLocaleString(undefined, { maximumFractionDigits: 4 })} units</small>
-                                    </span>
-                                    <span className="shrink-0 text-right font-semibold tabular-nums">{formatExact(holding.value)}</span>
-                                  </li>
-                                ))}
-                              </ul>
-                            </details>
-                          )}
-                          {isPortfolio && holdings.length === 0 && <p className="mt-1 text-xs text-stone-500">Holdings are not available from this connection yet.</p>}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                </div>
-              );
-            })}
-          </div>
-          <div className="mt-5 flex flex-wrap gap-2 border-t border-stone-100 pt-4">
-            <ConnectButton label="Connect another bank" variant="secondary" onConnected={load} />
-            {data.status.map((s) => (
-              <button
-                key={s.itemId}
-                onClick={() => { void disconnect(s.itemId); }}
-                disabled={disconnectingId !== null}
-                className="flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-semibold text-stone-500 hover:bg-stone-100 disabled:cursor-not-allowed disabled:opacity-50"
-              >
-                <Unplug className="h-4 w-4" aria-hidden="true" /> {disconnectingId === s.itemId ? "Disconnecting…" : `Disconnect ${s.institution}`}
-              </button>
-            ))}
-          </div>
-        </Card>
       </div>
+
+      {/* Where it went: tap a category to see those transactions below. */}
+      <Card>
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 className="text-lg font-bold text-ink">Where it went, last 30 days</h2>
+          {cats.length > 0 && <p className="text-xs text-stone-500">Tap a category to see its transactions.</p>}
+        </div>
+        {cats.length === 0 ? (
+          <p className="mt-2 text-sm text-stone-500">No spending yet.</p>
+        ) : (
+          <ul className="mt-2 grid gap-x-8 sm:grid-cols-2">
+            {cats.map((c) => (
+              <li key={c.key}>
+                <button type="button" onClick={() => showCategory(c.key)} aria-pressed={category === c.key} className={`block w-full rounded-xl px-2 py-2.5 text-left transition-colors hover:bg-stone-50 ${category === c.key ? "bg-stone-50 ring-1 ring-[var(--aurora-teal)]" : ""}`}>
+                  <span className="flex items-baseline justify-between gap-2 text-sm">
+                    <span className="font-semibold text-stone-800"><CategoryIcon category={c.key} inline /> {c.label}</span>
+                    <strong className="shrink-0 tabular-nums text-ink">{money(c.value)}</strong>
+                  </span>
+                  <span className="mt-1 block h-2 rounded-full bg-stone-100">
+                    <span className="block h-full rounded-full bg-brand-500" style={{ width: `${(c.value / maxCat) * 100}%` }} />
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Card>
+
+      {/* Every transaction NorthStar has, searchable. */}
+      <Card>
+        <div ref={listTop} className="flex flex-wrap items-baseline justify-between gap-2 scroll-mt-36">
+          <h2 className="text-lg font-bold text-ink">Transactions</h2>
+          <p className="text-sm text-stone-500">{filtered.length === data.transactions.length ? `${filtered.length} total` : `${filtered.length} of ${data.transactions.length}`}</p>
+        </div>
+        <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
+          <label className="relative block">
+            <span className="sr-only">Search transactions</span>
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-stone-400" aria-hidden="true" />
+            <input type="search" value={query} onChange={(e) => { setQuery(e.target.value); setShown(PAGE); }} placeholder="Search by name, like Trader Joe's" className="min-h-11 w-full rounded-xl bg-stone-50 pl-9 pr-3 text-sm text-stone-800 ring-1 ring-stone-300" />
+          </label>
+          <Segmented label="Show" size="md" className="w-full sm:w-auto" options={[{ value: "all", label: "All" }, { value: "out", label: "Money out" }, { value: "in", label: "Money in" }]} value={direction} onChange={(next) => { setDirection(next); setShown(PAGE); }} />
+          {data.accounts.length > 1 && (
+            <label className="block">
+              <span className="sr-only">Account</span>
+              <select value={accountFilter} onChange={(e) => { setAccountFilter(e.target.value); setShown(PAGE); }} className="min-h-11 w-full rounded-xl bg-stone-50 px-3 text-sm font-medium text-stone-800 ring-1 ring-stone-300">
+                <option value="">All accounts</option>
+                {data.accounts.map((a) => <option key={a.id} value={a.id}>{a.name}{a.mask ? ` ••${a.mask}` : ""}</option>)}
+              </select>
+            </label>
+          )}
+        </div>
+        {focus && (
+          <p className="mt-3 flex flex-wrap items-center gap-2 text-sm text-stone-600">
+            Showing <strong className="text-ink">{focus.kind === "earned" ? "interest earned" : focus.kind === "charged" ? "interest charged" : "bank fees"}</strong> · {focus.label.toLowerCase()}
+            <button type="button" onClick={clearFocus} className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 font-bold text-brand-700 hover:bg-brand-50"><X className="h-4 w-4" aria-hidden="true" /> Clear</button>
+          </p>
+        )}
+        {category && (
+          <p className="mt-3 flex flex-wrap items-center gap-2 text-sm text-stone-600">
+            Showing <strong className="text-ink">{categoryLabel(category)}</strong>
+            <button type="button" onClick={() => setCategory(null)} className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 font-bold text-brand-700 hover:bg-brand-50"><X className="h-4 w-4" aria-hidden="true" /> Clear</button>
+          </p>
+        )}
+        {filtered.length === 0 ? (
+          <p className="mt-6 pb-2 text-center text-sm text-stone-500">No transactions match. Try a different search or filter.</p>
+        ) : (
+          <div className="mt-2">
+            {byDay.map(([day, list]) => (
+              <section key={day} aria-label={formatDate(day)}>
+                <h3 className="sticky top-0 z-[1] mt-3 bg-[var(--night-surface,transparent)] py-1 text-xs font-bold uppercase tracking-wider text-stone-500">{formatDate(day)}</h3>
+                <ul className="divide-y divide-stone-100">
+                  {list.map((t) => {
+                    const order = rowOrder.get(t.id) ?? 0;
+                    const out = t.amount > 0;
+                    const transfer = isTransfer(t, transferIds);
+                    return (
+                      <li key={t.id} style={{ "--i": order } as React.CSSProperties} className="ns-enter flex items-center gap-3 py-2.5 text-sm">
+                        <CategoryIcon category={transfer ? (t.amount < 0 ? "TRANSFER_IN" : "TRANSFER_OUT") : t.category} />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate font-semibold text-stone-800">{t.name}</span>
+                          <span className="block truncate text-xs text-stone-500">
+                            {transfer ? "Transfer" : categoryLabel(t.category)} · {accountName.get(t.accountId) ?? "Account"}{t.pending ? " · pending" : ""}
+                          </span>
+                        </span>
+                        <span className={`shrink-0 font-bold tabular-nums ${out ? "text-ink" : "text-[var(--color-gain)]"}`}>{out ? "−" : "+"}{money(Math.abs(t.amount))}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            ))}
+            {filtered.length > shown && (
+              <button type="button" onClick={() => setShown((n) => n + PAGE)} className="mt-3 min-h-11 w-full rounded-xl text-sm font-bold text-brand-700 ring-1 ring-stone-200 hover:bg-brand-50">
+                Show {Math.min(PAGE, filtered.length - shown)} more
+              </button>
+            )}
+          </div>
+        )}
+      </Card>
     </Shell>
   );
 }
@@ -377,22 +329,13 @@ function Shell({ children, actions, sub }: { children: React.ReactNode; actions?
   );
 }
 
-function Mini({ label, value, tone }: { label: string; value: string; tone: string }) {
-  return (
-    <div className="rounded-2xl bg-stone-50 p-3">
-      <p className="text-xs font-semibold text-stone-500">{label}</p>
-      <p className={`truncate font-display text-lg font-bold ${tone}`}>{value}</p>
-    </div>
-  );
-}
-
-function FlowRow({ icon, label, value, prev }: { icon: React.ReactNode; label: string; value: string; prev: string }) {
+function FlowRow({ icon, label, value, prev, period }: { icon: React.ReactNode; label: string; value: string; prev: string; period: FlowPeriod }) {
   return (
     <div className="flex items-center justify-between gap-2">
       <span className="flex items-center gap-2 text-stone-700">{icon} {label}</span>
       <span className="text-right">
         <strong className="text-ink">{value}</strong>
-        <span className="block text-xs text-stone-400">last: {prev}</span>
+        <span className="block text-xs text-stone-500">last {period}: {prev}</span>
       </span>
     </div>
   );

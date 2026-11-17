@@ -1,4 +1,4 @@
-import { formatMoney, weeklyNeededForDeadline } from "./finance";
+import { formatMoneyRaw, weeklyNeededForDeadline } from "./finance";
 import { markBought } from "./envelopes";
 import { todayISO } from "./dates";
 import type { MoneyGoal } from "./types";
@@ -46,7 +46,7 @@ export interface ActionResult {
 export interface Undo { goals?: MoneyGoal[]; removeGoalId?: string; restoreGoals?: MoneyGoal[]; budget?: Partial<Budget>; removeReminderId?: string; label: string }
 
 const cents = (n: number) => Math.round(n * 100) / 100;
-export const money = (n: number) => formatMoney(n, Math.round(n * 100) % 100 !== 0); // cents only when there are some
+export const money = (n: number) => formatMoneyRaw(n, Math.round(n * 100) % 100 !== 0); // cents only when there are some
 export const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 export const dayLabel = (weekday: number) => (weekday === 7 ? "every day" : `every ${WEEKDAYS[weekday]}`);
 const BUDGET_LABEL: Record<BudgetField, string> = { income: "Monthly income", essentials: "Essentials budget", lifestyle: "Lifestyle budget" };

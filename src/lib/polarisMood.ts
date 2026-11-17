@@ -1,4 +1,4 @@
-import { formatMoney } from "./finance";
+import { formatMoneyRaw } from "./finance";
 import type { MoneyAssistantContext } from "./moneyAssistant";
 
 export interface PolarisMoodNote {
@@ -15,7 +15,7 @@ export function polarisMood(context: Pick<MoneyAssistantContext, "goals" | "mont
   const { goals, monthlyIncome, monthlyExpenses, monthlyGoalContributions } = context;
   const overBy = monthlyExpenses + monthlyGoalContributions - monthlyIncome;
   if (monthlyIncome > 0 && overBy > 0) {
-    return { mood: "worried", text: `Your monthly plan is ${formatMoney(overBy)} over your income. Want help trimming it?` };
+    return { mood: "worried", text: `Your monthly plan is ${formatMoneyRaw(overBy)} over your income. Want help trimming it?` };
   }
   const funded = goals.filter(g => g.target > 0);
   const done = funded.find(g => g.saved >= g.target);

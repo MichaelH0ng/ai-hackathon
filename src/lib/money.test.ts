@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type BankAccount, type BankTransaction, assetsByInstitution, detectTransferIds, netWorth, netWorthSeries, periodFlow, spendableCash, topCategories, upcomingBills } from "./money";
+import { type BankAccount, type BankTransaction, accountBalanceSeries, assetsByInstitution, monthlyBillTotal, detectTransferIds, netWorth, netWorthSeries, periodFlow, spendableCash, topCategories, upcomingBills } from "./money";
 
 const acct = (p: Partial<BankAccount>): BankAccount => ({ id: "a", name: "A", mask: null, type: "depository", subtype: "checking", current: 0, available: null, institution: "Bank", ...p });
 let n = 0;
@@ -133,5 +133,40 @@ describe("assets by institution", () => {
       ["Campus Bank", "Bank", 700, 23],
       ["Sunrise", "Bank", 200, 7],
     ]);
+  });
+});
+
+describe("accountBalanceSeries", () => {
+  const now = new Date(2026, 10, 16);
+  const tx = (id: string, accountId: string, date: string, amount: number, pending = false): BankTransaction =>
+    ({ id, accountId, date, name: id, amount, category: "OTHER", pending });
+
+  it("works a checking balance backward, counting transfers and skipping pending", () => {
+    const checking: BankAccount = { id: "chk", name: "Checking", mask: null, type: "depository", subtype: "checking", current: 1000, available: null, institution: "Bank" };
+    const series = accountBalanceSeries(checking, [
+      tx("pay", "chk", "2026-11-15", -500), // paycheck in yesterday
+      tx("move", "chk", "2026-11-14", 200), // transfer out to savings
+      tx("p", "chk", "2026-11-16", 50, true), // pending: ignored
+      tx("other", "sav", "2026-11-15", 999), // another account: ignored
+    ], 3, now);
+    expect(series.map((p) => p.value)).toEqual([700, 500, 1000, 1000]);
+    expect(series.at(-1)).toEqual({ date: "2026-11-16", value: 1000 });
+  });
+
+  it("tracks what a card owes: spending raises it, payments lower it", () => {
+    const card: BankAccount = { id: "cc", name: "Card", mask: null, type: "credit", subtype: "credit card", current: 300, available: null, institution: "Bank" };
+    const series = accountBalanceSeries(card, [tx("buy", "cc", "2026-11-16", 100), tx("payment", "cc", "2026-11-15", -400)], 2, now);
+    expect(series.map((p) => p.value)).toEqual([600, 200, 300]);
+  });
+});
+
+describe("monthlyBillTotal", () => {
+  it("converts each cadence to a monthly amount", () => {
+    expect(monthlyBillTotal([
+      { amount: 100, cadence: "Monthly" },
+      { amount: 12, cadence: "Weekly" }, // 52 a year
+      { amount: 50, cadence: "Every 2 weeks" }, // 26 a year
+      { amount: 120, cadence: "Yearly" },
+    ])).toBeCloseTo(100 + 52 + 108.33 + 10, 1);
   });
 });

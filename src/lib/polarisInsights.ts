@@ -1,12 +1,12 @@
 // Polaris's free, on-device insights: a weekly check-in, heads-ups for bills due soon,
 // and "what changed?" for this month. Pure arithmetic over your transactions: no AI call.
 import { addDays, todayISO } from "./dates";
-import { formatMoney } from "./finance";
+import { formatMoneyRaw } from "./finance";
 import { billsFor, categoryLabel, detectTransferIds, isTransfer, spendableCash, type BankData, type BankTransaction } from "./money";
 import type { MoneyGoal } from "./types";
 
-const usd = (n: number) => formatMoney(Math.round(n));
-const usdCents = (n: number) => formatMoney(n, n % 1 !== 0);
+const usd = (n: number) => formatMoneyRaw(Math.round(n));
+const usdCents = (n: number) => formatMoneyRaw(n, n % 1 !== 0);
 const shortDate = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 const weekday = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" });
 

@@ -12,7 +12,7 @@ function daysUntil(iso: string, now = new Date()): number {
   return Math.round((new Date(iso).getTime() - today) / 86400000);
 }
 
-function dueText(iso: string): string {
+export function dueText(iso: string): string {
   const d = daysUntil(iso);
   if (Number.isNaN(d)) return "";
   if (d < 0) return `was due ${formatDate(iso)}`;
