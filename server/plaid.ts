@@ -8,7 +8,9 @@ import { fileURLToPath } from "node:url";
 import { Router } from "express";
 import { Configuration, CountryCode, PlaidApi, PlaidEnvironments, Products } from "plaid";
 import { mapLiabilities, mapRecurring, type LiabilitiesResponse, type RecurringResponse } from "../src/lib/debt.js";
-import { netWorth, type BankData, type NetWorthSnapshot } from "../src/lib/money.js";
+import { classifyPayments, emptyStore, recordAnswer, type ClassificationStore } from "../src/lib/classify.js";
+import { refineStoreCategories, refineUncertainCategories, SPENDING_CATEGORIES } from "../src/lib/categorize.js";
+import { markCollegeSavings, markOwnTransfers, netWorth, type BankData, type NetWorthSnapshot } from "../src/lib/money.js";
 import { studentBanks } from "./sandboxStudent.js";
 import { applyPage, deleteSyncState, readSyncState, writeSyncState } from "./syncStore.js";
 import { forgetAccounts, mergeWithArchive, readArchive, writeArchive } from "./transactionArchive.js";
@@ -37,12 +39,29 @@ interface Item {
 }
 // Vercel's file system is read-only except /tmp, which lasts only while a function instance is warm,
 // so sandbox connections made on the live site are temporary there.
-const DATA_DIR = process.env.VERCEL ? path.join("/tmp", "northstar-data") : path.join(path.dirname(fileURLToPath(import.meta.url)), "data");
+// NORTHSTAR_DATA_DIR keeps a test run (say, a sandbox check) away from your real saved connections.
+const DATA_DIR = process.env.NORTHSTAR_DATA_DIR ? path.resolve(process.env.NORTHSTAR_DATA_DIR) : process.env.VERCEL ? path.join("/tmp", "northstar-data") : path.join(path.dirname(fileURLToPath(import.meta.url)), "data");
 const FILE = path.join(DATA_DIR, ENV === "sandbox" ? "plaid-items.json" : `plaid-items-${ENV}.json`);
 /** Every posted transaction seen so far, kept past Plaid's ~2-year window (see transactionArchive.ts). */
 const ARCHIVE_FILE = path.join(DATA_DIR, ENV === "sandbox" ? "transaction-archive.json" : `transaction-archive-${ENV}.json`);
 const SNAPSHOT_FILE = path.join(DATA_DIR, ENV === "sandbox" ? "net-worth-snapshots.json" : `net-worth-snapshots-${ENV}.json`);
 const SNAPSHOT_LIMIT = 730;
+/** Your answers about payments to and from people (see classify.ts). */
+const CLASSIFY_FILE = path.join(DATA_DIR, ENV === "sandbox" ? "classifications.json" : `classifications-${ENV}.json`);
+function readClassifications(): ClassificationStore {
+  try {
+    const saved = JSON.parse(fs.readFileSync(CLASSIFY_FILE, "utf8"));
+    return { senders: saved.senders ?? {}, transactions: saved.transactions ?? {}, categories: saved.categories ?? {} };
+  } catch {
+    return emptyStore();
+  }
+}
+function writeClassifications(store: ClassificationStore) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  const tmp = `${CLASSIFY_FILE}.tmp`;
+  fs.writeFileSync(tmp, JSON.stringify({ version: 1, ...store }, null, 1));
+  fs.renameSync(tmp, CLASSIFY_FILE);
+}
 /** Bank logos and colors from Plaid (public branding, not account data), cached so each bank is looked up once. */
 const LOGO_FILE = path.join(DATA_DIR, "institution-logos.json");
 type Branding = { logo: string | null; color: string | null; at: number };
@@ -107,9 +126,43 @@ function getSnapshots(): NetWorthSnapshot[] {
   }
 }
 
+const localDay = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+
+/** Whether today needs a net-worth point: none yet, or only one from before the evening (so the day's close is kept). */
+export function snapshotDue(snapshots: NetWorthSnapshot[], now = new Date(), eveningHour = 21): boolean {
+  const today = snapshots.find((s) => s.date === localDay(now));
+  if (!today) return true;
+  return now.getHours() >= eveningHour && new Date(today.capturedAt).getHours() < eveningHour;
+}
+
+/**
+ * Records net worth every day the server is running, so the chart has a real point for days
+ * the app isn't opened. Checks hourly and uses Plaid's saved balances (the free path), the
+ * same load as opening the app.
+ */
+export function startDailySnapshots(checkEveryMs = 60 * 60 * 1000) {
+  if (!plaidConfigured) return;
+  let running = false;
+  const tick = async () => {
+    if (running || !getItems().length || !snapshotDue(getSnapshots())) return;
+    running = true;
+    try {
+      await loadDashboardData();
+      console.log(`Saved today's net worth (${localDay(new Date())})`);
+    } catch (err) {
+      console.error("Daily net-worth snapshot failed", err instanceof Error ? err.message : err);
+    } finally {
+      running = false;
+    }
+  };
+  setTimeout(() => void tick(), 30_000).unref(); // shortly after start, then hourly
+  setInterval(() => void tick(), checkEveryMs).unref();
+}
+
 function recordSnapshot(accounts: BankData["accounts"], snapshots: NetWorthSnapshot[], now = new Date()): NetWorthSnapshot[] {
   const capturedAt = now.toISOString();
-  const date = capturedAt.slice(0, 10);
+  // Your calendar day, not UTC's: an evening check in California belongs to today, not tomorrow.
+  const date = localDay(now);
   const next = { date, capturedAt, value: Math.round(netWorth(accounts).net * 100) / 100 };
   const updated = [...snapshots.filter((snapshot) => snapshot.date !== date), next].sort((a, b) => a.date.localeCompare(b.date)).slice(-SNAPSHOT_LIMIT);
   fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -118,10 +171,15 @@ function recordSnapshot(accounts: BankData["accounts"], snapshots: NetWorthSnaps
 }
 
 // Plaid errors carry a readable message in response.data; never echo keys or tokens.
-function plaidError(err: unknown): { error: string; code?: string } {
-  const data = (err as { response?: { data?: { error_message?: string; error_code?: string } } })?.response?.data;
-  return { error: data?.error_message ?? "Plaid request failed.", code: data?.error_code };
+function plaidError(err: unknown): { error: string; code?: string; type?: string } {
+  const data = (err as { response?: { data?: { error_message?: string; error_code?: string; error_type?: string } } })?.response?.data;
+  return { error: data?.error_message ?? "Plaid request failed.", code: data?.error_code, ...(data?.error_type ? { type: data.error_type } : {}) };
 }
+/** Plaid said it's been asked too often (its error type, or one of its "too many requests" codes): the data didn't change. */
+const isRateLimited = (err: unknown) => {
+  const { type, code } = plaidError(err);
+  return type === "RATE_LIMIT_EXCEEDED" || (!!code && RATE_LIMITED.has(code));
+};
 
 async function exchange(publicToken: string, institution: string, kind: "bank" | "investments" | "all" = "bank") {
   const res = await plaid.itemPublicTokenExchange({ public_token: publicToken });
@@ -272,7 +330,7 @@ plaidRouter.delete("/api/plaid/items/:id", async (req, res) => {
     if (req.query.deleteHistory === "true") {
       try {
         const r = await plaid.accountsGet({ access_token: item.accessToken });
-        const accounts = r.data.accounts.map((a) => ({ id: a.account_id, name: a.name, mask: a.mask ?? null, type: a.type, subtype: a.subtype ?? null, current: 0, available: null, institution: item.institution }));
+        const accounts = r.data.accounts.map((a) => ({ id: a.account_id, name: accountName(a.name), mask: a.mask ?? null, type: a.type, subtype: a.subtype ?? null, current: 0, available: null, institution: item.institution }));
         writeArchive(ARCHIVE_FILE, forgetAccounts(readArchive(ARCHIVE_FILE), accounts));
       } catch (err) {
         res.status(502).json({ ...plaidError(err), error: "Couldn't reach the bank to find which history to delete, so nothing was changed. Try again." });
@@ -318,7 +376,8 @@ async function loadExtras(item: Item, accounts: BankData["accounts"], transactio
       extras.debts = mapLiabilities(r.data as unknown as LiabilitiesResponse, accounts);
     } catch (err) {
       const code = plaidError(err).code;
-      if (code === "ADDITIONAL_CONSENT_REQUIRED") extras.needsDebtConsent = true; // linked before debts were requested
+      if (isRateLimited(err)) extras.debts = cached?.debts ?? []; // asked too often: keep the last card and loan details
+      else if (code === "ADDITIONAL_CONSENT_REQUIRED") extras.needsDebtConsent = true; // linked before debts were requested
       else if (code !== "PRODUCT_NOT_READY" && code !== "NO_LIABILITY_ACCOUNTS") console.error("Liabilities read failed", code ?? "unknown");
     }
   }
@@ -329,7 +388,8 @@ async function loadExtras(item: Item, accounts: BankData["accounts"], transactio
       extras.recurring = mapRecurring(r.data as unknown as RecurringResponse);
     } catch (err) {
       const code = plaidError(err).code;
-      if (code !== "PRODUCT_NOT_READY") console.error("Recurring transactions read failed", code ?? "unknown");
+      if (isRateLimited(err)) extras.recurring = cached?.recurring ?? [];
+      else if (code !== "PRODUCT_NOT_READY") console.error("Recurring transactions read failed", code ?? "unknown");
     }
   }
   // A not-ready result should be retried soon, not remembered for ten minutes.
@@ -348,6 +408,15 @@ const toTransaction = (t: PlaidTransaction): BankData["transactions"][number] =>
   amount: t.amount, // Plaid: positive = money out
   category: t.personal_finance_category?.primary ?? "OTHER",
   pending: t.pending,
+  // Finer detail for telling, say, gas from snacks at 7-Eleven (see categorize.ts).
+  ...(t.personal_finance_category?.detailed ? { detail: t.personal_finance_category.detailed } : {}),
+  ...(t.personal_finance_category?.confidence_level ? { confidence: t.personal_finance_category.confidence_level } : {}),
+  ...(t.original_description && t.original_description !== t.name ? { raw: t.original_description } : {}),
+  // The merchant's logo and site, and who else was involved: a marketplace (DoorDash, a ticket site) and
+  // the business behind it. All optional; Plaid leaves them out for cash, deposits and most transfers.
+  ...(t.logo_url ?? t.counterparties?.find((c) => c.logo_url)?.logo_url ? { logo: (t.logo_url ?? t.counterparties?.find((c) => c.logo_url)?.logo_url)! } : {}),
+  ...(t.website ? { website: t.website } : {}),
+  ...(t.counterparties?.length ? { counterparties: t.counterparties.map((c) => ({ name: c.name, type: String(c.type) })) } : {}),
 });
 
 /**
@@ -362,7 +431,7 @@ async function syncTransactions(item: Item): Promise<{ transactions: BankData["t
     try {
       let more = true;
       while (more) {
-        const r = await plaid.transactionsSync({ access_token: item.accessToken, cursor: state.cursor || undefined, count: 500 });
+        const r = await plaid.transactionsSync({ access_token: item.accessToken, cursor: state.cursor || undefined, count: 500, options: { include_original_description: true } });
         state = applyPage(state, { added: r.data.added.map(toTransaction), modified: r.data.modified.map(toTransaction), removed: r.data.removed.map((t) => t.transaction_id) }, r.data.next_cursor);
         if ((r.data as { transactions_update_status?: string }).transactions_update_status === "NOT_READY") ready = false;
         more = r.data.has_more;
@@ -388,31 +457,64 @@ async function syncTransactions(item: Item): Promise<{ transactions: BankData["t
 // reused for 15 minutes, both for repeated "live" requests and for ordinary loads (fresher, and free).
 const LIVE_BALANCE_TTL_MS = 15 * 60 * 1000;
 const liveBalanceCache = new Map<string, { at: number; accounts: BankData["accounts"] }>();
+/** Some banks send symbols Plaid can't decode (Wells Fargo's "VISA®" arrives as "VISA\uFFFD\uFFFD"): drop them. */
+const accountName = (name: string) => name.replace(/\uFFFD+/g, "").replace(/\s{2,}/g, " ").trim();
+
+// Each connection's last account list that loaded. If a bank fails on one load, its accounts are still
+// known to the classifier, so "Wealthfront" on a Wells statement stays a transfer, not income.
+const lastKnownAccounts = new Map<string, BankData["accounts"]>();
+/**
+ * Saved balances (accountsGet) only change when Plaid refreshes the bank, a few times a day, but Plaid
+ * limits how often they can be read. Every page load and every Polaris question reads them, so a burst
+ * hit ACCOUNTS_LIMIT and every account vanished. Reuse a read from the last minute instead.
+ */
+const SAVED_BALANCE_TTL_MS = 60_000;
+const savedBalanceCache = new Map<string, { at: number; accounts: BankData["accounts"] }>();
+/** Plaid's "too many requests" codes, for errors that arrive without their type. */
+const RATE_LIMITED = new Set(["ACCOUNTS_LIMIT", "BALANCE_LIMIT", "RATE_LIMIT", "ACCOUNTS_BALANCE_GET_LIMIT", "TRANSACTIONS_SYNC_LIMIT", "ITEM_GET_LIMIT", "INVESTMENT_HOLDINGS_GET_LIMIT", "LIABILITIES_LIMIT"]);
+/** Bank name, logo and last-refresh time change rarely; read them at most once a minute per connection. */
+const itemStatusCache = new Map<string, { at: number; brand: Branding | null; lastUpdatedAt: string | null; consentExpiresAt: string | null }>();
 const freshLive = (itemId: string) => {
   const hit = liveBalanceCache.get(itemId);
   return hit && Date.now() - hit.at < LIVE_BALANCE_TTL_MS ? hit : null;
 };
 
 // Everything the dashboard needs: balances and recent transactions from every connected bank.
-export async function loadDashboardData({ liveBalances = false }: { liveBalances?: boolean } = {}): Promise<BankData> {
+// A page load and a Polaris question often arrive together. Ordinary loads that overlap share one
+// trip to Plaid instead of each calling every endpoint for every bank (Plaid limits each connection).
+let loadInFlight: Promise<BankData> | null = null;
+export function loadDashboardData({ liveBalances = false }: { liveBalances?: boolean } = {}): Promise<BankData> {
+  if (liveBalances) return loadFromPlaid(true);
+  loadInFlight ??= loadFromPlaid(false).finally(() => { loadInFlight = null; });
+  return loadInFlight;
+}
+
+async function loadFromPlaid(liveBalances: boolean): Promise<BankData> {
   const perItem = await Promise.all(
     getItems().map(async (item) => {
       const accounts: BankData["accounts"] = [];
       const transactions: BankData["transactions"] = [];
       const holdings: NonNullable<BankData["holdings"]> = [];
-      const investing = item.kind === "investments" || item.kind === "all";
       let problem: string | undefined;
       let ready = true;
       let lastUpdatedAt: string | null = null;
+      let consentExpiresAt: string | null = null;
       let brand: Branding | null = null;
-      try {
+      const status = itemStatusCache.get(item.itemId);
+      if (status && Date.now() - status.at < SAVED_BALANCE_TTL_MS) {
+        ({ brand, lastUpdatedAt, consentExpiresAt } = status);
+      } else try {
         const itemStatus = await plaid.itemGet({ access_token: item.accessToken });
         brand = await branding(itemStatus.data.item.institution_id);
-        // Plaid's generated type changes with API versions; only this optional
-        // freshness field is needed for the dashboard label.
-        lastUpdatedAt = ((itemStatus.data.item as unknown as { status?: { transactions?: { last_successful_update?: string | null } } }).status?.transactions?.last_successful_update) ?? null;
+        // When Plaid last got new activity from the bank. It's in the response's top-level status
+        // (data.status), not on the item: reading item.status left "Last synced" blank for every bank.
+        lastUpdatedAt = itemStatus.data.status?.transactions?.last_successful_update ?? itemStatus.data.status?.investments?.last_successful_update ?? null;
+        // Banks that sign you in on their own site (Wells Fargo, Chase…) give Plaid access for a limited time.
+        consentExpiresAt = itemStatus.data.item.consent_expiration_time ?? null;
+        itemStatusCache.set(item.itemId, { at: Date.now(), brand, lastUpdatedAt, consentExpiresAt });
       } catch {
         // A balance/transaction read can still succeed even if this optional status read fails.
+        if (status) ({ brand, lastUpdatedAt, consentExpiresAt } = status);
       }
       let liveAt: number | null = null;
       try {
@@ -423,14 +525,17 @@ export async function loadDashboardData({ liveBalances = false }: { liveBalances
           accounts.push(...cached.accounts);
           liveAt = cached.at;
         }
-        const r = cached ? null : liveBalances
+        const saved = !cached && !liveBalances ? savedBalanceCache.get(item.itemId) : undefined;
+        const reuseSaved = !!saved && Date.now() - saved.at < SAVED_BALANCE_TTL_MS;
+        if (reuseSaved) accounts.push(...saved!.accounts);
+        const r = cached || reuseSaved ? null : liveBalances
           ? await plaid.accountsBalanceGet({ access_token: item.accessToken })
           : await plaid.accountsGet({ access_token: item.accessToken });
         if (r && liveBalances) liveAt = Date.now();
         for (const a of r?.data.accounts ?? []) {
           accounts.push({
             id: a.account_id,
-            name: a.name,
+            name: accountName(a.name),
             mask: a.mask ?? null,
             type: a.type,
             subtype: a.subtype ?? null,
@@ -441,16 +546,25 @@ export async function loadDashboardData({ liveBalances = false }: { liveBalances
           });
         }
         if (r && liveBalances) liveBalanceCache.set(item.itemId, { at: liveAt!, accounts: [...accounts] });
+        if (r && !liveBalances) savedBalanceCache.set(item.itemId, { at: Date.now(), accounts: [...accounts] });
+        if (accounts.length) lastKnownAccounts.set(item.itemId, [...accounts]);
       } catch (err) {
-        problem = plaidError(err).code ?? "ACCOUNTS_FAILED";
+        const code = plaidError(err).code ?? "ACCOUNTS_FAILED";
+        // Asked too often: the balances read moments ago are still current, so show those instead of nothing.
+        const last = isRateLimited(err) ? lastKnownAccounts.get(item.itemId) : undefined;
+        if (last?.length) accounts.push(...last);
+        else problem = code;
       }
-      if (investing) {
+      // A unified connection to a bank-only institution (Venmo, a checking account) has nothing to
+      // hold, so don't ask: Plaid answers PRODUCTS_NOT_SUPPORTED and the bank would look broken.
+      const hasInvestmentAccount = accounts.some((a) => a.type === "investment" || a.type === "brokerage");
+      if (item.kind === "investments" || (item.kind === "all" && hasInvestmentAccount)) {
         try {
           const r = await plaid.investmentsHoldingsGet({ access_token: item.accessToken });
           const securities = new Map(r.data.securities.map(s => [s.security_id, s]));
           for (const h of r.data.holdings) {
             const security = securities.get(h.security_id);
-            holdings.push({ id: h.account_id + ":" + h.security_id, accountId: h.account_id, name: security?.name ?? "Investment holding", ticker: security?.ticker_symbol ?? null, quantity: h.quantity, price: h.institution_price, value: h.institution_value, currency: h.iso_currency_code ?? security?.iso_currency_code ?? null, priceAsOf: h.institution_price_as_of ?? security?.close_price_as_of ?? null, institution: item.institution });
+            holdings.push({ id: h.account_id + ":" + h.security_id, accountId: h.account_id, name: security?.name ?? "Investment holding", ticker: security?.ticker_symbol ?? null, quantity: h.quantity, price: h.institution_price, value: h.institution_value, costBasis: h.cost_basis ?? null, cash: security?.type === "cash" || /^CUR:/.test(security?.ticker_symbol ?? ""), /* uninvested cash only: Plaid also flags some crypto (XRP) as cash-equivalent */ currency: h.iso_currency_code ?? security?.iso_currency_code ?? null, priceAsOf: h.institution_price_as_of ?? security?.close_price_as_of ?? null, institution: item.institution });
           }
         } catch (err) {
           const code = plaidError(err).code;
@@ -458,7 +572,7 @@ export async function loadDashboardData({ liveBalances = false }: { liveBalances
           // A unified Link session starts with Transactions consent. A person
           // can connect only a bank, so there may simply be no investment
           // account to fetch; that is not a dashboard failure.
-          else if (code === "NO_INVESTMENT_ACCOUNTS" && item.kind === "all") { /* bank-only unified connection */ }
+          else if ((code === "NO_INVESTMENT_ACCOUNTS" || code === "PRODUCTS_NOT_SUPPORTED") && item.kind === "all") { /* bank-only unified connection */ }
           else problem ??= code ?? "HOLDINGS_FAILED";
         }
       }
@@ -471,17 +585,22 @@ export async function loadDashboardData({ liveBalances = false }: { liveBalances
       } catch (err) {
         const code = plaidError(err).code;
         if (code === "PRODUCT_NOT_READY") ready = false;
+        // Asked too often: what was synced last time is saved, and nothing new was missed for good
+        // (the saved bookmark picks up from there next time), so show that rather than an empty list.
+        else if (isRateLimited(err)) transactions.push(...Object.values(readSyncState(syncFile(item.itemId)).transactions));
         else problem ??= code ?? "TRANSACTIONS_FAILED";
       }
       const extras: Extras = item.kind === "investments" ? { at: 0, debts: [], recurring: [], needsDebtConsent: false } : await loadExtras(item, accounts, ready && !problem);
       return {
         accounts,
+        // Only for recognizing your own accounts in transfers; never counted in balances.
+        knownAccounts: accounts.length ? accounts : lastKnownAccounts.get(item.itemId) ?? [],
         liveAt,
         transactions,
         holdings,
         debts: extras.debts,
         recurring: extras.recurring,
-        status: { itemId: item.itemId, institution: item.institution, problem, ready, lastUpdatedAt, ...(extras.needsDebtConsent ? { needsDebtConsent: true } : {}), ...(brand?.logo || brand?.color ? { logo: brand.logo, color: brand.color } : {}) },
+        status: { itemId: item.itemId, institution: item.institution, problem, ready, lastUpdatedAt, ...(consentExpiresAt ? { consentExpiresAt } : {}), ...(extras.needsDebtConsent ? { needsDebtConsent: true } : {}), ...(brand?.logo || brand?.color ? { logo: brand.logo, color: brand.color } : {}) },
       };
     }),
   );
@@ -493,13 +612,24 @@ export async function loadDashboardData({ liveBalances = false }: { liveBalances
   } catch (err) {
     console.error("Couldn't save transaction archive", err instanceof Error ? err.message : err);
   }
+  // Moves between your own linked accounts are transfers, even where Plaid labeled one side income;
+  // 529 withdrawals are family support; payments with people get your answer or NorthStar's guess.
+  const knownAccounts = perItem.flatMap((r) => r.knownAccounts);
+  const answers = readClassifications();
+  const classified = classifyPayments(markCollegeSavings(markOwnTransfers(merged.transactions, knownAccounts)), knownAccounts, answers);
+  // Gas or snacks at stores that sell both: settled from the bank's text, Plaid's detail, and your answers.
+  const stores = refineStoreCategories(classified.transactions, answers.categories ?? {});
+  // Then the charges Plaid itself was least sure of: your answers, or a question for the big ones.
+  const uncertain = refineUncertainCategories(stores.transactions, answers.categories ?? {});
   const data: BankData = {
     env: ENV,
     accounts,
     holdings: perItem.flatMap((r) => r.holdings),
     debts: perItem.flatMap((r) => r.debts),
     recurring: perItem.flatMap((r) => r.recurring),
-    transactions: merged.transactions,
+    transactions: uncertain.transactions,
+    reviews: classified.reviews,
+    categoryQuestions: [...stores.questions, ...uncertain.questions],
     status: perItem.map((r) => r.status),
     fetchedAt: new Date().toISOString(),
     // When every bank's balance was last checked live (the oldest of them), or null if any is Plaid's saved copy.
@@ -522,6 +652,39 @@ export async function loadDashboardData({ liveBalances = false }: { liveBalances
   }
   return data;
 }
+
+/** Your answer to "what was this payment?": a label for a sender (all their payments one way) or one transaction. */
+plaidRouter.post("/api/plaid/classify", (req, res) => {
+  const key = typeof req.body?.key === "string" ? req.body.key.slice(0, 600) : "";
+  const label = req.body?.label;
+  if (!key || !["earned", "payback", "family", "own", "spending", "lent"].includes(label)) {
+    res.status(400).json({ error: "Send a question key and an answer." });
+    return;
+  }
+  try {
+    writeClassifications(recordAnswer(readClassifications(), key, label));
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : "Couldn't save that answer." });
+  }
+});
+
+/** Your answer to "was this gas or food?" for one store charge. */
+plaidRouter.post("/api/plaid/categorize", (req, res) => {
+  const key = typeof req.body?.key === "string" ? req.body.key.slice(0, 600) : "";
+  const category = req.body?.category;
+  if (!key.startsWith("cat:") || !(SPENDING_CATEGORIES as readonly string[]).includes(category)) {
+    res.status(400).json({ error: "Send a question key and a category." });
+    return;
+  }
+  try {
+    const store = readClassifications();
+    writeClassifications({ ...store, categories: { ...store.categories, [key.slice(4)]: category } });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err instanceof Error ? err.message : "Couldn't save that answer." });
+  }
+});
 
 plaidRouter.get("/api/plaid/dashboard", async (req, res) => {
   try {

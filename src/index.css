@@ -488,8 +488,8 @@ body { background: #edf4ed; color: #24392c; }
 .money-assistant-launch { position: fixed; right: 22px; bottom: 20px; z-index: 51; display: inline-flex; min-height: 50px; align-items: center; gap: 9px; padding: 0 17px; border-radius: 999px; background: #35634b; color: #fff; box-shadow: 0 5px 18px #203c2e30; font-size: 14px; font-weight: 600; }
 .money-assistant-launch:hover { background: #284f39; }
 .money-assistant-panel { position: fixed; right: 22px; bottom: 82px; z-index: 50; display: flex; width: min(390px, calc(100vw - 28px)); max-height: min(72dvh, 600px); flex-direction: column; overflow: hidden; border: 1px solid #dce5d9; border-radius: 15px; background: #fff; box-shadow: 0 16px 48px #24392c2b; }
-.money-assistant-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 17px 18px; border-bottom: 1px solid #e8eee5; }
-.money-assistant-header h2 { color: #2f4d36; font-size: 17px; }
+.money-assistant-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 17px 18px; border-bottom: 1px solid #e8eee5; }
+.money-assistant-header h2 { margin: 0; color: #2f4d36; font-size: 17px; line-height: 1.2; }
 .money-assistant-header p { display: flex; align-items: center; gap: 5px; margin-top: 5px; color: #657360; font-size: 12px; }
 .money-assistant-messages { display: flex; min-height: 150px; flex-direction: column; gap: 10px; overflow-y: auto; padding: 16px; }
 .money-assistant-message { max-width: 90%; padding: 11px 13px; border-radius: 12px; color: #3d4d40; background: #f2f5ee; font-size: 14px; line-height: 1.6; overflow-wrap: anywhere; }
@@ -809,9 +809,6 @@ body {
 .wealth-account-monogram { display: grid; width: 100%; height: 100%; place-items: center; border-radius: inherit; color: #fff; font-size: 13px; font-weight: 800; letter-spacing: .02em; }
 .wealth-account-icon.has-logo img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
 .wealth-balance-wrap { display: grid; justify-items: end; gap: 3px; flex: 0 0 auto; text-align: right; }
-.wealth-account-change { font-size: 12px; font-weight: 650; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.wealth-account-change.is-up { color: var(--color-gain); }
-.wealth-account-change.is-down { color: var(--night-muted); }
 .wealth-account-credit { display: grid; gap: 5px; margin-top: 4px; color: var(--night-muted); font-size: 12px; font-weight: 600; }
 .wealth-account-credit-bar { display: block; width: min(220px, 100%); height: 6px; overflow: hidden; border-radius: 999px; background: rgb(148 192 243 / 14%); }
 .wealth-account-credit-bar > i { display: block; height: 100%; border-radius: inherit; background: var(--aurora-teal); }
@@ -1074,6 +1071,19 @@ html, body { overscroll-behavior-y: none; }
 :root[data-theme="dark"] .polaris-action-change strong, :root[data-theme="dark"] .polaris-action.done .polaris-action-status { color: #9af6e3; }
 :root[data-theme="dark"] .polaris-action-cancel { border-color: rgb(148 192 243 / 26%); color: var(--night-text); }
 :root[data-theme="dark"] .polaris-action-cancel:hover { background: rgb(84 226 194 / 11%); }
+/* Polaris's quick question about a payment with a person: one tap answers it. */
+.money-assistant-question { margin: 4px 0 2px 36px; }
+.polaris-question-text { margin: 0; font-size: 14px; line-height: 1.4; }
+.polaris-question-examples { display: grid; gap: 2px; margin: 0; padding-left: 16px; color: #2f4665; font-size: 12.5px; font-variant-numeric: tabular-nums; }
+.polaris-question-options { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+.polaris-question-options .wealth-primary { display: inline-flex; align-items: center; gap: 5px; min-height: 36px; padding: 0 12px; border-radius: 8px; font-size: 13px; font-weight: 700; }
+.polaris-question-skip { min-height: 36px; padding: 0 8px; color: #6a7a90; font-size: 12.5px; text-decoration: underline; }
+:root[data-theme="dark"] .polaris-question-examples { color: var(--night-text); }
+:root[data-theme="dark"] .polaris-question-skip { color: var(--night-muted); }
+/* "No, it was…": the other categories, as a list so the card stays one row. */
+.polaris-question-select { min-height: 36px; padding: 0 10px; border: 1px solid #cdd9e7; border-radius: 8px; background: #fff; color: #2f4665; font-size: 13px; font-weight: 600; }
+:root[data-theme="dark"] .polaris-question-select { border-color: rgb(148 192 243 / 26%); background: transparent; color: var(--night-text); }
+:root[data-theme="dark"] .polaris-question-select option { color: initial; }
 
 /* Undo link on Polaris's "Done!" message. */
 .polaris-undo { display: inline-flex; align-items: center; gap: 5px; margin-top: 8px; padding: 4px 10px 4px 8px; border: 1px solid #cdd9e7; border-radius: 999px; color: #2f4665; font-size: 12px; font-weight: 600; }
@@ -1200,7 +1210,10 @@ html, body { overscroll-behavior-y: none; }
 .account-detail-chart-head p span { color: var(--night-muted); font-weight: 600; }
 .account-detail-chart-head p.is-gain { color: var(--color-gain); }
 .account-detail-chart-head p.is-down { color: var(--night-text); }
-.account-detail-chart-note { color: var(--night-muted); font-size: 11px; }
+.account-detail-chart-value { display: block; color: var(--night-text); font-size: 22px; font-weight: 800; font-variant-numeric: tabular-nums; }
+.account-detail-chart-plot { position: relative; }
+.account-detail-chart-plot svg { cursor: crosshair; touch-action: pan-y; }
+.account-detail-chart-dot { position: absolute; width: 12px; height: 12px; border: 2px solid #fff; border-radius: 50%; background: var(--aurora-teal); box-shadow: 0 1px 4px rgb(0 0 0 / 30%); transform: translate(-50%, -50%); pointer-events: none; }
 .account-detail-facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 12px 18px; padding: 14px 0; border-top: 1px solid var(--night-border); border-bottom: 1px solid var(--night-border); }
 .account-detail-facts dt { color: var(--night-muted); font-size: 12px; font-weight: 600; }
 .account-detail-facts dd { margin-top: 2px; font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
@@ -1237,22 +1250,14 @@ html, body { overscroll-behavior-y: none; }
 .accounts-cushion-big strong { font-size: 34px; font-weight: 750; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
 .accounts-cushion-big span { color: var(--night-muted); }
 .accounts-side-note { color: var(--night-muted); font-size: 13px; line-height: 1.55; }
-.accounts-side-facts { display: grid; gap: 8px; padding-top: 12px; border-top: 1px solid var(--night-border); }
-.accounts-side-facts > div { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; }
-.accounts-side-facts dt { color: var(--night-muted); }
-.accounts-side-facts dd { color: var(--night-text); font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
-.accounts-side-facts dd.is-debt { color: var(--color-cost); }
 .accounts-side-head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
 .accounts-side-head small { color: var(--night-muted); font-size: 12px; font-weight: 600; white-space: nowrap; }
-.accounts-side-facts dd.is-gain { color: var(--color-gain); }
-.accounts-moves, .accounts-holdings-top, .accounts-interest-list { display: grid; }
-.accounts-moves li, .accounts-holdings-top li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 0; border-top: 1px solid var(--night-border); }
-.accounts-moves li:first-child, .accounts-holdings-top li:first-child { border-top: 0; padding-top: 0; }
-.accounts-move-route { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; min-width: 0; color: var(--night-muted); font-size: 13px; }
-.accounts-move-route strong { color: var(--night-text); font-weight: 650; }
-.accounts-move-amount, .accounts-holding-value { display: grid; flex: none; justify-items: end; gap: 1px; font-variant-numeric: tabular-nums; }
-.accounts-move-amount strong, .accounts-holding-value strong { color: var(--night-text); font-size: 14px; font-weight: 750; }
-.accounts-move-amount small, .accounts-holding-value small { color: var(--night-muted); font-size: 12px; }
+.accounts-holdings-top { display: grid; }
+.accounts-holdings-top li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 9px 0; border-top: 1px solid var(--night-border); }
+.accounts-holdings-top li:first-child { border-top: 0; padding-top: 0; }
+.accounts-holding-value { display: grid; flex: none; justify-items: end; gap: 1px; font-variant-numeric: tabular-nums; }
+.accounts-holding-value strong { color: var(--night-text); font-size: 14px; font-weight: 750; }
+.accounts-holding-value small { color: var(--night-muted); font-size: 12px; }
 .accounts-holdings-top li > span:first-child { display: grid; gap: 1px; min-width: 0; }
 .accounts-holdings-top li > span:first-child strong { color: var(--night-text); font-size: 14px; font-weight: 750; }
 .accounts-holdings-top li > span:first-child small { overflow: hidden; color: var(--night-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
@@ -1266,17 +1271,6 @@ html, body { overscroll-behavior-y: none; }
 .accounts-side-subhead small { color: var(--night-muted); font-weight: 600; }
 .accounts-side-missing { padding: 10px 12px; border-radius: 10px; background: rgb(148 192 243 / 8%); color: var(--night-muted); font-size: 12px; line-height: 1.55; }
 .accounts-side-missing strong { color: var(--night-text); }
-.accounts-interest dt small { display: block; color: var(--night-muted); font-size: 11px; opacity: .85; }
-.accounts-interest-list li { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding: 9px 0; border-top: 1px solid var(--night-border); }
-.accounts-interest-list li:first-child { border-top: 0; padding-top: 2px; }
-.accounts-interest-who { display: grid; gap: 1px; min-width: 0; }
-.accounts-interest-who strong { color: var(--night-text); font-size: 13px; font-weight: 750; }
-.accounts-interest-who small { overflow: hidden; color: var(--night-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-.accounts-interest-amounts { display: grid; flex: none; justify-items: end; gap: 2px; font-size: 12px; font-weight: 650; font-variant-numeric: tabular-nums; }
-.accounts-interest-amounts .is-gain { color: var(--color-gain); }
-.accounts-interest-amounts .is-debt { color: var(--color-cost); }
-.accounts-interest-amounts button { display: inline-flex; align-items: center; gap: 2px; min-height: 28px; padding: 0 4px; margin-right: -4px; border-radius: 6px; font: inherit; text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 35%, transparent); text-underline-offset: 3px; }
-.accounts-interest-amounts button:hover { background: rgb(148 192 243 / 10%); text-decoration-color: currentColor; }
 
 /* ---------- Shared React Bits pieces: segmented switch, spotlight, list entrance ---------- */
 :root { --seg-track: #eef2f8; --seg-thumb: #ffffff; --seg-ink: #4b5b72; --seg-ink-active: #12233d; }
@@ -1284,14 +1278,17 @@ html, body { overscroll-behavior-y: none; }
 .ns-segmented { font-weight: 700; }
 .ns-segmented .rubber-segment__item { font-weight: 700; }
 :root:not([data-theme="dark"]) .ns-segmented .rubber-segment__thumb { box-shadow: 0 1px 3px rgb(18 35 61 / 14%); }
-.ns-segmented.accounts-range { display: grid; width: 100%; }
 
 /* List entrance: React Bits' Animated List "pop" (scale and lift on its spring curve), staggered 40ms per
    row and capped so long lists never wait. Rows set --i to their position. Off with reduced motion. */
 @keyframes ns-pop-in { from { opacity: 0; transform: translate3d(0, 10px, 0) scale(0.96); } to { opacity: 1; transform: none; } }
 .ns-enter { animation: ns-pop-in 520ms linear(0, 0.0603, 0.2033, 0.3821, 0.5633, 0.7258, 0.8584, 0.9574, 1.0242, 1.0634, 1.0809, 1.0828, 1.0747, 1.0613, 1.046, 1.0313, 1.0186, 1.0085, 1.0012, 0.9965, 0.994, 0.9931, 0.9933, 0.9941, 0.9953, 0.9966, 0.9978, 0.9988, 1) both; animation-delay: calc(min(var(--i, 0), 12) * 40ms); }
 @media (prefers-reduced-motion: reduce) { .ns-enter { animation: none; } }
-.accounts-move-route { display: grid !important; gap: 2px; }
-.accounts-move-route strong { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px; color: var(--night-text); font-size: 14px; font-weight: 750; }
-.accounts-move-route small { overflow: hidden; color: var(--night-muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .accounts-side-card .asset-split-pie { padding-top: 4px; }
+
+/* Interest an account paid you, and the latest payment toward a card or loan. */
+.wealth-account-interest, .wealth-account-paid { display: block; color: var(--night-muted); font-size: 12px; font-weight: 600; }
+.wealth-account-interest { color: var(--color-gain); }
+/* Money you moved into your investments (not market moves). */
+.accounts-invest-flow { margin: -4px 0 10px; color: var(--night-muted); font-size: 12.5px; font-weight: 600; }
+.accounts-invest-flow .is-gain { color: var(--color-gain); }

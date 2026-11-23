@@ -2,7 +2,7 @@ import { ArrowRight, CalendarClock, PiggyBank, Plus, RefreshCw, Sparkles, Target
 import { useMemo } from "react";
 import { addDays, daysBetween, formatDate, formatWeekday, parseISO, todayISO } from "../lib/dates";
 import { formatExact, formatMoney, weeklyNeededForDeadline } from "../lib/finance";
-import { assetsByInstitution, billsFor, detectTransferIds, netWorthSeries } from "../lib/money";
+import { assetsByInstitution, billsFor, detectTransferIds, mergeNetWorthHistory, netWorthSeries } from "../lib/money";
 import { buildForecast, cashFromAccounts } from "../lib/safeToSpend";
 import type { MoneyGoal } from "../lib/types";
 import { balancesAreFresh, type Bank } from "../lib/useBank";
@@ -97,12 +97,10 @@ export function HomeOverview({ data, goals = [], profileName = "", onCheck, onMo
     // chart with made-up flat history before the first available transaction.
     const historyDays = oldestTransaction ? Math.min(730, Math.max(1, daysBetween(oldestTransaction, todayISO()))) : 1;
     const estimatedSeries = netWorthSeries(data.accounts, postedTransactions, historyDays);
-    const recorded = data.netWorthSnapshots ?? [];
-    const hasRecordedHistory = recorded.length >= 2;
     return {
-      // Transaction math is useful context, but only points NorthStar has
-      // captured are true whole-account net-worth records.
-      series: hasRecordedHistory ? recorded : estimatedSeries,
+      // Days NorthStar recorded are exact; earlier days come from the
+      // transaction estimate so every period (1W through All) has history.
+      series: mergeNetWorthHistory(estimatedSeries, data.netWorthSnapshots ?? []),
       slices: assetsByInstitution(data.accounts),
       chartTransactions: postedTransactions.filter((transaction) => !transferIds.has(transaction.id)),
       bills: billsFor({ transactions: postedTransactions, recurring: data.recurring }, transferIds).slice(0, 3),

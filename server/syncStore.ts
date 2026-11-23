@@ -8,8 +8,15 @@ import fs from "node:fs";
 import path from "node:path";
 import type { BankTransaction } from "../src/lib/money.js";
 
+/**
+ * Bumped when the saved transactions gain fields. Version 2 adds Plaid's detailed category, its
+ * confidence, and the bank's original description; version 3 adds merchant logos, websites and
+ * counterparties. An older save is re-downloaded once from the start (free: it's the same sync call).
+ */
+export const SYNC_VERSION = 3;
+
 export interface SyncState {
-  version: 1;
+  version: typeof SYNC_VERSION;
   /** Empty means "start from the beginning". */
   cursor: string;
   transactions: Record<string, BankTransaction>;
@@ -22,7 +29,7 @@ export interface SyncPage {
   removed: string[];
 }
 
-export const emptySyncState = (): SyncState => ({ version: 1, cursor: "", transactions: {} });
+export const emptySyncState = (): SyncState => ({ version: SYNC_VERSION, cursor: "", transactions: {} });
 
 /** Applies one page of changes. Pure: returns a new state and leaves the old one untouched. */
 export function applyPage(state: SyncState, page: SyncPage, nextCursor: string): SyncState {
@@ -30,13 +37,13 @@ export function applyPage(state: SyncState, page: SyncPage, nextCursor: string):
   for (const t of page.added) transactions[t.id] = t;
   for (const t of page.modified) transactions[t.id] = t; // replace, never append: appending is how edits get double-counted
   for (const id of page.removed) delete transactions[id];
-  return { version: 1, cursor: nextCursor, transactions };
+  return { version: SYNC_VERSION, cursor: nextCursor, transactions };
 }
 
 export function readSyncState(file: string): SyncState {
   try {
     const saved = JSON.parse(fs.readFileSync(file, "utf8"));
-    if (saved?.version === 1 && typeof saved.cursor === "string" && saved.transactions && typeof saved.transactions === "object" && !Array.isArray(saved.transactions)) return saved as SyncState;
+    if (saved?.version === SYNC_VERSION && typeof saved.cursor === "string" && saved.transactions && typeof saved.transactions === "object" && !Array.isArray(saved.transactions)) return saved as SyncState;
   } catch {
     // no saved state yet, or it can't be read: start over from the beginning
   }

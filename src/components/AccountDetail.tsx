@@ -2,12 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowRight, Check, Pencil, X } from "lucide-react";
 import { formatDate } from "../lib/dates";
 import { formatExact } from "../lib/finance";
-import { accountBalanceSeries, categoryLabel, isLiability, type BankAccount, type BankData, type DebtAccount } from "../lib/money";
+import { accountBalanceSeries, categoryLabel, gainText, isLiability, type BankAccount, type BankData, type DebtAccount } from "../lib/money";
 import { CategoryIcon } from "./CategoryIcon";
 import { dueText } from "./DebtPanel";
 import { Segmented } from "./Segmented";
 
 const RANGES = [
+  { key: "7", label: "1W", days: 7 },
   { key: "30", label: "1M", days: 30 },
   { key: "90", label: "3M", days: 90 },
   { key: "365", label: "1Y", days: 365 },
@@ -102,7 +103,7 @@ export function AccountDetail({ account, name, kind, icon, data, debt, included,
           <div className="account-detail-section">
             <h3>Holdings</h3>
             <ul className="account-detail-list">
-              {holdings.map((h) => <li key={h.id}><span><strong>{h.ticker || h.name}</strong><small>{h.quantity.toLocaleString(undefined, { maximumFractionDigits: 4 })} shares{h.ticker ? ` · ${h.name}` : ""}</small></span><strong>{formatExact(h.value)}</strong></li>)}
+              {holdings.map((h) => <li key={h.id}><span><strong>{h.ticker || h.name}</strong><small>{h.quantity.toLocaleString(undefined, { maximumFractionDigits: 4 })} shares{h.ticker ? ` · ${h.name}` : ""}{gainText(h)}</small></span><strong>{formatExact(h.value)}</strong></li>)}
             </ul>
           </div>
         )}
@@ -121,7 +122,7 @@ export function AccountDetail({ account, name, kind, icon, data, debt, included,
               <ul className="account-detail-list">
                 {transactions.slice(0, 8).map((t) => (
                   <li key={t.id}>
-                    <span className="account-detail-tx"><CategoryIcon category={t.category} /><span><strong>{t.name}</strong><small>{formatDate(t.date)} · {categoryLabel(t.category)}{t.pending ? " · pending" : ""}</small></span></span>
+                    <span className="account-detail-tx"><CategoryIcon category={t.category} logo={t.logo} /><span><strong>{t.name}</strong><small>{formatDate(t.date)} · {categoryLabel(t.category)}{t.pending ? " · pending" : ""}</small></span></span>
                     <strong className={t.amount < 0 ? "is-gain" : ""}>{t.amount < 0 ? "+" : "−"}{formatExact(Math.abs(t.amount))}</strong>
                   </li>
                 ))}
@@ -142,7 +143,10 @@ export function AccountDetail({ account, name, kind, icon, data, debt, included,
   );
 }
 
-/** The account's balance over the chosen range, as a small area chart with start and end values. */
+/**
+ * The account's balance over the chosen range. Like the home page's net worth chart: hover or drag across
+ * the line and the figures above it switch to that day's balance and its change since the range began.
+ */
 function BalanceChart({ account, transactions, days, owed, range, setRange }: {
   account: BankAccount;
   transactions: BankData["transactions"];
@@ -151,6 +155,8 @@ function BalanceChart({ account, transactions, days, owed, range, setRange }: {
   range: string;
   setRange: (key: (typeof RANGES)[number]["key"]) => void;
 }) {
+  const [hover, setHover] = useState<number | null>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
   const points = accountBalanceSeries(account, transactions, days);
   const values = points.map((p) => p.value);
   const min = Math.min(...values);
@@ -161,22 +167,41 @@ function BalanceChart({ account, transactions, days, owed, range, setRange }: {
   const x = (i: number) => (i / Math.max(1, points.length - 1)) * w;
   const y = (v: number) => max === min ? h / 2 : 8 + (1 - (v - min) / span) * (h - 16);
   const line = points.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(p.value).toFixed(1)}`).join(" ");
-  const change = values.at(-1)! - values[0];
+  const shown = points[hover ?? points.length - 1];
+  const change = shown.value - values[0];
   const better = owed ? change < 0 : change > 0;
+  const track = (clientX: number) => {
+    const r = svgRef.current?.getBoundingClientRect();
+    if (!r || !r.width || points.length < 2) return;
+    const i = Math.round(((clientX - r.left) / r.width) * (points.length - 1));
+    setHover(Math.max(0, Math.min(points.length - 1, i)));
+  };
+  const hx = hover != null ? x(hover) : null;
+  const hy = hover != null ? y(points[hover].value) : null;
   return (
     <div className="account-detail-chart">
       <div className="account-detail-chart-head">
-        <p className={change === 0 ? "" : better ? "is-gain" : "is-down"}>
-          {change === 0 ? "No change" : `${change > 0 ? "↑" : "↓"} ${formatExact(Math.abs(change))}${owed ? " owed" : ""}`} <span>since {formatDate(points[0].date)}</span>
-        </p>
-        <Segmented label="Time range" options={RANGES.map((r) => ({ value: r.key, label: r.label }))} value={range as (typeof RANGES)[number]["key"]} onChange={setRange} />
+        <div aria-live="polite">
+          <strong className="account-detail-chart-value">{formatExact(shown.value)}{owed ? " owed" : ""}</strong>
+          <p className={change === 0 ? "" : better ? "is-gain" : "is-down"}>
+            {change === 0 ? "No change" : `${change > 0 ? "↑" : "↓"} ${formatExact(Math.abs(change))}`} <span>{hover != null ? `on ${formatDate(shown.date)}, since ${formatDate(points[0].date)}` : `since ${formatDate(points[0].date)}`}</span>
+          </p>
+        </div>
+        <Segmented label="Time range" options={RANGES.map((r) => ({ value: r.key, label: r.label }))} value={range as (typeof RANGES)[number]["key"]} onChange={(next) => { setRange(next); setHover(null); }} />
       </div>
-      <svg viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" role="img" aria-label={`${owed ? "Amount owed" : "Balance"} over the last ${days} days, from ${formatExact(values[0])} to ${formatExact(values.at(-1)!)}`}>
-        <defs><linearGradient id="account-detail-fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="var(--aurora-teal)" stopOpacity=".28" /><stop offset="1" stopColor="var(--aurora-teal)" stopOpacity="0" /></linearGradient></defs>
-        <path d={`${line} L${w},${h} L0,${h} Z`} fill="url(#account-detail-fill)" />
-        <path d={line} fill="none" stroke="var(--aurora-teal)" strokeWidth="2.2" vectorEffect="non-scaling-stroke" />
-      </svg>
-      <p className="account-detail-chart-note">Worked out from this account's posted transactions, so it can drift if a transaction is missing.</p>
+      <div className="account-detail-chart-plot">
+        <svg ref={svgRef} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" role="img" aria-label={`${owed ? "Amount owed" : "Balance"} over the last ${days} days, from ${formatExact(values[0])} to ${formatExact(values.at(-1)!)}`}
+          onPointerMove={(e) => track(e.clientX)} onPointerDown={(e) => track(e.clientX)} onPointerLeave={() => setHover(null)}>
+          <defs><linearGradient id="account-detail-fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stopColor="var(--aurora-teal)" stopOpacity=".28" /><stop offset="1" stopColor="var(--aurora-teal)" stopOpacity="0" /></linearGradient></defs>
+          {/* Where the range started, so a move up or down is easy to read. */}
+          <line x1={0} x2={w} y1={y(values[0])} y2={y(values[0])} stroke="#a8a29e" strokeWidth={1.2} strokeDasharray="2 6" vectorEffect="non-scaling-stroke" />
+          <path d={`${line} L${w},${h} L0,${h} Z`} fill="url(#account-detail-fill)" />
+          <path d={line} fill="none" stroke="var(--aurora-teal)" strokeWidth="2.2" vectorEffect="non-scaling-stroke" />
+          {hx != null && <line x1={hx} x2={hx} y1={0} y2={h} stroke="#a8a29e" strokeWidth={1} vectorEffect="non-scaling-stroke" />}
+        </svg>
+        {/* The dot is HTML so it stays round while the SVG stretches. */}
+        {hx != null && hy != null && <span className="account-detail-chart-dot" aria-hidden="true" style={{ left: `${(hx / w) * 100}%`, top: `${(hy / h) * 100}%` }} />}
+      </div>
     </div>
   );
 }

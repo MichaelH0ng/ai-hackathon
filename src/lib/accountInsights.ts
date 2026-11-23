@@ -1,4 +1,4 @@
-import type { BankAccount, BankTransaction, PortfolioHolding } from "./money";
+import { institutionWords, type BankAccount, type BankTransaction, type PortfolioHolding } from "./money";
 
 const DAY = 86_400_000;
 const isoDaysAgo = (days: number, now: Date) => {
@@ -16,10 +16,6 @@ export interface AccountMove {
   matchedBy: "both" | "name";
 }
 
-const GENERIC = new Set(["bank", "financial", "credit", "union", "trust", "national", "federal", "savings", "investments", "securities", "brokerage", "group", "company", "the", "of", "and"]);
-/** Words in an institution's name that identify it in a transaction ("Charles Schwab" → schwab, charles). */
-const institutionWords = (institution: string) =>
-  institution.replace(/ \(test\)$/, "").toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 4 && !GENERIC.has(w));
 /** The account money most likely went to at an institution: its brokerage/investment account first. */
 const mainAccount = (accounts: BankAccount[]) =>
   accounts.find((a) => a.type === "investment" && /brokerage|individual/i.test(`${a.subtype ?? ""} ${a.name}`)) ?? accounts.find((a) => a.type === "investment") ?? accounts[0];
@@ -215,4 +211,56 @@ export function investmentAccountsSummary(accounts: BankAccount[], holdings: Por
     taxable: round(taxable),
     withoutHoldings: investing.filter((a) => a.current > 0 && !withHoldings.has(a.id)).map((a) => ({ id: a.id, name: a.name, institution: a.institution, balance: round(a.current) })),
   };
+}
+
+/** Money added to your investment accounts from your other accounts (and taken back out) over the last `days` days. */
+export function investingFlow(transactions: BankTransaction[], accounts: BankAccount[], days = 30, now = new Date()): { added: number; withdrawn: number } {
+  const invest = new Set(accounts.filter((a) => a.type === "investment" || a.type === "brokerage").map((a) => a.id));
+  let added = 0, withdrawn = 0;
+  for (const m of movesBetweenAccounts(transactions, accounts, days, now)) {
+    if (invest.has(m.toId) && !invest.has(m.fromId)) added += m.total;
+    else if (invest.has(m.fromId) && !invest.has(m.toId)) withdrawn += m.total;
+  }
+  return { added: Math.round(added * 100) / 100, withdrawn: Math.round(withdrawn * 100) / 100 };
+}
+
+/** The latest payment toward each card or loan in the last `days` days, from your other accounts: "Paid $1,993 on Oct 30". */
+export function lastPayments(transactions: BankTransaction[], accounts: BankAccount[], days = 45, now = new Date()): Map<string, { amount: number; date: string }> {
+  const owed = new Set(accounts.filter((a) => a.type === "credit" || a.type === "loan").map((a) => a.id));
+  const since = isoDaysAgo(days - 1, now);
+  const out = new Map<string, { amount: number; date: string }>();
+  for (const t of transactions) {
+    // A payment shows on the card as money in, labeled a payment or transfer (not a refund from a store).
+    if (!owed.has(t.accountId) || t.pending || t.amount >= 0 || t.date < since) continue;
+    if (!/^(TRANSFER_IN|LOAN_PAYMENTS)/.test(t.category) && !/\bpayment\b/i.test(t.name)) continue;
+    const seen = out.get(t.accountId);
+    if (!seen || t.date > seen.date) out.set(t.accountId, { amount: -t.amount, date: t.date });
+  }
+  return out;
+}
+
+export interface FeeAlert {
+  accountId: string;
+  kind: "charged" | "fee";
+  total: number;
+  count: number;
+  lastDate: string;
+}
+
+/** Interest charged and bank fees in the last `days` days, one alert per account and kind. Empty when there were none. */
+export function feeAlerts(transactions: BankTransaction[], days = 90, now = new Date()): FeeAlert[] {
+  const since = isoDaysAgo(days - 1, now);
+  const alerts = new Map<string, FeeAlert>();
+  for (const t of transactions) {
+    if (t.pending || t.date < since) continue;
+    const kind = interestOrFee(t);
+    if (kind !== "charged" && kind !== "fee") continue;
+    const key = `${t.accountId}|${kind}`;
+    const a = alerts.get(key) ?? { accountId: t.accountId, kind, total: 0, count: 0, lastDate: t.date };
+    a.total = Math.round((a.total + t.amount) * 100) / 100;
+    a.count += 1;
+    if (t.date > a.lastDate) a.lastDate = t.date;
+    alerts.set(key, a);
+  }
+  return [...alerts.values()].sort((a, b) => b.lastDate.localeCompare(a.lastDate));
 }

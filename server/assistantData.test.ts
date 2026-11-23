@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { BankTransaction } from "../src/lib/money.ts";
-import { monthlySummaries, needsSonnet, comparisonPeriods, goalFinishDate, hasUnmatchedSubject, matchCategory, matchGoal, matchMerchant, rollingRange, windowTotals, explicitRange, followUpQuestion } from "./assistantData.ts";
+import { monthlySummaries, needsSonnet, comparisonPeriods, goalFinishDate, hasUnmatchedSubject, matchCategory, matchGoal, matchMerchant, matchSubcategory, rollingRange, windowTotals, explicitRange, followUpQuestion } from "./assistantData.ts";
 
 const tx = (id: string, name: string, amount: number, category: string, date = "2026-11-10"): BankTransaction => ({ id, accountId: "a", date, name, amount, category, pending: false });
 const transactions = [
@@ -80,6 +80,36 @@ describe("rollingRange", () => {
   });
 });
 
+describe("family support", () => {
+  it("counts 529 money toward cash flow but not toward what you made", () => {
+    const list = [
+      tx("p", "STATE PAYROLL", -1811.34, "INCOME"),
+      tx("s", "ScholarShare ACH DEPOSIT", -3000, "FAMILY_SUPPORT"),
+      tx("r", "McNamara Realty", 945, "RENT_AND_UTILITIES"),
+    ];
+    expect(windowTotals(list, new Set())).toMatchObject({ inflowTotal: 4811.34, earnedTotal: 1811.34, familySupportTotal: 3000, spendingTotal: 945, netCashFlow: 3866.34 });
+  });
+});
+
+describe("net spending", () => {
+  it("takes refunds and paybacks off spending (and their category), not counting them as earned", () => {
+    const list = [
+      tx("pay", "STATE PAYROLL", -500, "INCOME"),
+      tx("pge", "PG&E", 191, "RENT_AND_UTILITIES"),
+      tx("back", 'Joaquin Boyd "Electric"', -45.45, "RENT_AND_UTILITIES"),
+      tx("buy", "Costco", 153.15, "GENERAL_MERCHANDISE"),
+      tx("refund", "Costco", -15, "GENERAL_MERCHANDISE"),
+    ];
+    const w = windowTotals(list, new Set());
+    expect(w).toMatchObject({ grossSpending: 344.15, refundsAndPaybacks: 60.45, spendingTotal: 283.7, earnedTotal: 500, inflowTotal: 500, netCashFlow: 216.3 });
+    expect(w.spendingByCategory).toEqual({ "rent and utilities": 145.55, "general merchandise": 138.15 });
+  });
+  it("reports how much rests on unconfirmed guesses", () => {
+    const guessed = { ...tx("g", 'Keaton Smith "Rent"', -15.1, "RENT_AND_UTILITIES"), review: { key: "keaton smith|in", label: "payback" as const, confirmed: false } };
+    expect(windowTotals([guessed], new Set()).unconfirmed).toEqual({ count: 1, amount: 15.1 });
+  });
+});
+
 describe("explicitRange", () => {
   const now = new Date(2026, 10, 14); // Nov 14, 2026
   it("reads named years and months", () => {
@@ -88,8 +118,30 @@ describe("explicitRange", () => {
     expect(explicitRange("spending during December", now)?.label).toBe("December 2025");
     expect(explicitRange("income for sep 2026", now)?.label).toBe("September 2026");
   });
+  it("reads specific days, not the whole month", () => {
+    const sinceAug24 = { label: "the period since Aug 24, 2026", start: "2026-08-24", endExclusive: "2026-11-15" };
+    expect(explicitRange("How much have I spent since August 24th and how much have I made since August 24th", now)).toEqual(sinceAug24);
+    expect(explicitRange("spending since aug 24", now)).toEqual(sinceAug24);
+    expect(explicitRange("income since 8/24", now)).toEqual(sinceAug24);
+    expect(explicitRange("spent after Aug 24", now)?.start).toBe("2026-08-25");
+    expect(explicitRange("spent from Sept 1 to Sept 15", now)).toEqual({ label: "Sep 1, 2026 through Sep 15, 2026", start: "2026-09-01", endExclusive: "2026-09-16" });
+    expect(explicitRange("what did I spend on Aug 24?", now)).toEqual({ label: "Aug 24, 2026", start: "2026-08-24", endExclusive: "2026-08-25" });
+    // No year and still ahead this year: last year's.
+    expect(explicitRange("spent since December 20", now)?.start).toBe("2025-12-20");
+    // Not a real day: falls back to the month, and "since" a month runs through today.
+    expect(explicitRange("since Feb 31", now)).toEqual({ label: "the period since February 1", start: "2026-02-01", endExclusive: "2026-11-15" });
+  });
+  it("reads since a month as that month through today, and misspelled months", () => {
+    expect(explicitRange("spent on entertainment since August", now)).toEqual({ label: "the period since August 1", start: "2026-08-01", endExclusive: "2026-11-15" });
+    expect(explicitRange("how much did i spnd on food in octobr", now)?.label).toBe("October 2026");
+    expect(explicitRange("spending in septmber", now)?.label).toBe("September 2026");
+    expect(explicitRange("what did I spend in febuary 2026", now)?.label).toBe("February 2026");
+  });
   it("ignores lookalikes", () => {
     expect(explicitRange("I may need a new laptop", now)).toBeNull();
+    expect(explicitRange("how much do I spend on junk food", now)).toBeNull();
+    expect(explicitRange("spent in maybe two weeks", now)).toBeNull();
+    expect(explicitRange("spent at the market", now)).toBeNull();
     expect(explicitRange("Can I afford a $2025 trip?", now)).toBeNull();
   });
 });
@@ -102,6 +154,11 @@ describe("followUpQuestion", () => {
     const coffee = [{ role: "user", content: "How much did I spend at Starbucks this month?" }];
     expect(followUpQuestion("What about Chipotle?", coffee)).toBe("What about Chipotle? How much did I spend at Starbucks this month?");
     expect(matchMerchant("What about Chipotle? How much did I spend at Starbucks this month?", transactions)).toBe("Chipotle");
+  });
+  it("switches topic when the follow-up names its own, keeping the earlier time", () => {
+    const august = [{ role: "user", content: "How much did I spend in August?" }, { role: "assistant", content: "$8,674.25" }];
+    expect(followUpQuestion("what about how much have I made", august)).toBe("what about how much have I made in August");
+    expect(followUpQuestion("And how much did I earn last month?", august)).toBe("And how much did I earn last month?");
   });
   it("leaves full questions alone", () => {
     expect(followUpQuestion("What's my credit card balance right now?", history)).toBe("What's my credit card balance right now?");
@@ -138,5 +195,25 @@ describe("needsSonnet", () => {
 describe("rollingRange in years", () => {
   it("reads 'last 2 years'", () => {
     expect(rollingRange("what did I spend in the last 2 years", new Date(2026, 10, 14))).toMatchObject({ label: "the last 2 years", start: "2024-11-15", endExclusive: "2026-11-15" });
+  });
+});
+
+describe("matchSubcategory and people", () => {
+  const t = (detail: string, category: string, extra: Partial<BankTransaction> = {}): BankTransaction => ({ ...tx("x", "Store", 30, category), detail, ...extra });
+  it("counts fill-ups as gas, not parking or rides", () => {
+    const gas = matchSubcategory("How much have I spent on gas since August?")!;
+    expect(gas.label).toBe("gas");
+    expect(gas.test(t("TRANSPORTATION_GAS", "TRANSPORTATION"))).toBe(true);
+    expect(gas.test(t("TRANSPORTATION_PARKING", "TRANSPORTATION"))).toBe(false);
+    // NorthStar decided a 7-Eleven charge was a fill-up even though Plaid calls the store a convenience store.
+    expect(gas.test(t("GENERAL_MERCHANDISE_CONVENIENCE_STORES", "TRANSPORTATION", { categorized: { by: "you", confirmed: true } }))).toBe(true);
+    // A snack NorthStar moved to food isn't gas.
+    expect(gas.test(t("TRANSPORTATION_GAS", "FOOD_AND_DRINK", { categorized: { by: "amount", confirmed: false } }))).toBe(false);
+    expect(matchSubcategory("groceries a month")?.label).toBe("groceries");
+    expect(matchSubcategory("How much did I spend on food?")).toBeNull();
+  });
+  it("matches a person across payment notes", () => {
+    const venmo = [tx("a", 'Christian Lim "Chipper"', 15, "FOOD_AND_DRINK"), tx("b", 'Christian Lim "Closet"', 100, "GENERAL_MERCHANDISE")];
+    expect(matchMerchant("How much have I paid Christian Lim?", venmo)).toBe("Christian Lim");
   });
 });

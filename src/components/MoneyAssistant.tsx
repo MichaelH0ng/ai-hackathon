@@ -13,7 +13,8 @@ import { bestAlternative, fixVoiceText } from "../lib/voiceFix";
 import { billHeadsUp, WHAT_CHANGED, weeklyCheckIn, whatChanged } from "../lib/polarisInsights";
 import { requestPriceCheck } from "../lib/priceCheckRequest";
 import { useReminders } from "../lib/polarisReminders";
-import type { BankData } from "../lib/money";
+import type { BankData, ReviewLabel } from "../lib/money";
+import { PaymentQuestion, StoreQuestion } from "./PaymentQuestion";
 import type { MoneyGoal } from "../lib/types";
 
 interface ChatMessage {
@@ -220,9 +221,11 @@ interface MoneyAssistantProps {
   onRemoveGoal?: (id: string) => void;
   onUpdateBudget?: (patch: Partial<Budget>) => void;
   onOpenPriceCheck?: () => void;
+  /** Reloads bank data after you answer a quick question about a payment, so totals use your answer. */
+  onPaymentAnswered?: () => Promise<unknown>;
 }
 
-export function MoneyAssistant({ context, goals = [], budget = { income: 0, essentials: 0, lifestyle: 0 }, plan, bankData, freshBankData, onUpdateGoal, onAddGoal, onRemoveGoal, onUpdateBudget, onOpenPriceCheck }: MoneyAssistantProps) {
+export function MoneyAssistant({ context, goals = [], budget = { income: 0, essentials: 0, lifestyle: 0 }, plan, bankData, freshBankData, onUpdateGoal, onAddGoal, onRemoveGoal, onUpdateBudget, onOpenPriceCheck, onPaymentAnswered }: MoneyAssistantProps) {
   useMoneyHidden(); // re-render when "Hide amounts" changes
   const canAct = !!(onUpdateGoal && onAddGoal && onRemoveGoal && onUpdateBudget);
   const world: World = { goals, budget };
@@ -446,7 +449,8 @@ export function MoneyAssistant({ context, goals = [], budget = { income: 0, esse
       return;
     }
     // "What changed this month?": computed here from your transactions, no AI needed.
-    if (WHAT_CHANGED.test(text) && bankData?.transactions.length) {
+    // It compares months; week questions ("more this week than last week?") go to Polaris, which compares weeks.
+    if (WHAT_CHANGED.test(text) && !/\bweeks?\b/i.test(text) && bankData?.transactions.length) {
       say({ text: whatChanged(bankData) });
       return;
     }
@@ -600,12 +604,33 @@ export function MoneyAssistant({ context, goals = [], budget = { income: 0, esse
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, hasNews]);
 
+  // Quick questions about payments with people (Venmo, Zelle, deposits with no sender), one at a time.
+  // Answers save on the server; "Not sure" hides one for this visit.
+  const [answeredKeys, setAnsweredKeys] = useState<Set<string>>(() => new Set());
+  const [skippedKeys, setSkippedKeys] = useState<Set<string>>(() => new Set());
+  const openQuestions = (bankData?.reviews ?? []).filter(q => !answeredKeys.has(q.key) && !skippedKeys.has(q.key));
+  const paymentQuestion = openQuestions[0];
+  // Then gas-or-snacks questions about store charges, once payments with people are answered.
+  const openStoreQuestions = (bankData?.categoryQuestions ?? []).filter(q => !answeredKeys.has(q.key) && !skippedKeys.has(q.key));
+  const storeQuestion = paymentQuestion ? undefined : openStoreQuestions[0];
+  async function answerStore(key: string, category: string) {
+    const res = await fetch("/api/plaid/categorize", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key, category }) });
+    if (!res.ok) throw new Error("save failed");
+    setAnsweredKeys(current => new Set([...current, key]));
+    void onPaymentAnswered?.();
+  }
+  async function answerPayment(key: string, label: ReviewLabel) {
+    const res = await fetch("/api/plaid/classify", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ key, label }) });
+    if (!res.ok) throw new Error("save failed");
+    setAnsweredKeys(current => new Set([...current, key]));
+    void onPaymentAnswered?.();
+  }
+
   const avatarMood = busy ? "thinking" : mood?.mood ?? "idle";
-  const mode = aiReady ? "AI answers from your NorthStar data" : "Private, on-device answers";
   return <>
     {open && <section id="money-assistant-panel" className="money-assistant-panel" role="dialog" aria-labelledby="money-assistant-title">
       <header className="money-assistant-header">
-        <div className="money-assistant-identity"><PolarisAvatar size={40} mood={avatarMood} /><div><h2 id="money-assistant-title">Polaris</h2><p><Sparkles size={13} /> {mode}</p></div></div>
+        <div className="money-assistant-identity"><PolarisAvatar size={40} mood={avatarMood} /><h2 id="money-assistant-title">Polaris</h2></div>
         <div className="money-assistant-header-actions">
           <button className="wealth-icon-button" aria-label="Start a new chat" title="New chat" onClick={newChat} disabled={busy || messages.length <= 1}><RotateCcw size={17} /></button>
           <button className="wealth-icon-button" aria-label="Close Polaris" onClick={() => setOpen(false)}><X size={18} /></button>
@@ -661,6 +686,16 @@ export function MoneyAssistant({ context, goals = [], budget = { income: 0, esse
             ? <div key={message.id} className="money-assistant-row"><PolarisAvatar size={28} mood={message.pending ? "thinking" : "idle"} className="money-assistant-row-avatar" />{bubble}</div>
             : <div key={message.id} className="money-assistant-row user">{bubble}</div>;
         })}
+        {paymentQuestion && !busy && <div className="money-assistant-row"><PolarisAvatar size={28} mood="idle" className="money-assistant-row-avatar" /><div className="money-assistant-message assistant">
+          <PaymentQuestion key={paymentQuestion.key} question={paymentQuestion} remaining={openQuestions.length}
+            onAnswer={label => answerPayment(paymentQuestion.key, label)}
+            onSkip={() => setSkippedKeys(current => new Set([...current, paymentQuestion.key]))} />
+        </div></div>}
+        {storeQuestion && !busy && <div className="money-assistant-row"><PolarisAvatar size={28} mood="idle" className="money-assistant-row-avatar" /><div className="money-assistant-message assistant">
+          <StoreQuestion key={storeQuestion.key} question={storeQuestion} remaining={openStoreQuestions.length}
+            onAnswer={category => answerStore(storeQuestion.key, category)}
+            onSkip={() => setSkippedKeys(current => new Set([...current, storeQuestion.key]))} />
+        </div></div>}
       </div>
       {messages.length === 1 && <div className="money-assistant-prompts">{prompts.map(prompt => <button key={prompt} onClick={() => ask(prompt)}>{prompt}</button>)}</div>}
       <form className="money-assistant-form" onSubmit={event => { event.preventDefault(); ask(); }}>
@@ -685,7 +720,7 @@ export function MoneyAssistant({ context, goals = [], budget = { income: 0, esse
         {tucked ? <ChevronLeft size={18} aria-hidden="true" /> : <ChevronRight size={18} aria-hidden="true" />}
       </button>
       <button className="money-assistant-launch" inert={tucked} aria-expanded={open} aria-controls="money-assistant-panel" onClick={() => setOpen(value => !value)}>
-        {open ? <X size={20} /> : <PolarisAvatar size={28} mood={mood?.mood ?? "idle"} className="money-assistant-launch-avatar" />}<span>{open ? "Close Polaris" : "Ask Polaris"}</span>{!open && hasNews && <span className="money-assistant-news" aria-label="New check-in from Polaris" />}
+        {open ? <X size={20} /> : <PolarisAvatar size={28} mood={mood?.mood ?? "idle"} className="money-assistant-launch-avatar" />}<span>{open ? "Close Polaris" : "Ask Polaris"}</span>{!open && (hasNews || !!paymentQuestion || !!storeQuestion) && <span className="money-assistant-news" aria-label={hasNews ? "New check-in from Polaris" : "Polaris has a quick question about a payment"} />}
         {!open && due.length > 0 && <span className="money-assistant-dot" aria-label={`${due.length} savings reminder${due.length === 1 ? "" : "s"} today`} />}
       </button>
     </div>

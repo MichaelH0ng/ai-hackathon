@@ -11,8 +11,8 @@ import { ProgressRing } from "./ProgressRing";
 import { SavingsPlanner } from "./SavingsPlanner";
 import { GoalPathPlanner } from "./GoalPathPlanner";
 import { CashSplitEditor } from "./CashSplitEditor";
-import { detectTransferIds, isLiability } from "../lib/money";
-import { interestAndFees, investmentAccountsSummary, investmentsTogether, movesBetweenAccounts, type InterestOrFee } from "../lib/accountInsights";
+import { detectTransferIds, gainText, isLiability, isTransfer, moneyKind } from "../lib/money";
+import { feeAlerts, interestAndFees, investingFlow, investmentAccountsSummary, investmentsTogether, lastPayments, type InterestOrFee } from "../lib/accountInsights";
 import { addDays, formatDate, todayISO } from "../lib/dates";
 import { cashOnHand, envelopes } from "../lib/envelopes";
 import { bankDataForPlan, includedItems } from "../lib/planningAccounts";
@@ -60,13 +60,6 @@ function cleanAccountName(name: string, institution = ""): string {
   if (out === out.toUpperCase()) out = out.toLowerCase().replace(/\b([a-z])/g, c => c.toUpperCase());
   return out ? out[0].toUpperCase() + out.slice(1) : name;
 }
-/** Time ranges for Interest & fees on Accounts. */
-const FEE_RANGES = [
-  { days: 30, label: "1M", long: "Last 30 days" },
-  { days: 90, label: "3M", long: "Last 3 months" },
-  { days: 182, label: "6M", long: "Last 6 months" },
-  { days: 365, label: "1Y", long: "Last 12 months" },
-] as const;
 function daysSince(iso: string) { return Math.max(0, Math.floor((Date.now() - new Date(iso).getTime()) / 86400000)); }
 function updatedLabel(iso?: string) {
   if (!iso) return "Update date unknown";
@@ -126,8 +119,6 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; complet
   // Filters opened from Accounts last only for that visit to Activity.
   useEffect(() => { if (tab !== "Activity") { setActivityAccount(null); setActivityFocus(null); } }, [tab]);
   const [groupBy, setGroupBy] = useState<"type" | "bank">(() => { try { return localStorage.getItem("northstar.accountsGroupBy") === "bank" ? "bank" : "type"; } catch { return "type"; } });
-  const [feeDays, setFeeDays] = useState<number>(() => { try { return Number(localStorage.getItem("northstar.feeDays")) || 365; } catch { return 365; } });
-  const chooseFeeDays = (days: number) => { setFeeDays(days); try { localStorage.setItem("northstar.feeDays", String(days)); } catch { /* remembered for this visit */ } };
   const closeDetail = useCallback(() => setDetailId(null), []);
   const chooseGroupBy = (next: "type" | "bank") => { setGroupBy(next); try { localStorage.setItem("northstar.accountsGroupBy", next); } catch { /* remembered for this visit */ } };
   const [assetForm, setAssetForm] = useState<Asset | null>(null);
@@ -242,18 +233,10 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; complet
     ].map(a => ({ ...a, id: crypto.randomUUID(), sample: true, updatedAt: new Date().toISOString() }))] });
   }
   const addAsset = () => setAssetForm({ id: crypto.randomUUID(), name: "", institution: "", kind: "Checking", balance: 0 });
-  // Each cash or credit account's change over 30 days, from posted transactions (Plaid: amount > 0 is money out).
-  // Investments are left out: their value moves with the market, not just with transactions.
-  const monthChange = new Map<string, number>();
-  {
-    const since = addDays(todayISO(), -30);
-    for (const account of bank.data?.accounts ?? []) {
-      if (account.type !== "depository" && account.type !== "credit") continue;
-      const flow = bank.data!.transactions.filter(t => t.accountId === account.id && !t.pending && t.date > since).reduce((sum, t) => sum + t.amount, 0);
-      const delta = account.type === "credit" ? flow : -flow; // spending raises what a card owes
-      if (Math.abs(delta) >= 1) monthChange.set(account.id, Math.round(delta * 100) / 100);
-    }
-  }
+  // Facts for each linked account's row: interest it paid you this year, and the latest payment toward a card or loan.
+  const linkedTx = bank.data?.transactions ?? [];
+  const interestThisYear = new Map(interestAndFees(linkedTx, 365).byAccount.map(r => [r.accountId, r.earned]));
+  const payments = bank.data ? lastPayments(linkedTx, bank.data.accounts) : new Map<string, { amount: number; date: string }>();
   const accountRow = (a: Asset, index = 0) => {
     const isLinked = linked.some(account => account.id === a.id);
     const isManual = plan.assets.some(m => m.id === a.id);
@@ -271,26 +254,29 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; complet
     const logo = brand?.logo;
     // No logo from Plaid (Wells Fargo, for one): the bank's initials on its brand color.
     const initials = !logo && brand?.color && /^#[0-9a-f]{6}$/i.test(brand.color) ? (institution ?? "").replace(/ \(test\)$/, "").split(/\s+/).filter(w => /^[A-Za-z]/.test(w) && !/^(of|the|and|&)$/i.test(w)).slice(0, 2).map(w => w[0].toUpperCase()).join("") : "";
-    const change = monthChange.get(a.id);
     const isDebt = debt(a.kind);
     // Credit used: what's owed out of the card's limit. Under 30% is the usual guideline for credit scores.
     const limit = bankAccount?.type === "credit" && bankAccount.limit && bankAccount.limit > 0 ? bankAccount.limit : null;
     const used = limit ? Math.max(0, a.balance) / limit : null;
+    const earned = isLinked ? interestThisYear.get(a.id) ?? 0 : 0;
+    const paid = isLinked ? payments.get(a.id) : undefined;
     return <div style={{ "--i": index } as React.CSSProperties} className={`ns-enter wealth-account-block${includedInPlan && !isClosed ? "" : " is-excluded"}${isLinked ? " is-openable" : ""}`} key={a.id}>
       {/* Linked accounts: a click anywhere on the row opens the account (except its own checkbox or buttons). */}
       <div className="wealth-account" onClick={isLinked ? event => { if (!(event.target as HTMLElement).closest("button, a, label, input")) setDetailId(a.id); } : undefined}><label className={`wealth-account-plan-checkbox${includedInPlan && !isClosed ? " is-checked" : ""}`} title={isClosed ? "Closed: not counted" : includedInPlan ? "Included in your plan" : "Excluded from your plan"}><input type="checkbox" checked={includedInPlan && !isClosed} disabled={isClosed} aria-label={isClosed ? `${a.name} is closed and not counted` : `${includedInPlan ? "Exclude" : "Include"} ${a.name} in your plan`} onChange={() => update({ excludedAccountIds: includedInPlan ? [...plan.excludedAccountIds, a.id] : plan.excludedAccountIds.filter((id) => id !== a.id) })} /><span aria-hidden="true">{includedInPlan && !isClosed && <Check size={13} strokeWidth={3} />}</span></label><span className={`wealth-account-icon ${investment(a.kind) ? "invest" : ""}${logo ? " has-logo" : ""}`}>{logo ? <img src={logo} alt="" width={26} height={26} /> : initials ? <span className="wealth-account-monogram" style={{ background: brand!.color! }} aria-hidden="true">{initials}</span> : investment(a.kind) ? <ArrowUpRight size={20} /> : <Landmark size={20} />}</span><div className="wealth-account-name">{isLinked ? <button type="button" className="wealth-account-open" onClick={() => setDetailId(a.id)} aria-label={`Open ${a.name}`}><strong>{a.name}</strong></button> : <strong>{a.name}</strong>}<span>{a.institution || "Personal account"} · {a.kind}{a.sample ? " · Sample" : ""}</span>
 
         {isManual && !a.sample && <span className={`wealth-account-status${stale ? " stale" : ""}`}>Manual · {updatedLabel(a.updatedAt)} · <button className="wealth-inline-link" onClick={() => setAssetForm(a)}>Update</button></span>}
-      </div><span className="wealth-balance-wrap"><strong className="wealth-balance">{isDebt ? "−" : ""}{usd(a.balance)}</strong>{change !== undefined && <small className={`wealth-account-change ${(isDebt ? change < 0 : change > 0) ? "is-up" : "is-down"}`} title="Change over the last 30 days, from posted transactions">{change > 0 ? "↑" : "↓"} {usd(Math.abs(change))}{isDebt ? " owed" : ""} · 30 days</small>}</span>{isManual && <button className="wealth-icon-button" aria-label={`Edit ${a.name}`} onClick={() => setAssetForm(a)}><SlidersHorizontal size={15} /></button>}{isLinked && <ChevronRight size={16} className="wealth-account-chevron" aria-hidden="true" />}</div>
-      {(problem || debtInfo || used !== null) && <div className="wealth-account-extra">
+      </div><span className="wealth-balance-wrap"><strong className="wealth-balance">{isDebt ? "−" : ""}{usd(a.balance)}</strong></span>{isManual && <button className="wealth-icon-button" aria-label={`Edit ${a.name}`} onClick={() => setAssetForm(a)}><SlidersHorizontal size={15} /></button>}{isLinked && <ChevronRight size={16} className="wealth-account-chevron" aria-hidden="true" />}</div>
+      {(problem || debtInfo || used !== null || earned >= 1 || paid) && <div className="wealth-account-extra">
         {problem && <span className="wealth-account-status stale accounts-signin">{problem.problem === "ITEM_LOGIN_REQUIRED" ? "Not updating: sign in again above" : "Couldn't refresh this account. Showing its last balance."}</span>}
         {debtInfo && <span className="wealth-account-debt">{[debtInfo.minimumPayment != null ? `${usd(debtInfo.minimumPayment)} minimum` : null, debtInfo.nextDueDate ? dueText(debtInfo.nextDueDate) : null, debtInfo.apr != null ? `${debtInfo.apr.toFixed(2)}% APR` : null].filter(Boolean).join(" · ")}{debtInfo.isOverdue && <strong> · Overdue, per your bank</strong>}</span>}
+        {earned >= 1 && <span className="wealth-account-interest">Earned {usd(earned)} in interest over the past year</span>}
+        {paid && <span className="wealth-account-paid">Paid {usd(paid.amount)} on {formatDate(paid.date)}</span>}
         {used !== null && <span className={`wealth-account-credit${used > 0.3 ? " is-high" : ""}`}>
           <span className="wealth-account-credit-bar" role="progressbar" aria-label={`${a.name} credit used`} aria-valuenow={Math.round(used * 100)} aria-valuemin={0} aria-valuemax={100}><i style={{ width: `${Math.min(100, used * 100)}%` }} /></span>
           <span>{Math.round(used * 100)}% of {usd(limit!)} limit used{used > 0.3 ? " · aim for under 30%" : ""}</span>
         </span>}
       </div>}
-      {holdings.length > 0 && <details className="wealth-account-holdings"><summary>{holdings.length} investment holding{holdings.length === 1 ? "" : "s"}</summary><ul>{holdings.map(holding => <li key={holding.id}><span><strong>{holding.ticker || holding.name}</strong><small>{holding.quantity.toLocaleString(undefined, { maximumFractionDigits: 6 })} shares</small></span><strong>{holdingMoney(holding.value, holding.currency)}</strong></li>)}</ul></details>}
+      {holdings.length > 0 && <details className="wealth-account-holdings"><summary>{holdings.length} investment holding{holdings.length === 1 ? "" : "s"}</summary><ul>{holdings.map(holding => <li key={holding.id}><span><strong>{holding.ticker || holding.name}</strong><small>{holding.quantity.toLocaleString(undefined, { maximumFractionDigits: 6 })} shares{gainText(holding)}</small></span><strong>{holdingMoney(holding.value, holding.currency)}</strong></li>)}</ul></details>}
     </div>;
   };
   /** Net worth beside "Edit accounts" in the Accounts banner (replaces the separate totals card). */
@@ -300,6 +286,11 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; complet
   </div>;
   // Banks that stopped syncing, shown first so a stale balance isn't mistaken for a real one.
   const attention = (bank.data?.status ?? []).filter(st => st.problem);
+  // Interest charged or bank fees in the last 3 months: worth a look only when there are some.
+  const charges = feeAlerts(linkedTx.filter(t => !plan.closedAccountIds.includes(t.accountId)), 90);
+  const accountLabel = (id: string) => { const a = bank.data?.accounts.find(x => x.id === id); return a ? `${a.institution.replace(/ \(test\)$/, "")} ${plan.accountNames[a.id] || cleanAccountName(a.name, a.institution)}` : "An account"; };
+  // Banks whose permission for Plaid ends within 30 days: reconnecting renews it before the data freezes.
+  const expiring = (bank.data?.status ?? []).filter(st => !st.problem && st.consentExpiresAt && Date.parse(st.consentExpiresAt) - Date.now() < 30 * 86_400_000);
   const openAssets = assets.filter(a => !plan.closedAccountIds.includes(a.id));
   const closedAssets = assets.filter(a => plan.closedAccountIds.includes(a.id));
   const groups: { key: string; label: string; icon?: React.ReactNode; list: Asset[]; owed: boolean }[] = groupBy === "type"
@@ -311,8 +302,16 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; complet
       <h2>Where your money is</h2>
       {assets.length > 1 && <Segmented label="Group accounts by" options={[{ value: "type", label: "Type" }, { value: "bank", label: "Bank" }]} value={groupBy} onChange={chooseGroupBy} />}
     </div>
-    {attention.length > 0 && <div className="accounts-attention" role="status">
+    {(attention.length > 0 || expiring.length > 0 || charges.length > 0) && <div className="accounts-attention" role="status">
       <strong>Needs attention</strong>
+      {charges.map(c => <div key={`${c.accountId}-${c.kind}`} className="accounts-attention-row">
+        <span>{accountLabel(c.accountId)} charged you {usd(c.total)} {c.kind === "fee" ? `in ${c.count === 1 ? "a fee" : "fees"}` : "in interest"} in the last 3 months{c.count > 1 ? ` (${c.count} charges)` : ""}, most recently {formatDate(c.lastDate)}.</span>
+        <button type="button" className="wealth-secondary" onClick={() => showFees(c.accountId, c.kind)}>See {c.count === 1 ? "it" : "them"}</button>
+      </div>)}
+      {expiring.map(st => <div key={`expiring-${st.itemId}`} className="accounts-attention-row">
+        <span>{st.institution.replace(/ \(test\)$/, "")}'s permission for NorthStar {Date.parse(st.consentExpiresAt!) < Date.now() ? "has ended" : `ends ${new Date(st.consentExpiresAt!).toLocaleDateString("en-US", { month: "short", day: "numeric" })}`}. Renew it to keep its balances and activity updating.</span>
+        <ReconnectButton itemId={st.itemId} institution={st.institution} label="Renew" onDone={bank.reload} />
+      </div>)}
       {attention.map(st => <div key={st.itemId} className="accounts-attention-row">
         <span>{st.institution.replace(/ \(test\)$/, "")} {st.problem === "ITEM_LOGIN_REQUIRED" ? "stopped updating. Sign in again to refresh its balances and activity." : "couldn't be refreshed. Its balances may be out of date."}</span>
         {st.problem === "ITEM_LOGIN_REQUIRED" ? <ReconnectButton itemId={st.itemId} institution={st.institution} label="Sign in again" onDone={bank.reload} /> : <button type="button" className="wealth-secondary" onClick={() => { void bank.reload(); }}>Try again</button>}
@@ -337,54 +336,17 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; complet
     {(bank.data?.debts?.length ?? 0) > 0 && <p className="wealth-note accounts-debt-note">Card and loan details come from your bank about once a day. Interest and fees can make the real payoff higher.</p>}
     {plan.assets.some(m => !m.sample) && <div className="wealth-card-foot"><ShieldCheck size={14} /><span>Manual accounts are saved in this browser only.</span></div>}
   </section>;
-  // ---------- Right column: moves between accounts, interest and fees, investments together ----------
+  // ---------- Right column: investments, and money you added to them ----------
   const openLinked = (bank.data?.accounts ?? []).filter(a => !plan.closedAccountIds.includes(a.id));
-  const shortName = (id: string) => { const a = bank.data?.accounts.find(x => x.id === id); return a ? (plan.accountNames[a.id] || cleanAccountName(a.name, a.institution)) : "Account"; };
-  const bankName = (id: string) => (bank.data?.accounts.find(x => x.id === id)?.institution ?? "").replace(/ \(test\)$/, "");
-  const moves = bank.data ? movesBetweenAccounts(bank.data.transactions, openLinked, 30).slice(0, 5) : [];
-  const movesCard = openLinked.length > 1 && <section className="wealth-card accounts-side-card" aria-labelledby="moves-title">
-    <div className="accounts-side-head"><h2 id="moves-title">Moves between accounts</h2><small>Last 30 days</small></div>
-    {moves.length ? <ul className="accounts-moves">{moves.map(m => <li key={`${m.fromId}>${m.toId}`}>
-      <span className="accounts-move-route">
-        <strong>{bankName(m.fromId)}<ArrowRight size={13} aria-label="to" />{bankName(m.toId)}</strong>
-        <small>{shortName(m.fromId)} → {shortName(m.toId)}</small>
-      </span>
-      <span className="accounts-move-amount"><strong>{usd(m.total)}</strong><small>{m.count === 1 ? formatDate(m.lastDate) : `${m.count} times`}</small></span>
-    </li>)}</ul> : <p className="accounts-side-note">No money moved between your connected accounts in the last 30 days.</p>}
-    <p className="accounts-side-note">Includes card payments and deposits to your brokerages.</p>
-  </section>;
-  const feeRange = FEE_RANGES.find(r => r.days === feeDays) ?? FEE_RANGES[FEE_RANGES.length - 1];
-  const yearly = bank.data ? interestAndFees(bank.data.transactions.filter(t => openLinked.some(a => a.id === t.accountId)), feeRange.days) : null;
-  // Tap an amount: Activity, filtered to that account and exactly these transactions in this range.
+  // Tap an alert: Activity, filtered to that account and exactly those charges in the last 3 months.
   const showFees = (accountId: string, kind: InterestOrFee) => {
-    const since = new Date(); since.setDate(since.getDate() - (feeRange.days - 1));
+    const since = new Date(); since.setDate(since.getDate() - 89);
     setActivityAccount(accountId);
-    setActivityFocus({ kind, since: `${since.getFullYear()}-${String(since.getMonth() + 1).padStart(2, "0")}-${String(since.getDate()).padStart(2, "0")}`, label: feeRange.long });
+    setActivityFocus({ kind, since: `${since.getFullYear()}-${String(since.getMonth() + 1).padStart(2, "0")}-${String(since.getDate()).padStart(2, "0")}`, label: "Last 3 months" });
     setTab("Activity");
     window.scrollTo({ top: 0 });
   };
-  const bankOf = (id: string) => (bank.data?.accounts.find(x => x.id === id)?.institution ?? "").replace(/ \(test\)$/, "");
-  const interestCard = yearly && openLinked.length > 0 && <section className="wealth-card accounts-side-card" aria-labelledby="interest-title">
-    <div className="accounts-side-head"><h2 id="interest-title">Interest &amp; fees</h2><small>{feeRange.long}</small></div>
-    <Segmented label="Time range for interest and fees" className="accounts-range" options={FEE_RANGES.map(r => ({ value: String(r.days), label: r.label }))} value={String(feeRange.days)} onChange={days => chooseFeeDays(Number(days))} />
-    <dl className="accounts-side-facts accounts-interest">
-      <div><dt>Interest earned <small>paid to you</small></dt><dd className={yearly.earned > 0 ? "is-gain" : ""}>{yearly.earned > 0 ? "+" : ""}{usd(yearly.earned)}</dd></div>
-      <div><dt>Interest charged <small>on cards &amp; loans</small></dt><dd className={yearly.interestPaid > 0 ? "is-debt" : ""}>{yearly.interestPaid > 0 ? "−" : ""}{usd(yearly.interestPaid)}</dd></div>
-      <div><dt>Bank fees <small>ATM, overdraft, service</small></dt><dd className={yearly.fees > 0 ? "is-debt" : ""}>{yearly.fees > 0 ? "−" : ""}{usd(yearly.fees)}</dd></div>
-    </dl>
-    {yearly.byAccount.length > 0 ? <>
-      <h3 className="accounts-side-subhead">By account</h3>
-      <ul className="accounts-interest-list">{[...yearly.byAccount].sort((x, y) => (y.earned + y.interestPaid + y.fees) - (x.earned + x.interestPaid + x.fees)).map(r => <li key={r.accountId}>
-        <span className="accounts-interest-who"><strong>{bankOf(r.accountId) || "Account"}</strong><small>{shortName(r.accountId)}</small></span>
-        <span className="accounts-interest-amounts">
-          {r.earned > 0 && <button type="button" className="is-gain" onClick={() => showFees(r.accountId, "earned")} title="See these transactions in Activity">+{usd(r.earned)} interest earned <ChevronRight size={12} aria-hidden="true" /></button>}
-          {r.interestPaid > 0 && <button type="button" className="is-debt" onClick={() => showFees(r.accountId, "charged")} title="See these transactions in Activity">−{usd(r.interestPaid)} interest charged <ChevronRight size={12} aria-hidden="true" /></button>}
-          {r.fees > 0 && <button type="button" className="is-debt" onClick={() => showFees(r.accountId, "fee")} title="See these transactions in Activity">−{usd(r.fees)} in fees <ChevronRight size={12} aria-hidden="true" /></button>}
-        </span>
-      </li>)}</ul>
-    </> : <p className="accounts-side-note">No interest or fees in {feeRange.long.toLowerCase()}.</p>}
-    <p className="accounts-side-note">Found in your transactions: anything your bank names as interest, or labels as a fee. Interest that builds up inside a brokerage may not appear.</p>
-  </section>;
+  const investedFlow = bank.data ? investingFlow(bank.data.transactions, openLinked, 30) : { added: 0, withdrawn: 0 };
   // Totals and the retirement/taxable split come from every investment account's balance; the holdings
   // list can only show institutions that share holdings (Fidelity, through Plaid, doesn't).
   const investSummary = bank.data ? investmentAccountsSummary(openLinked, bank.data.holdings ?? []) : null;
@@ -395,6 +357,11 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; complet
   const investCard = investSummary && investSummary.total > 0 && <section className="wealth-card accounts-side-card" aria-labelledby="invest-title">
     <div className="accounts-side-head"><h2 id="invest-title">Investments</h2><small>{investCount} account{investCount === 1 ? "" : "s"}</small></div>
     <p className="accounts-cushion-big"><strong>{usd(investSummary.total)}</strong></p>
+    {/* "Am I investing?": money you moved in from your other accounts, not market moves. */}
+    {(investedFlow.added > 0 || investedFlow.withdrawn > 0) && <p className="accounts-invest-flow">
+      {investedFlow.added > 0 && <span className="is-gain">You added {usd(investedFlow.added)} in the last 30 days</span>}
+      {investedFlow.withdrawn > 0 && <span>{investedFlow.added > 0 ? " · " : ""}took out {usd(investedFlow.withdrawn)}</span>}
+    </p>}
     {investSummary.retirement > 0 && investSummary.taxable > 0
       ? <AssetSplit title="Retirement vs. taxable" label="Investments split between retirement and taxable accounts" slices={[
         { name: "Retirement", value: investSummary.retirement, pct: investSummary.retirement / investSummary.total * 100 },
@@ -410,7 +377,7 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; complet
     </>}
     {missingBanks.length > 0 && <p className="accounts-side-note">{listNames(missingBanks)}: balance only, no holdings.</p>}
   </section>;
-  const accountsRail = (investCard || movesCard || interestCard) && <aside className="accounts-rail">{investCard}{movesCard}{interestCard}</aside>;
+  const accountsRail = investCard && <aside className="accounts-rail">{investCard}</aside>;
   const undatedGoals = goals.filter(g => g.saved < g.target && !g.deadline).length;
   // Goals as envelopes: each goal's savings are a share of your checking + savings.
   const knowsCash = (planningBankData?.accounts ?? []).some(a => a.type === "depository") || planningAssets.some(a => a.kind === "Checking" || a.kind === "Savings");
@@ -499,7 +466,8 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; complet
   const monthAgo = addDays(todayISO(), -30);
   const recent = (bank.data?.transactions ?? []).filter(t => !t.pending && t.date >= monthAgo);
   const recentTransfers = detectTransferIds(recent);
-  const spentThisMonth = recent.filter(t => t.amount > 0 && !recentTransfers.has(t.id)).reduce((sum, t) => sum + t.amount, 0);
+  // Purchases minus refunds and people paying you back; transfers, pay, and family support aren't spending.
+  const spentThisMonth = recent.filter(t => !isTransfer(t, recentTransfers) && (moneyKind(t) === "spent" || moneyKind(t) === "offset")).reduce((sum, t) => sum + t.amount, 0);
   const activeGoalCount = goals.filter(g => g.saved < g.target).length;
   const savedForGoals = goals.reduce((sum, g) => sum + Math.min(g.saved, g.target), 0);
   const planFact = plan.income > 0 ? `${formatMoney(plan.income)} monthly income · ${available >= 0 ? `${formatMoney(available)} left to plan` : `${formatMoney(-available)} over budget`}` : `${formatMoney(retirementBalance)} in retirement accounts`;
@@ -583,7 +551,7 @@ export function WealthDashboard(props: { bank: Bank; goals: MoneyGoal[]; complet
     </div>
     </div>}
     {tab === "Activity" && <div className="wealth-stack"><MoneyDashboard {...props} accountId={activityAccount} onAccountFilterChange={setActivityAccount} focus={activityFocus} onFocusChange={setActivityFocus} /></div>}
-    <MoneyAssistant context={assistantContext} goals={goals} budget={{ income: plan.income, essentials: plan.essentials, lifestyle: plan.lifestyle }} plan={{ ...plan, assets: planningAssets }} bankData={planningBankData} freshBankData={() => bank.ensureFreshBalances().then(fresh => bankDataForPlan(fresh, plan.excludedAccountIds))} onUpdateGoal={props.onUpdateGoal} onAddGoal={props.onAddGoal} onRemoveGoal={props.onRemoveGoal} onUpdateBudget={update} onOpenPriceCheck={props.onCheck} />
+    <MoneyAssistant context={assistantContext} goals={goals} budget={{ income: plan.income, essentials: plan.essentials, lifestyle: plan.lifestyle }} plan={{ ...plan, assets: planningAssets }} bankData={planningBankData} freshBankData={() => bank.ensureFreshBalances().then(fresh => bankDataForPlan(fresh, plan.excludedAccountIds))} onUpdateGoal={props.onUpdateGoal} onAddGoal={props.onAddGoal} onRemoveGoal={props.onRemoveGoal} onUpdateBudget={update} onOpenPriceCheck={props.onCheck} onPaymentAnswered={() => bank.reload()} />
     {detail && bank.data && <AccountDetail
       account={detail}
       name={plan.accountNames[detail.id] || detail.name}

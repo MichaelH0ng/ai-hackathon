@@ -22,6 +22,30 @@ export interface BankTransaction {
   amount: number;
   category: string; // Plaid personal_finance_category.primary
   pending: boolean;
+  /** Set when NorthStar classified a payment to or from a person or an unknown source (see classify.ts). */
+  review?: TransactionReview;
+  /** Plaid's detailed category ("TRANSPORTATION_GAS") and how sure Plaid is ("VERY_HIGH" … "LOW"). */
+  detail?: string;
+  confidence?: string;
+  /** The bank's own description when it differs from the merchant name (may say "FUEL" or a pump number). */
+  raw?: string;
+  /** The merchant's logo (an https URL from Plaid) and website, when Plaid knows the merchant. */
+  logo?: string;
+  website?: string;
+  /** Everyone Plaid saw in the charge: e.g. a marketplace ("DoorDash") and the merchant behind it. */
+  counterparties?: { name: string; type: string }[];
+  /** How NorthStar settled this category when Plaid's alone wasn't enough (see categorize.ts). */
+  categorized?: { by: "you" | "bank text" | "Plaid" | "your answers" | "amount"; confirmed: boolean };
+}
+
+/** What a person-to-person or unknown-source payment really was. */
+export type ReviewLabel = "earned" | "payback" | "family" | "own" | "spending" | "lent";
+export interface TransactionReview {
+  /** One question covers this key: a sender and direction ("keaton smith|in"), or a single transaction. */
+  key: string;
+  label: ReviewLabel;
+  /** You answered; otherwise this is NorthStar's best guess. */
+  confirmed: boolean;
 }
 
 export interface PortfolioHolding {
@@ -35,6 +59,10 @@ export interface PortfolioHolding {
   currency: string | null;
   priceAsOf: string | null;
   institution: string;
+  /** What was paid for the whole position, when the brokerage shares it. value − costBasis is the gain. */
+  costBasis?: number | null;
+  /** Cash sitting in the account (a money-market sweep), which has no gain or loss. */
+  cash?: boolean;
 }
 
 /** A credit card or loan from Plaid Liabilities. Every field except the balance can be missing at a given bank. */
@@ -82,6 +110,8 @@ export interface BankData {
     problem?: string;
     ready: boolean;
     lastUpdatedAt?: string | null;
+    /** When the bank's permission for Plaid runs out (banks that sign you in on their own site); reconnect before then. */
+    consentExpiresAt?: string | null;
     /** This connection was made before card and loan details were requested; reconnecting adds them. */
     needsDebtConsent?: boolean;
     /** The bank's logo (a PNG data URL) and brand color from Plaid, when Plaid has them. */
@@ -89,6 +119,10 @@ export interface BankData {
     color?: string | null;
   }[];
   fetchedAt: string;
+  /** Payments NorthStar guessed at and wants you to confirm, most money first. */
+  reviews?: ReviewQuestion[];
+  /** Store charges that could be gas or food and nothing settled (see categorize.ts). */
+  categoryQuestions?: CategoryQuestion[];
   /** When balances were last checked live with the banks (within 15 minutes), or null for Plaid's saved balances. */
   balancesCheckedAt?: string | null;
   /** One recorded whole-net-worth value per day, captured after a complete account load. */
@@ -162,6 +196,154 @@ export function detectTransferIds(transactions: BankTransaction[]): Set<string> 
   return ids;
 }
 
+const GENERIC_INSTITUTION_WORDS = new Set(["bank", "financial", "credit", "union", "trust", "national", "federal", "savings", "investments", "securities", "brokerage", "group", "company", "the", "of", "and"]);
+/** Words in an institution's name that identify it in a transaction ("Charles Schwab" → schwab, charles). */
+export const institutionWords = (institution: string) =>
+  institution.replace(/ \(test\)$/, "").toLowerCase().split(/[^a-z0-9]+/).filter((w) => w.length >= 4 && !GENERIC_INSTITUTION_WORDS.has(w));
+
+const isLabeledTransfer = (t: BankTransaction) => t.category.startsWith("TRANSFER") || t.category === "LOAN_PAYMENTS";
+const MOVE_WORDS = /\b(transfer|xfer|deposit|withdrawal|withdraw)\b/i;
+const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/**
+ * Whether a transaction's description names one of your other linked accounts: its last digits
+ * ("XXXXXX2793", "Account ****2793") or another bank or brokerage you connected ("Wealthfront").
+ * Your own institution's name doesn't count: banks print it on everything.
+ */
+export function namesAnotherAccount(t: BankTransaction, accounts: BankAccount[], only?: BankAccount): boolean {
+  const own = accounts.find((a) => a.id === t.accountId);
+  const text = t.name.toLowerCase();
+  return (only ? [only] : accounts).some((a) => {
+    if (a.id === t.accountId) return false;
+    if (a.mask && /^\d{3,}$/.test(a.mask) && new RegExp(`(?:[x*•#.]{2,}\\s*|ending(?: in)?\\s+)${escapeRegExp(a.mask)}\\b`, "i").test(text)) return true;
+    if (own && a.institution === own.institution) return false;
+    return institutionWords(a.institution).some((w) => new RegExp(`\\b${escapeRegExp(w)}\\b`).test(text));
+  });
+}
+
+/**
+ * Relabels money moving between your own linked accounts as TRANSFER_IN / TRANSFER_OUT, so it never
+ * counts as income or spending. Plaid often labels only one side as a transfer: a $300 move from
+ * Wealthfront to Wells Fargo arrives at Wells as "Wealthfront", labeled INCOME, while Wealthfront
+ * calls its side a transfer. Two rules, both limited to accounts you've connected:
+ * 1. Paired: the same amount left one of your accounts (labeled as a transfer) and arrived in another
+ *    within 3 days, and the description shows it's a move (transfer wording, or one side names the other account).
+ * 2. One-sided: the description names another of your accounts (its last digits, or that bank or
+ *    brokerage), and it's a deposit Plaid called income or reads as a transfer. Covers brokerages
+ *    that don't report their side.
+ * Everything else keeps Plaid's category; detectTransferIds still pairs unlabeled moves.
+ */
+export function markOwnTransfers(transactions: BankTransaction[], accounts: BankAccount[]): BankTransaction[] {
+  if (accounts.length < 2) return transactions;
+  const accountById = new Map(accounts.map((a) => [a.id, a]));
+  const relabel = new Set<string>();
+  const used = new Set<string>();
+  const posted = transactions.filter((t) => !t.pending && t.amount !== 0 && accountById.has(t.accountId));
+  const buckets = new Map<string, BankTransaction[]>();
+  for (const t of posted) {
+    const key = Math.abs(t.amount).toFixed(2);
+    buckets.set(key, [...(buckets.get(key) ?? []), t]);
+  }
+  const daysApart = (a: BankTransaction, b: BankTransaction) => Math.abs(Date.parse(a.date) - Date.parse(b.date)) / 86_400_000;
+  const closest = (a: BankTransaction, group: BankTransaction[], ok: (b: BankTransaction) => boolean) => {
+    let best: BankTransaction | null = null;
+    for (const b of group) {
+      if (b === a || used.has(b.id) || b.accountId === a.accountId || Math.sign(b.amount) === Math.sign(a.amount) || daysApart(a, b) > 3 || !ok(b)) continue;
+      if (!best || daysApart(a, b) < daysApart(a, best)) best = b;
+    }
+    return best;
+  };
+  for (const group of buckets.values()) {
+    // Transfers Plaid labeled on both sides pair with each other first, so they can't claim a
+    // same-sized paycheck or refund on another account.
+    for (const a of group) {
+      if (used.has(a.id) || !isLabeledTransfer(a)) continue;
+      const b = closest(a, group, isLabeledTransfer);
+      if (b) { used.add(a.id); used.add(b.id); }
+    }
+    for (const a of group) {
+      if (used.has(a.id) || isLabeledTransfer(a)) continue;
+      const cardPayment = a.amount < 0 && ["credit", "loan"].includes(accountById.get(a.accountId)!.type) && /\bpayment\b/i.test(a.name);
+      const b = closest(a, group, (b) =>
+        isLabeledTransfer(b) &&
+        (MOVE_WORDS.test(a.name) || cardPayment || namesAnotherAccount(a, accounts, accountById.get(b.accountId)) || namesAnotherAccount(b, accounts, accountById.get(a.accountId))));
+      if (b) { used.add(a.id); used.add(b.id); relabel.add(a.id); }
+    }
+  }
+  for (const t of transactions) {
+    if (relabel.has(t.id) || isLabeledTransfer(t) || !accountById.has(t.accountId)) continue;
+    const looksLikeMove = (t.amount < 0 && t.category === "INCOME") || MOVE_WORDS.test(t.name);
+    if (looksLikeMove && namesAnotherAccount(t, accounts)) relabel.add(t.id);
+  }
+  if (!relabel.size) return transactions;
+  return transactions.map((t) => (relabel.has(t.id) ? { ...t, category: t.amount > 0 ? "TRANSFER_OUT" : "TRANSFER_IN" } : t));
+}
+
+/** 529 college savings plans, by plan name or the number itself ("ScholarShare ACH DEPOSIT", "MY529", "NY 529 DIRECT"). */
+const COLLEGE_SAVINGS = /\bscholar ?share\b|\bmy ?529\b|\b529\b|\bcollege ?(savings|advantage|invest|bound|choice|america)\b|\bbright ?start\b|\bnest ?529\b|\bunique ?college\b|\bpath2college\b/i;
+
+/** Money from family (today: 529 college savings withdrawals). Counts as money in for cash flow, never as earned income. */
+export const FAMILY_SUPPORT = "FAMILY_SUPPORT";
+export const isFamilySupport = (t: Pick<BankTransaction, "category">) => t.category === FAMILY_SUPPORT;
+
+/**
+ * Money to or from a 529 college savings plan. A withdrawal (Plaid usually calls it INCOME) becomes
+ * FAMILY_SUPPORT: it pays real bills like rent, so it counts toward cash flow, but it isn't pay, so
+ * "how much did I make" and paycheck projections leave it out. A contribution is saving, not
+ * spending, so it becomes a transfer. Card payments and transfers Plaid already labeled are left alone.
+ */
+export function markCollegeSavings(transactions: BankTransaction[]): BankTransaction[] {
+  let changed = false;
+  const result = transactions.map((t) => {
+    if (isLabeledTransfer(t) || t.amount === 0 || !COLLEGE_SAVINGS.test(t.name)) return t;
+    changed = true;
+    return { ...t, category: t.amount > 0 ? "TRANSFER_OUT" : FAMILY_SUPPORT };
+  });
+  return changed ? result : transactions;
+}
+
+/** One question Polaris asks about a store charge that could be gas or food (see categorize.ts). */
+export interface CategoryQuestion {
+  /** "cat:<date>|<amount>|<merchant>": answers are saved per charge. */
+  key: string;
+  merchant: string;
+  date: string;
+  amount: number;
+  guess: string;
+  reason: string;
+  choices: string[];
+  /** "store": gas or food at a store that sells both. "uncertain": Plaid marked its category low-confidence. */
+  kind?: "store" | "uncertain";
+}
+
+/** One question Polaris asks: what were these payments? */
+export interface ReviewQuestion {
+  key: string;
+  direction: "in" | "out";
+  /** Who sent or received it ("Keaton Smith"), or null for a deposit with no sender (mobile check). */
+  person: string | null;
+  /** Where it happened ("Venmo", "Zelle", "Mobile deposit", "Wells Fargo"). */
+  via: string;
+  guess: ReviewLabel;
+  /** Why NorthStar guessed that ("the note says “Electric”"). */
+  reason: string;
+  count: number;
+  total: number;
+  lastDate: string;
+  examples: { date: string; amount: number; note: string }[];
+}
+
+/**
+ * What a non-transfer transaction does to your totals: money out is spending; money in is earned (Plaid's
+ * INCOME: pay, interest), family support, or otherwise a refund or payback that reduces spending.
+ */
+export function moneyKind(t: Pick<BankTransaction, "amount" | "category">): "spent" | "earned" | "family" | "offset" {
+  if (t.amount > 0) return "spent";
+  if (t.category === "INCOME") return "earned";
+  if (t.category === FAMILY_SUPPORT) return "family";
+  return "offset";
+}
+
 export function isTransfer(t: BankTransaction, transferIds: Set<string>): boolean {
   return transferIds.has(t.id) || t.category.startsWith("TRANSFER") || t.category === "LOAN_PAYMENTS";
 }
@@ -195,11 +377,15 @@ export function topCategories(transactions: BankTransaction[], transferIds: Set<
   const c = localISO(cutoff);
   const totals = new Map<string, number>();
   for (const t of transactions) {
-    if (t.pending || t.amount <= 0 || t.date < c || isTransfer(t, transferIds)) continue;
+    // Refunds and paybacks come off their category; earned money and family support aren't spending.
+    if (t.pending || t.date < c || isTransfer(t, transferIds)) continue;
+    const kind = moneyKind(t);
+    if (kind !== "spent" && kind !== "offset") continue;
     totals.set(t.category, (totals.get(t.category) ?? 0) + t.amount);
   }
-  const total = [...totals.values()].reduce((s, v) => s + v, 0) || 1;
+  const total = [...totals.values()].filter((v) => v > 0).reduce((s, v) => s + v, 0) || 1;
   return [...totals.entries()]
+    .filter(([, value]) => value > 0)
     .map(([key, value]) => ({ key, label: categoryLabel(key), emoji: categoryEmoji(key), value, pct: (value / total) * 100 }))
     .sort((a, b) => b.value - a.value)
     .slice(0, 6);
@@ -306,6 +492,8 @@ export function findRepeating(transactions: BankTransaction[], direction: "out" 
   const byName = new Map<string, BankTransaction[]>();
   for (const t of transactions) {
     if (t.pending || (direction === "out" ? t.amount <= 0 : t.amount >= 0)) continue;
+    // Family support (529 withdrawals) arrives when needed, not on a payday schedule.
+    if (direction === "in" && isFamilySupport(t)) continue;
     byName.set(t.name, [...(byName.get(t.name) ?? []), t]);
   }
   const found: Repeating[] = [];
@@ -356,6 +544,8 @@ export function upcomingBills(transactions: BankTransaction[], transferIds: Set<
 
 const CATEGORIES: Record<string, [string, string]> = {
   INCOME: ["Income", "💰"],
+  FAMILY_SUPPORT: ["Family support", "🎓"],
+  SHARED_COSTS: ["Shared costs", "🤝"],
   RENT_AND_UTILITIES: ["Rent & utilities", "🏠"],
   FOOD_AND_DRINK: ["Food & drink", "🍽️"],
   TRANSPORTATION: ["Transportation", "🚗"],
@@ -414,6 +604,18 @@ export function netWorthSeries(accounts: BankAccount[], transactions: BankTransa
 }
 
 /**
+ * The chart's history: days NorthStar actually recorded win; before the first recorded day,
+ * the estimate worked back from transactions fills in. (Using only recorded days would shrink
+ * every period, from 1W to All, to however long NorthStar has been open.)
+ */
+export function mergeNetWorthHistory(estimated: NetWorthPoint[], recorded: NetWorthPoint[]): NetWorthPoint[] {
+  const firstRecorded = recorded.reduce<string | null>((first, p) => (!first || p.date < first ? p.date : first), null);
+  if (!firstRecorded) return estimated;
+  const merged = [...estimated.filter((p) => p.date < firstRecorded), ...recorded.map(({ date, value }) => ({ date, value }))];
+  return merged.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/**
  * One account's balance for each of the last `days` days, worked backward from today's balance
  * through its posted transactions. Transfers count here (they do move this account's balance).
  * Cards and loans give what's owed, which spending raises. Not for investments: their value
@@ -469,4 +671,12 @@ export function assetsByInstitution(accounts: BankAccount[]): InstitutionSlice[]
       accounts: e.accounts,
     }))
     .sort((a, b) => b.value - a.value);
+}
+
+/** " · +$120 (+8.4%)" since bought, when the brokerage shares what was paid; "" otherwise (and for cash). */
+export function gainText(h: Pick<PortfolioHolding, "value" | "costBasis" | "cash">): string {
+  if (h.cash || typeof h.costBasis !== "number" || h.costBasis <= 0) return "";
+  const gain = h.value - h.costBasis;
+  const dollars = Math.abs(gain).toLocaleString("en-US", { style: "currency", currency: "USD", maximumFractionDigits: 0 });
+  return ` · ${gain < 0 ? "−" : "+"}${dollars} (${gain < 0 ? "−" : "+"}${Math.abs((gain / h.costBasis) * 100).toFixed(1)}%)`;
 }

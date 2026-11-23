@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { interestAndFees, investmentAccountsSummary, investmentsTogether, movesBetweenAccounts } from "./accountInsights";
+import { feeAlerts, interestAndFees, investingFlow, investmentAccountsSummary, investmentsTogether, lastPayments, movesBetweenAccounts } from "./accountInsights";
 import type { BankAccount, BankTransaction, PortfolioHolding } from "./money";
 
 const now = new Date(2026, 10, 16);
@@ -82,5 +82,37 @@ describe("movesBetweenAccounts: one-sided transfers", () => {
       tx("gold", "chk", "2026-11-05", 5, "Robinhood Gold", "GENERAL_SERVICES"), // a subscription, not a move
     ], [wf, rh, crypto], 30, now);
     expect(moves).toEqual([{ fromId: "chk", toId: "rh", total: 550, count: 2, lastDate: "2026-11-13", matchedBy: "name" }]);
+  });
+});
+
+describe("account row facts", () => {
+  const accounts = [account("chk", "depository", "checking"), account("rh", "investment", "brokerage"), account("cc", "credit")];
+
+  it("counts money added to investments, and money taken back out", () => {
+    const flow = investingFlow([
+      tx("o1", "chk", "2026-11-10", 500, "Transfer to Robinhood", "TRANSFER_OUT"), tx("i1", "rh", "2026-11-10", -500, "Deposit", "TRANSFER_IN"),
+      tx("o2", "rh", "2026-11-12", 200, "Withdrawal", "TRANSFER_OUT"), tx("i2", "chk", "2026-11-12", -200, "From Robinhood", "TRANSFER_IN"),
+    ], accounts, 30, now);
+    expect(flow).toEqual({ added: 500, withdrawn: 200 });
+  });
+
+  it("finds the latest card payment, not a store refund", () => {
+    const paid = lastPayments([
+      tx("p1", "cc", "2026-10-30", -1992.88, "ONLINE PAYMENT THANK YOU", "LOAN_PAYMENTS"),
+      tx("p0", "cc", "2026-09-30", -1500, "ONLINE PAYMENT THANK YOU", "LOAN_PAYMENTS"),
+      tx("r1", "cc", "2026-11-05", -40, "Target refund", "GENERAL_MERCHANDISE"),
+    ], accounts, 60, now);
+    expect(paid.get("cc")).toEqual({ amount: 1992.88, date: "2026-10-30" });
+  });
+
+  it("raises an alert only for interest charged and fees, one per account and kind", () => {
+    const alerts = feeAlerts([
+      tx("f1", "chk", "2026-11-03", 35, "OVERDRAFT FEE", "BANK_FEES"), tx("f2", "chk", "2026-10-03", 3, "ATM FEE", "BANK_FEES"),
+      tx("c1", "cc", "2026-11-01", 12.4, "INTEREST CHARGE ON PURCHASES", "BANK_FEES"),
+      tx("e1", "chk", "2026-11-01", -0.03, "INTEREST PAYMENT", "INCOME"),
+      tx("old", "chk", "2026-06-01", 35, "OVERDRAFT FEE", "BANK_FEES"),
+    ], 90, now);
+    expect(alerts.map((a) => [a.accountId, a.kind, a.total, a.count])).toEqual([["chk", "fee", 38, 2], ["cc", "charged", 12.4, 1]]);
+    expect(feeAlerts([tx("e1", "chk", "2026-11-01", -0.03, "INTEREST PAYMENT", "INCOME")], 90, now)).toEqual([]);
   });
 });

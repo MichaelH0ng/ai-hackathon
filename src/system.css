@@ -179,6 +179,9 @@
 /* Category icons on Activity (replacing emoji). */
 .category-icon { display: inline-grid; place-items: center; width: 36px; height: 36px; flex-shrink: 0; border-radius: var(--ns-radius-control); background: var(--ns-surface-inset); color: var(--ns-accent); }
 .category-icon.is-inline { width: 22px; height: 22px; background: none; vertical-align: -5px; margin-right: 4px; }
+/* A merchant's logo from Plaid: on white so dark logos stay visible in dark mode. */
+.category-icon.has-logo { overflow: hidden; background: #fff; }
+.category-icon.has-logo img { width: 28px; height: 28px; object-fit: contain; border-radius: 6px; }
 
 /* ---------- Magic UI-inspired touches (kept subtle) ---------- */
 /* Goal progress ring. */

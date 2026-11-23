@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { type BankAccount, type BankTransaction, accountBalanceSeries, assetsByInstitution, monthlyBillTotal, detectTransferIds, netWorth, netWorthSeries, periodFlow, spendableCash, topCategories, upcomingBills } from "./money";
+import { type BankAccount, type BankTransaction, isTransfer, accountBalanceSeries, assetsByInstitution, monthlyBillTotal, detectTransferIds, findRepeating, markCollegeSavings, markOwnTransfers, netWorth, mergeNetWorthHistory, netWorthSeries, periodFlow, spendableCash, topCategories, upcomingBills } from "./money";
 
 const acct = (p: Partial<BankAccount>): BankAccount => ({ id: "a", name: "A", mask: null, type: "depository", subtype: "checking", current: 0, available: null, institution: "Bank", ...p });
 let n = 0;
@@ -32,6 +32,83 @@ describe("transfers", () => {
     const into = tx({ accountId: "sav", amount: -50, date: "2026-09-30", category: "TRANSFER_IN", name: "Transfer from Checking" });
     const groceries = tx({ accountId: "chk", amount: 50, date: "2026-10-02", name: "Trader Joe's" });
     expect(detectTransferIds([into, groceries, out]).has(groceries.id)).toBe(false);
+  });
+});
+
+describe("markOwnTransfers", () => {
+  const wells = acct({ id: "wf", name: "Everyday Checking", mask: "2793", institution: "Wells Fargo" });
+  const wellsSavings = acct({ id: "wfs", name: "Way2Save Savings", mask: "9469", subtype: "savings", institution: "Wells Fargo" });
+  const wealthfront = acct({ id: "wfc", name: "Individual Cash Account", mask: "4410", subtype: "savings", institution: "Wealthfront" });
+  const card = acct({ id: "visa", name: "Active Cash Visa", mask: "6839", type: "credit", subtype: "credit card", institution: "Wells Fargo" });
+  const accounts = [wells, wellsSavings, wealthfront, card];
+  const category = (list: BankTransaction[], id: string) => list.find((t) => t.id === id)!.category;
+
+  it("relabels a deposit Plaid called income when the other side is your own transfer", () => {
+    const out = tx({ accountId: "wfc", amount: 300, category: "TRANSFER_OUT", name: "Wells Fargo (Account ****2793) Withdrawal WITHDRAWAL" });
+    const into = tx({ accountId: "wf", amount: -300, category: "INCOME", name: "Wealthfront" });
+    const result = markOwnTransfers([out, into], accounts);
+    expect(category(result, into.id)).toBe("TRANSFER_IN");
+    expect(isTransfer(result.find((t) => t.id === into.id)!, new Set())).toBe(true);
+  });
+
+  it("relabels a one-sided deposit named after another linked brokerage", () => {
+    const into = tx({ accountId: "wf", amount: -300, category: "INCOME", name: "Wealthfront" });
+    expect(category(markOwnTransfers([into], accounts), into.id)).toBe("TRANSFER_IN");
+  });
+
+  it("relabels a move between your accounts that Plaid filed under rent", () => {
+    const out = tx({ accountId: "wf", amount: 748.75, category: "RENT_AND_UTILITIES", name: "ONLINE TRANSFER TO HONG M REF #IB0R3X8JDM EVERYDAY CHECKING BRYAN RENT" });
+    const into = tx({ accountId: "wfs", amount: -748.75, category: "TRANSFER_IN", name: "ONLINE TRANSFER FROM HONG M REF #IB0R3X8JDM WELLS FARGO CLEAR ACCESS BA BRYAN RENT" });
+    expect(category(markOwnTransfers([out, into], accounts), out.id)).toBe("TRANSFER_OUT");
+  });
+
+  it("relabels a card payment received when checking sent it", () => {
+    const pay = tx({ accountId: "wf", amount: 300, category: "LOAN_PAYMENTS", name: "ONLINE TRANSFER TO WELLS FARGO ACTIVE CASH VISA CARD XXXXXXXXXXXX6839" });
+    const received = tx({ accountId: "visa", amount: -300, category: "OTHER", name: "ONLINE PAYMENT THANK YOU" });
+    expect(category(markOwnTransfers([pay, received], accounts), received.id)).toBe("TRANSFER_IN");
+  });
+
+  it("keeps a paycheck that happens to match a transfer amount", () => {
+    const out = tx({ accountId: "wf", amount: 300, category: "TRANSFER_OUT", name: "ONLINE TRANSFER TO HONG M WAY2SAVE SAVINGS XXXXXX9469" });
+    const into = tx({ accountId: "wfs", amount: -300, category: "TRANSFER_IN", name: "ONLINE TRANSFER FROM HONG M EVERYDAY CHECKING XXXXXX2793" });
+    const pay = tx({ accountId: "wfc", amount: -300, category: "INCOME", name: "ACME CORP PAYROLL" });
+    const lonePay = tx({ accountId: "wf", date: "2026-11-01", amount: -649.02, category: "INCOME", name: "ACME CORP PAYROLL" });
+    const result = markOwnTransfers([out, into, pay, lonePay], accounts);
+    expect(category(result, pay.id)).toBe("INCOME");
+    expect(category(result, lonePay.id)).toBe("INCOME");
+  });
+
+  it("keeps a refund that matches a transfer amount", () => {
+    const out = tx({ accountId: "wf", amount: 20, category: "TRANSFER_OUT", name: "VENMO PAYMENT JOHN" });
+    const refund = tx({ accountId: "visa", amount: -20, category: "GENERAL_MERCHANDISE", name: "TARGET REFUND" });
+    expect(category(markOwnTransfers([out, refund], accounts), refund.id)).toBe("GENERAL_MERCHANDISE");
+  });
+
+  it("keeps a purchase at a store that shares a linked institution's name", () => {
+    const apple = acct({ id: "apple", institution: "Apple", type: "credit" });
+    const buy = tx({ accountId: "wf", amount: 999, category: "GENERAL_MERCHANDISE", name: "APPLE STORE" });
+    expect(category(markOwnTransfers([buy], [...accounts, apple]), buy.id)).toBe("GENERAL_MERCHANDISE");
+  });
+});
+
+describe("markCollegeSavings", () => {
+  it("treats 529 withdrawals as family support and contributions as transfers", () => {
+    const withdrawal = tx({ amount: -7787.5, category: "INCOME", name: "ScholarShare ACH DEPOSIT 080526 0094652123801#17201437" });
+    const contribution = tx({ amount: 100, category: "GENERAL_SERVICES", name: "MY529 CONTRIB" });
+    const nyPlan = tx({ amount: -500, category: "INCOME", name: "NY 529 DIRECT WITHDRAWAL" });
+    const [a, b, c] = markCollegeSavings([withdrawal, contribution, nyPlan]);
+    expect([a.category, b.category, c.category]).toEqual(["FAMILY_SUPPORT", "TRANSFER_OUT", "FAMILY_SUPPORT"]);
+  });
+  it("never predicts family support as a paycheck", () => {
+    const deposits = ["2026-08-05", "2026-09-04", "2026-10-05", "2026-11-04"].map((date) => tx({ date, amount: -945, category: "FAMILY_SUPPORT", name: "ScholarShare ACH DEPOSIT" }));
+    expect(findRepeating(deposits, "in", "2026-11-14")).toEqual([]);
+    expect(findRepeating(deposits.map((t) => ({ ...t, category: "INCOME" })), "in", "2026-11-14").length).toBe(1);
+  });
+  it("leaves paychecks and numbers that only contain 529 alone", () => {
+    const pay = tx({ amount: -1317.85, category: "INCOME", name: "PROTIVITI INC. EARNINGS 260731" });
+    const ref = tx({ amount: -40, category: "INCOME", name: "DEPOSIT REF 17201529" });
+    const list = [pay, ref];
+    expect(markCollegeSavings(list)).toBe(list);
   });
 });
 
@@ -168,5 +245,16 @@ describe("monthlyBillTotal", () => {
       { amount: 50, cadence: "Every 2 weeks" }, // 26 a year
       { amount: 120, cadence: "Yearly" },
     ])).toBeCloseTo(100 + 52 + 108.33 + 10, 1);
+  });
+});
+
+describe("mergeNetWorthHistory", () => {
+  it("keeps the estimated history before NorthStar's first recorded day", () => {
+    const estimated = [{ date: "2026-11-14", value: 100 }, { date: "2026-11-15", value: 110 }, { date: "2026-11-16", value: 999 }, { date: "2026-11-17", value: 999 }];
+    const recorded = [{ date: "2026-11-17", value: 130, capturedAt: "x" }, { date: "2026-11-16", value: 120, capturedAt: "x" }];
+    expect(mergeNetWorthHistory(estimated, recorded)).toEqual([
+      { date: "2026-11-14", value: 100 }, { date: "2026-11-15", value: 110 }, { date: "2026-11-16", value: 120 }, { date: "2026-11-17", value: 130 },
+    ]);
+    expect(mergeNetWorthHistory(estimated, [])).toBe(estimated);
   });
 });

@@ -291,7 +291,7 @@ export function MoneyDashboard({
                     const transfer = isTransfer(t, transferIds);
                     return (
                       <li key={t.id} style={{ "--i": order } as React.CSSProperties} className="ns-enter flex items-center gap-3 py-2.5 text-sm">
-                        <CategoryIcon category={transfer ? (t.amount < 0 ? "TRANSFER_IN" : "TRANSFER_OUT") : t.category} />
+                        <CategoryIcon category={transfer ? (t.amount < 0 ? "TRANSFER_IN" : "TRANSFER_OUT") : t.category} logo={transfer ? undefined : t.logo} />
                         <span className="min-w-0 flex-1">
                           <span className="block truncate font-semibold text-stone-800">{t.name}</span>
                           <span className="block truncate text-xs text-stone-500">

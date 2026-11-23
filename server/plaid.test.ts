@@ -49,7 +49,8 @@ beforeEach(() => {
   mocks.items = [{ itemId: "investment-item", accessToken: "private-access-token", institution: "Test broker", kind: "investments" }]; mocks.files.clear();
   mocks.client.accountsGet.mockResolvedValue({ data: { accounts: [{ account_id: "ira", name: "My IRA", mask: "1234", type: "investment", subtype: "roth", balances: { current: 1000, available: null } }] } });
   mocks.client.investmentsHoldingsGet.mockResolvedValue({ data: { securities: [{ security_id: "fund", name: "Example fund", ticker_symbol: "TEST", iso_currency_code: "USD", close_price_as_of: "2026-11-13" }], holdings: [{ account_id: "ira", security_id: "fund", quantity: 10, institution_price: 100, institution_value: 1000 }] } });
-  mocks.client.itemGet.mockResolvedValue({ data: { item: { status: { transactions: { last_successful_update: "2026-11-14T15:00:00Z" } } } } });
+  // Plaid's real shape: the refresh times are in the response's top-level status, not on the item.
+  mocks.client.itemGet.mockResolvedValue({ data: { item: { institution_id: null, consent_expiration_time: null }, status: { transactions: { last_successful_update: "2026-11-14T15:00:00Z" } } } });
   mocks.client.linkTokenCreate.mockResolvedValue({ data: { link_token: "short-lived-token" } });
 });
 afterEach(() => vi.unstubAllEnvs());
@@ -217,9 +218,9 @@ describe("keeping transactions in sync", () => {
   it("saves nothing until the last page has arrived", async () => {
     mocks.client.transactionsSync
       .mockResolvedValueOnce({ data: { added: [plaidTx("a")], modified: [], removed: [], next_cursor: "page-1", has_more: true } })
-      .mockRejectedValueOnce({ response: { data: { error_code: "RATE_LIMIT" } } });
+      .mockRejectedValueOnce({ response: { data: { error_type: "API_ERROR", error_code: "INTERNAL_SERVER_ERROR" } } });
     const broken = await invoke<BankData>("/api/plaid/dashboard");
-    expect(broken.body.status[0].problem).toBe("RATE_LIMIT");
+    expect(broken.body.status[0].problem).toBe("INTERNAL_SERVER_ERROR");
     expect([...mocks.files.keys()].filter((f) => f.includes("sync"))).toEqual([]);
     mocks.client.transactionsSync.mockResolvedValueOnce({ data: { added: [plaidTx("a")], modified: [], removed: [], next_cursor: "page-1", has_more: false } });
     await invoke<BankData>("/api/plaid/dashboard");
@@ -278,5 +279,118 @@ describe("reconnecting an existing bank", () => {
     const result = await invoke<{ error: string }>("/api/plaid/link-token", { itemId: "missing" });
     expect(result.status).toBe(404);
     expect(mocks.client.linkTokenCreate).not.toHaveBeenCalled();
+  });
+});
+
+describe("daily net-worth snapshot", () => {
+  const at = (iso: string) => new Date(iso);
+  const point = (date: string, capturedAt: Date) => ({ date, capturedAt: capturedAt.toISOString(), value: 1 });
+  it("is due when today has no point, and again in the evening if today's was taken earlier", async () => {
+    const { snapshotDue } = await import("./plaid.ts");
+    const morning = at("2026-11-17T09:00:00");
+    expect(snapshotDue([], morning)).toBe(true);
+    expect(snapshotDue([point("2026-11-17", morning)], at("2026-11-17T14:00:00"))).toBe(false);
+    expect(snapshotDue([point("2026-11-17", morning)], at("2026-11-17T22:00:00"))).toBe(true);
+    expect(snapshotDue([point("2026-11-17", at("2026-11-17T21:30:00"))], at("2026-11-17T23:00:00"))).toBe(false);
+  });
+});
+
+describe("a bank that fails on one load", () => {
+  it("still lets its name mark a transfer as your own money, without counting its balance", async () => {
+    const wells = { itemId: "wells", accessToken: "private-access-token", institution: "Wells Fargo", kind: "bank" };
+    const wealthfront = { itemId: "wf", accessToken: "private-access-token-2", institution: "Wealthfront", kind: "bank" };
+    mocks.items = [wells, wealthfront];
+    const checking = { account_id: "chk", name: "Everyday Checking", mask: "2793", type: "depository", subtype: "checking", balances: { current: 2000, available: 2000 } };
+    const cash = { account_id: "cash", name: "Cash Account", mask: "4410", type: "depository", subtype: "savings", balances: { current: 30000, available: 30000 } };
+    mocks.client.accountsGet.mockImplementation(({ access_token }: { access_token: string }) =>
+      Promise.resolve({ data: { accounts: [access_token === "private-access-token" ? checking : cash] } }));
+    mocks.client.liabilitiesGet.mockResolvedValue({ data: { liabilities: {} } });
+    mocks.client.transactionsRecurringGet.mockResolvedValue({ data: { inflow_streams: [], outflow_streams: [] } });
+    const fromWealthfront = { transaction_id: "t1", account_id: "chk", date: "2026-08-19", name: "Wealthfront", merchant_name: null, amount: -300, pending: false, personal_finance_category: { primary: "INCOME" } };
+    mocks.client.transactionsSync.mockImplementation(({ access_token }: { access_token: string }) =>
+      Promise.resolve({ data: { added: access_token === "private-access-token" ? [fromWealthfront] : [], modified: [], removed: [], next_cursor: "c", has_more: false } }));
+    const { loadDashboardData } = await import("./plaid.ts");
+    await loadDashboardData();
+    mocks.client.accountsGet.mockImplementation(({ access_token }: { access_token: string }) =>
+      access_token === "private-access-token" ? Promise.resolve({ data: { accounts: [checking] } }) : Promise.reject({ response: { data: { error_code: "INTERNAL_SERVER_ERROR" } } }));
+    // A minute later, so the saved balances are read again.
+    const later = Date.now() + 61_000;
+    vi.spyOn(Date, "now").mockReturnValue(later);
+    const second = await loadDashboardData();
+    vi.restoreAllMocks();
+    expect(second.accounts.map((a) => a.id)).toEqual(["chk"]);
+    expect(second.transactions.find((t) => t.id === "t1")?.category).toMatch(/^TRANSFER/);
+  });
+
+  it("reads saved balances once a minute, and keeps showing them when Plaid says it's been asked too often", async () => {
+    mocks.items = [{ itemId: "wells", accessToken: "private-access-token", institution: "Wells Fargo", kind: "bank" }];
+    const checking = { account_id: "chk", name: "WELLS FARGO ACTIVE CASH VISA\uFFFD\uFFFD CARD", mask: "2793", type: "depository", subtype: "checking", balances: { current: 2000, available: 1700 } };
+    mocks.client.accountsGet.mockResolvedValue({ data: { accounts: [checking] } });
+    mocks.client.liabilitiesGet.mockResolvedValue({ data: { liabilities: {} } });
+    mocks.client.transactionsRecurringGet.mockResolvedValue({ data: { inflow_streams: [], outflow_streams: [] } });
+    mocks.client.transactionsSync.mockResolvedValue({ data: { added: [], modified: [], removed: [], next_cursor: "c", has_more: false } });
+    const { loadDashboardData } = await import("./plaid.ts");
+    const first = await loadDashboardData();
+    await loadDashboardData();
+    await loadDashboardData();
+    expect(mocks.client.accountsGet).toHaveBeenCalledTimes(1);
+    // Symbols Plaid couldn't decode are dropped from the name.
+    expect(first.accounts[0].name).toBe("WELLS FARGO ACTIVE CASH VISA CARD");
+    mocks.client.accountsGet.mockRejectedValue({ response: { data: { error_code: "ACCOUNTS_LIMIT" } } });
+    vi.spyOn(Date, "now").mockReturnValue(Date.now() + 61_000);
+    const limited = await loadDashboardData();
+    vi.restoreAllMocks();
+    expect(limited.accounts.map((a) => [a.id, a.current])).toEqual([["chk", 2000]]);
+    expect(limited.status[0]).not.toHaveProperty("problem", "ACCOUNTS_LIMIT");
+  });
+
+  it("reports when each bank last updated, when its permission ends, merchant logos and what holdings cost", async () => {
+    mocks.items = [{ itemId: "wells", accessToken: "private-access-token", institution: "Wells Fargo", kind: "all" }];
+    mocks.client.itemGet.mockResolvedValue({ data: { item: { institution_id: null, consent_expiration_time: "2027-03-03T00:00:00Z" }, status: { transactions: { last_successful_update: "2026-11-19T08:00:00Z" } } } });
+    mocks.client.accountsGet.mockResolvedValue({ data: { accounts: [
+      { account_id: "chk", name: "Checking", mask: "1", type: "depository", subtype: "checking", balances: { current: 5, available: 5 } },
+      { account_id: "brk", name: "Brokerage", mask: "2", type: "investment", subtype: "brokerage", balances: { current: 1200, available: null } },
+    ] } });
+    mocks.client.investmentsHoldingsGet.mockResolvedValue({ data: {
+      securities: [{ security_id: "s1", name: "Vanguard Total", ticker_symbol: "VTI", type: "etf" }, { security_id: "s2", name: "Cash", ticker_symbol: null, type: "cash", is_cash_equivalent: true }],
+      holdings: [{ account_id: "brk", security_id: "s1", quantity: 4, institution_price: 275, institution_value: 1100, cost_basis: 1000 }, { account_id: "brk", security_id: "s2", quantity: 100, institution_price: 1, institution_value: 100, cost_basis: null }],
+    } });
+    mocks.client.liabilitiesGet.mockResolvedValue({ data: { liabilities: {} } });
+    mocks.client.transactionsRecurringGet.mockResolvedValue({ data: { inflow_streams: [], outflow_streams: [] } });
+    const coffee = { transaction_id: "t1", account_id: "chk", date: "2026-11-01", name: "STARBUCKS 123", merchant_name: "Starbucks", amount: 4, pending: false, logo_url: "https://plaid-merchant-logos.plaid.com/starbucks.png", website: "starbucks.com", counterparties: [{ name: "Starbucks", type: "merchant", logo_url: null }], personal_finance_category: { primary: "FOOD_AND_DRINK" } };
+    mocks.client.transactionsSync.mockResolvedValue({ data: { added: [coffee], modified: [], removed: [], next_cursor: "c", has_more: false } });
+    const { loadDashboardData } = await import("./plaid.ts");
+    const data = await loadDashboardData();
+    expect(data.status[0]).toMatchObject({ lastUpdatedAt: "2026-11-19T08:00:00Z", consentExpiresAt: "2027-03-03T00:00:00Z" });
+    expect(data.transactions[0]).toMatchObject({ logo: "https://plaid-merchant-logos.plaid.com/starbucks.png", website: "starbucks.com", counterparties: [{ name: "Starbucks", type: "merchant" }] });
+    expect(data.holdings?.map((h) => [h.ticker, h.costBasis, h.cash])).toEqual([["VTI", 1000, false], [null, null, true]]);
+  });
+
+  it("shares one trip to Plaid between loads that overlap", async () => {
+    mocks.items = [{ itemId: "wells", accessToken: "private-access-token", institution: "Wells Fargo", kind: "bank" }];
+    mocks.client.accountsGet.mockResolvedValue({ data: { accounts: [{ account_id: "chk", name: "Checking", mask: "1", type: "depository", subtype: "checking", balances: { current: 5, available: 5 } }] } });
+    mocks.client.liabilitiesGet.mockResolvedValue({ data: { liabilities: {} } });
+    mocks.client.transactionsRecurringGet.mockResolvedValue({ data: { inflow_streams: [], outflow_streams: [] } });
+    mocks.client.transactionsSync.mockResolvedValue({ data: { added: [], modified: [], removed: [], next_cursor: "c", has_more: false } });
+    const { loadDashboardData } = await import("./plaid.ts");
+    const [a, b] = await Promise.all([loadDashboardData(), loadDashboardData()]);
+    expect(a).toBe(b);
+    expect(mocks.client.transactionsSync).toHaveBeenCalledTimes(1);
+    expect(mocks.client.itemGet).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the synced transactions when Plaid rate-limits the sync (by error type, whatever the code)", async () => {
+    mocks.items = [{ itemId: "wells", accessToken: "private-access-token", institution: "Wells Fargo", kind: "bank" }];
+    mocks.client.accountsGet.mockResolvedValue({ data: { accounts: [{ account_id: "chk", name: "Checking", mask: "1", type: "depository", subtype: "checking", balances: { current: 5, available: 5 } }] } });
+    mocks.client.liabilitiesGet.mockResolvedValue({ data: { liabilities: {} } });
+    mocks.client.transactionsRecurringGet.mockResolvedValue({ data: { inflow_streams: [], outflow_streams: [] } });
+    const coffee = { transaction_id: "t1", account_id: "chk", date: "2026-11-01", name: "Coffee", merchant_name: "Coffee", amount: 4, pending: false, personal_finance_category: { primary: "FOOD_AND_DRINK" } };
+    mocks.client.transactionsSync.mockResolvedValue({ data: { added: [coffee], modified: [], removed: [], next_cursor: "c", has_more: false } });
+    const { loadDashboardData } = await import("./plaid.ts");
+    await loadDashboardData();
+    mocks.client.transactionsSync.mockRejectedValue({ response: { data: { error_type: "RATE_LIMIT_EXCEEDED", error_code: "SOME_NEW_LIMIT" } } });
+    const limited = await loadDashboardData();
+    expect(limited.transactions.map((t) => t.id)).toContain("t1");
+    expect(limited.status[0].problem).toBeUndefined();
   });
 });

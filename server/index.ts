@@ -3,10 +3,10 @@ import express from "express";
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
 import { z } from "zod";
-import { loadDashboardData, plaidConfigured, plaidRouter } from "./plaid.js";
-import { billsFor, detectTransferIds, isTransfer } from "../src/lib/money.js";
+import { loadDashboardData, plaidConfigured, plaidRouter, startDailySnapshots } from "./plaid.js";
+import { billsFor, detectTransferIds, isTransfer, moneyKind, type BankTransaction } from "../src/lib/money.js";
 import { sentenceMatchesFacts, templateSentence, type VerdictFacts } from "../src/lib/safeToSpendExplain.js";
-import { categoryLabel, comparisonPeriods, goalFinishDate, hasUnmatchedSubject, inRange, matchCategory, matchGoal, matchMerchant, monthlySummaries, needsSonnet, rollingRange, windowTotals, explicitRange, followUpQuestion, type DateRange } from "./assistantData.js";
+import { categoryLabel, comparisonPeriods, goalFinishDate, hasUnmatchedSubject, inRange, matchCategory, matchGoal, matchMerchant, matchSubcategory, monthlySummaries, payee, needsSonnet, rollingRange, windowTotals, explicitRange, followUpQuestion, type DateRange } from "./assistantData.js";
 import { shortDate } from "../src/lib/safeToSpendExplain.js";
 import { recurring } from "../src/lib/safeToSpend.js";
 import { todayISO } from "../src/lib/dates.js";
@@ -108,7 +108,7 @@ type ChatData = Awaited<ReturnType<typeof loadDashboardData>>;
 
 const isoDate = (date: Date) => date.toISOString().slice(0, 10);
 
-function transactionRange(question: string, now = new Date(), defaultDays = 30): DateRange {
+function transactionRange(question: string, now = new Date(), defaultDays = 30, allTimeDefault = false): DateRange {
   const periods = comparisonPeriods(question, now);
   if (periods) return { label: `${periods[0].label} and ${periods[1].label}`, start: periods[0].start, endExclusive: periods[1].endExclusive };
   const rolling = rollingRange(question, now);
@@ -127,7 +127,17 @@ function transactionRange(question: string, now = new Date(), defaultDays = 30):
   if (/\blast month\b/.test(text)) return { label: "last calendar month", start: isoDate(new Date(today.getFullYear(), today.getMonth() - 1, 1)), endExclusive: isoDate(new Date(today.getFullYear(), today.getMonth(), 1)) };
   if (/\bthis month\b/.test(text)) return { label: "this month", start: isoDate(new Date(today.getFullYear(), today.getMonth(), 1)), endExclusive: day(1) };
   if (/\b(last|past) (30 days|month)\b/.test(text)) return { label: "the last 30 days", start: day(-29), endExclusive: day(1) };
-  if (/\b(last|past) year\b|\b12 months\b/.test(text)) return { label: "the last 12 months", start: day(-365), endExclusive: day(1) };
+  if (/\btoday\b/.test(text)) return { label: "today", start: day(0), endExclusive: day(1) };
+  if (/\byesterday\b/.test(text)) return { label: "yesterday", start: day(-1), endExclusive: day(0) };
+  if (/\b(this year|so far this year|year to date|ytd)\b/.test(text)) return { label: "this year", start: `${today.getFullYear()}-01-01`, endExclusive: day(1) };
+  // "Last year" is the calendar year before this one; "the past year" and "12 months" are rolling.
+  if (/\blast year\b/.test(text)) {
+    const y = today.getFullYear() - 1;
+    return { label: String(y), start: `${y}-01-01`, endExclusive: `${y + 1}-01-01` };
+  }
+  if (/\bpast year\b|\b12 months\b/.test(text)) return { label: "the last 12 months", start: day(-365), endExclusive: day(1) };
+  // "Ever", "all time": everything saved. Questions about a person or store with no period ("how much have I paid Christian?"): all of it too.
+  if (allTimeDefault || /\b(ever|all[- ]time|of all time|lifetime)\b/.test(text)) return { label: "all time", start: "0000-01-01", endExclusive: day(1) };
   // No period named: instant answers mean the last 30 days; Polaris reads 90 days of
   // individual transactions (older months arrive as monthly summaries).
   return { label: `the last ${defaultDays} days`, start: day(-(defaultDays - 1)), endExclusive: day(1) };
@@ -155,7 +165,8 @@ function financialContext(data: ChatData, goals: z.infer<typeof ChatRequest>["go
     .sort((a, b) => b.date.localeCompare(a.date));
   const transactions = posted
     .slice(0, MAX_LISTED_TRANSACTIONS)
-    .map(({ id: _id, accountId, ...transaction }) => ({ ...transaction, account: accountNames.get(accountId) ?? "Unknown account" }));
+    // Logos and websites are for the screen; counterparties stay (they can name what was bought).
+    .map(({ id: _id, accountId, logo: _logo, website: _site, ...transaction }) => ({ ...transaction, account: accountNames.get(accountId) ?? "Unknown account" }));
 
   const transferIds = detectTransferIds(data.transactions);
   const windowed = selectedTransactions(data, range);
@@ -177,6 +188,9 @@ function financialContext(data: ChatData, goals: z.infer<typeof ChatRequest>["go
       .map(({ name, amount, cadence, nextDue, daysUntil, source }) => ({ name, amount: Math.round(amount * 100) / 100, cadence, nextDue, daysUntil, source })),
     // Cards and loans from the bank. Any field can be null when the bank doesn't share it; say so rather than guessing.
     debts: (data.debts ?? []).map(({ institution, name, mask, kind, balance, minimumPayment, nextDueDate, apr, lastStatementBalance, isOverdue }) => ({ institution, name, mask, kind, balance, minimumPayment, nextDueDate, apr, lastStatementBalance, isOverdue })),
+    // Investments, with what was paid when the brokerage shares it (value minus costBasis is the gain so far).
+    holdings: (data.holdings ?? []).filter((h) => !h.cash).sort((x, y) => y.value - x.value).slice(0, 25)
+      .map(({ institution, name, ticker, quantity, value, costBasis }) => ({ institution, name, ticker, quantity, value, costBasis: costBasis ?? null })),
     conventions: { plaidAmount: "positive means money out; negative means money in" },
     accounts,
     moneyGoals: goals.map((goal) => ({ ...goal, projectedFinish: goalFinishDate(goal) })),
@@ -191,7 +205,8 @@ function financialContext(data: ChatData, goals: z.infer<typeof ChatRequest>["go
     postedTransactions: lean ? [...transactions].sort((a, b) => b.amount - a.amount).slice(0, 15) : transactions,
     ...(lean ? { postedTransactionsNote: "Only the 15 largest posted transactions in the window are listed; windowTotals and monthlySummaries include all of them." } : {}),
     ...(!lean && posted.length > transactions.length ? { postedTransactionsNote: `Showing the newest ${transactions.length} of ${posted.length} posted transactions in the window; windowTotals and monthlySummaries include all of them.` } : {}),
-    dataStatus: data.status,
+    // Bank logos are images (tens of thousands of characters each question); the model needs only the words.
+    dataStatus: data.status.map(({ logo: _logo, color: _color, itemId: _id, ...status }) => status),
   });
 }
 
@@ -199,27 +214,214 @@ const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD
 /** Cents only when there are cents ($350, $412.50), matching the app's formatExact. */
 const exact = (n: number) => money.format(n).replace(/\.00$/, "");
 
+/** Says how much of an answer rests on NorthStar's guesses about payments with people, so a number is never presented as more certain than it is. */
+function guessNote(totals: ReturnType<typeof windowTotals>): string {
+  const { count, amount } = totals.unconfirmed;
+  // A few dollars of guesses can't change the answer; only mention it when it could.
+  if (!count || (amount < 20 && amount < totals.grossSpending * 0.01)) return "";
+  return `\n\n${whole(amount)} of this is still NorthStar's guess. Answer Polaris's quick questions to confirm it.`;
+}
+
+/** Whole dollars for breakdowns, so the headline number is the only one with cents. */
+const whole = (n: number) => money.format(Math.round(n)).replace(/\.00$/, "");
+const capitalize = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+/** "Nov 3" this year, "Nov 3, 2025" otherwise. */
+const when = (iso: string) => `${shortDate(iso)}${iso.slice(0, 4) === String(new Date().getFullYear()) ? "" : `, ${iso.slice(0, 4)}`}`;
+
+/** "Paychecks", "Mobile deposit", "Interest", or the payer's name, instead of raw bank text like "PAYROLL ST OF CA … XXXXX7052". */
+function earnedSource(name: string): string {
+  if (/\binterest\b|\bapy\b/i.test(name)) return "interest";
+  if (/tax ?r(e)?f(un)?d|taxrfd|irs treas|franchise tax/i.test(name)) return "tax refunds";
+  if (/payroll|earnings|direct dep|salary|\bpay\b/i.test(name)) return "paychecks";
+  if (/mobile deposit/i.test(name)) return "mobile deposit";
+  if (/deposit/i.test(name)) return "deposits";
+  return name.split(/\s+(?=\S*\d)|\s*[:#*]/)[0].replace(/\s+\w*ACH$/i, "").trim() || name;
+}
+
+/** Where the money you made came from, biggest first: "paychecks $1,550, mobile deposit $325". */
+function earnedBreakdown(earned: { name: string; amount: number }[], limit = 3): string {
+  const bySource = new Map<string, number>();
+  for (const t of earned) bySource.set(earnedSource(t.name), (bySource.get(earnedSource(t.name)) ?? 0) - t.amount);
+  return [...bySource].sort(([, a], [, b]) => b - a).slice(0, limit).map(([source, amount]) => `${source} ${whole(amount)}`).join(", ");
+}
+
+/**
+ * A name a person recognizes: "Joaquin Boyd" from 'Joaquin Boyd "Utilities"', "Cal Poly" from the
+ * university's full name, and the bank's own words when Plaid's merchant name misleads
+ * ("Shell Beach Brewhouse", which Plaid calls "Shell").
+ */
+function shortMerchant(name: string, t?: Pick<BankTransaction, "raw" | "categorized">): string {
+  if (t?.raw && t.categorized?.by === "bank text" && t.categorized.confirmed) {
+    // "SHELL BEACH BREWHOUSE PISMO BEACH CA" → "Shell Beach Brewhouse": up to the word that says what it is.
+    const raw = t.raw.replace(/\s+\d.*$|\s{2,}.*$/, "");
+    const named = /^.*?\b(brew(house|ery|ing)|cafe|grill|pizza|restaurant|taqueria|burgers?|kitchen|bistro|diner|eatery|tavern|pub)\b/i.exec(raw)?.[0] ?? raw.replace(/\s+[A-Z]{2}$/, "");
+    const words = named.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()).trim();
+    if (words) return words;
+  }
+  return payee(name).replace(/California Polytechnic State University.*/i, "Cal Poly").replace(/\s+Inc\.?$/i, "");
+}
+
+/** Top spending categories: "rent and utilities $3,355, transportation $920". */
+function categoryBreakdown(byCategory: Record<string, number>, limit = 3): string {
+  return Object.entries(byCategory).filter(([, v]) => v > 0).slice(0, limit).map(([cat, amount]) => `${cat} ${whole(amount)}`).join(", ");
+}
+
+/** The biggest places in a list of purchases: "Costco $177, Platinum Gas $65". */
+function merchantBreakdown(bought: BankTransaction[], limit = 3): string {
+  const byMerchant = new Map<string, number>();
+  for (const t of bought) byMerchant.set(shortMerchant(t.name, t), (byMerchant.get(shortMerchant(t.name, t)) ?? 0) + t.amount);
+  return [...byMerchant].sort(([, x], [, y]) => y - x).slice(0, limit).map(([name, amount]) => `${name} ${whole(amount)}`).join(", ");
+}
+
+/** "Since Aug 24" / "This month" / "In October": the period as a sentence opener. */
+function periodOpener(label: string): string {
+  const fixed: Record<string, string> = {
+    "this month": "This month", "this week": "This week", "last calendar month": "Last month", "last calendar week": "Last week",
+    today: "Today", yesterday: "Yesterday", "this year": "This year", "all time": "In total",
+  };
+  if (fixed[label]) return fixed[label];
+  const since = /^the period since (.+?)(, \d{4})?$/.exec(label);
+  if (since) return `Since ${since[1]}`;
+  // "October 2026" asked in 2026 reads as "In October".
+  const month = /^([A-Z][a-z]+) (\d{4})$/.exec(label);
+  if (month && Number(month[2]) === new Date().getFullYear()) return `In ${month[1]}`;
+  return capitalize(`in ${label}`);
+}
+
+/** Whether the question names its own period; without one, store and person questions cover all history. */
+const namesPeriod = (question: string) => transactionRange(question, new Date(), 30, true).label !== "all time";
+
+/** Stores that sell groceries but that banks file as shopping (Costco's gas station is filed as gas, so it stays out). */
+const WAREHOUSE_STORES = /\b(costco|sam'?s club|target|walmart)\b/i;
+const AVERAGE_WORDS = /\b(average|avg|typical(ly)?|usually|normally)\b|\b(a|per|each|every) month\b|\bmonthly\b/;
+
+/** "State of California" from "PAYROLL ST OF CA CA PAYROLL XX7052", or the payer's own words. */
+function payerName(name: string): string {
+  if (/\bST(ATE)? OF CA\b/i.test(name)) return "State of California";
+  const words = name.replace(/\b(payroll|ppd|ach|dir(ect)? dep(osit)?|pay|xx+\w*)\b|\d+|[*#:]/gi, " ").replace(/\s+/g, " ").trim();
+  return words ? words.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()) : "Your employer";
+}
+
+const FREQUENCY_WORDS: Record<string, string> = { WEEKLY: "weekly", BIWEEKLY: "every two weeks", SEMI_MONTHLY: "twice a month", MONTHLY: "monthly", ANNUALLY: "yearly" };
+
+/**
+ * The next paycheck Plaid predicts. Only income streams that look like pay: not interest, and not
+ * money from your own accounts (a regular Wealthfront transfer is labeled income by Plaid too).
+ */
+function nextPaycheck(data: ChatData): string | null {
+  const today = todayISO();
+  const own = [...new Set(data.accounts.map((a) => a.institution.toLowerCase().split(/\s+/)[0]))].filter((w) => w.length >= 4);
+  const streams = (data.recurring ?? []).filter((s) => s.direction === "in" && s.isActive && s.category === "INCOME" && s.nextDate && s.nextDate >= today
+    && s.amount >= 20 && !/\binterest\b/i.test(s.name) && !own.some((w) => s.name.toLowerCase().includes(w)))
+    .sort((a, b) => a.nextDate!.localeCompare(b.nextDate!));
+  const next = streams[0];
+  if (!next) return null;
+  // The paychecks themselves, to show what they've actually been: amounts vary for hourly and state pay.
+  const key = (name: string) => name.toLowerCase().replace(/[^a-z ]+/g, " ").split(/\s+/).filter((w) => w.length > 1 && !/^x+$/.test(w)).slice(0, 3).join(" ");
+  const sixMonthsAgo = isoDate(new Date(Date.now() - 183 * 86_400_000));
+  const paid = data.transactions.filter((t) => t.amount < 0 && !t.pending && t.date >= sixMonthsAgo && key(t.name) === key(next.name)).sort((a, b) => b.date.localeCompare(a.date));
+  const amounts = paid.map((t) => -t.amount);
+  const last = paid[0];
+  const lines = [`**Your next paycheck should arrive around ${when(next.nextDate!)}**, from ${payerName(next.name)} (${FREQUENCY_WORDS[next.frequency] ?? "on a regular schedule"}).`];
+  if (last) lines.push(`The last one was ${exact(-last.amount)} on ${when(last.date)}.`);
+  if (amounts.length >= 3 && Math.max(...amounts) - Math.min(...amounts) > Math.max(...amounts) * 0.1) {
+    lines.push(`Over the last 6 months they ranged from ${whole(Math.min(...amounts))} to ${whole(Math.max(...amounts))}, so the amount may differ.`);
+  }
+  const others = streams.slice(1).filter((s) => s.nextDate! <= isoDate(new Date(Date.now() + 31 * 86_400_000)));
+  if (others.length) lines.push(`Also expected: ${others.map((s) => `${payerName(s.name)} around ${shortDate(s.nextDate!)}`).join(", ")}.`);
+  lines.push("", "The date is Plaid's prediction from your past paychecks, so it can shift by a day or two.");
+  return lines.join("\n");
+}
+
+const signedWhole = (n: number) => `${n < 0 ? "−" : "+"}${whole(Math.abs(n))}`;
+const pct = (gain: number, basis: number) => (basis > 0 ? ` (${gain < 0 ? "−" : "+"}${Math.abs((gain / basis) * 100).toFixed(1)}%)` : "");
+
+/** Gains and losses on what was paid, from the cost basis brokerages share. Cash has no gain, so it's left out. */
+function investmentGains(data: ChatData, text: string): string | null {
+  const brokers = [...new Set((data.holdings ?? []).map((h) => h.institution))];
+  const asked = brokers.filter((b) => text.includes(b.toLowerCase().split(/\s+/)[0]));
+  const holdings = (data.holdings ?? []).filter((h) => !h.cash && (!asked.length || asked.includes(h.institution)));
+  const priced = holdings.filter((h) => typeof h.costBasis === "number" && h.costBasis > 0);
+  if (!priced.length) return null;
+  const sum = (list: typeof priced, f: (h: (typeof priced)[number]) => number) => list.reduce((total, h) => total + f(h), 0);
+  const value = sum(priced, (h) => h.value);
+  const basis = sum(priced, (h) => h.costBasis!);
+  const gain = value - basis;
+  const where = asked.length === 1 ? ` at ${asked[0]}` : "";
+  const lines = [`**Your investments${where} are ${gain >= 0 ? "up" : "down"} ${whole(Math.abs(gain))}${pct(gain, basis).replace(/[+−]/, "")}** on what you paid: worth ${whole(value)}, bought for ${whole(basis)}.`];
+  const byBroker = asked.length === 1 ? [] : brokers.map((b) => {
+    const list = priced.filter((h) => h.institution === b);
+    const v = sum(list, (h) => h.value), c = sum(list, (h) => h.costBasis!);
+    return { b, gain: v - c, basis: c, n: list.length };
+  }).filter((x) => x.n).sort((x, y) => y.gain - x.gain);
+  if (byBroker.length > 1) lines.push(...byBroker.map((x) => `• ${x.b}: ${signedWhole(x.gain)}${pct(x.gain, x.basis)}`));
+  const sorted = [...priced].sort((a, b) => (b.value - b.costBasis!) - (a.value - a.costBasis!));
+  const best = sorted[0], worst = sorted.at(-1)!;
+  const label = (h: (typeof priced)[number]) => h.ticker || h.name;
+  if (best.value - best.costBasis! > 0) lines.push(`Biggest gain: ${label(best)} ${signedWhole(best.value - best.costBasis!)}.${worst !== best && worst.value - worst.costBasis! < 0 ? ` Biggest drop: ${label(worst)} ${signedWhole(worst.value - worst.costBasis!)}.` : ""}`);
+  else if (worst.value - worst.costBasis! < 0) lines.push(`Biggest drop: ${label(worst)} ${signedWhole(worst.value - worst.costBasis!)}.`);
+  const unpriced = holdings.length - priced.length;
+  const notes = [unpriced ? `${unpriced} holding${unpriced === 1 ? "" : "s"} worth ${whole(sum(holdings.filter((h) => !priced.includes(h)), (h) => h.value))} ${unpriced === 1 ? "isn't" : "aren't"} counted because the brokerage doesn't share ${unpriced === 1 ? "its" : "their"} purchase price.` : "", "Gains aren't locked in until you sell."].filter(Boolean);
+  return `${lines.join("\n")}\n\n${notes.join(" ")}`;
+}
+
 function instantAnswer(question: string, data: ChatData, goals: z.infer<typeof ChatRequest>["goals"], hasManualAccounts = false): string | null {
   const text = question.toLowerCase();
-  const range = transactionRange(question);
-  const transactions = selectedTransactions(data, range).filter((transaction) => !transaction.pending);
   const transferIds = detectTransferIds(data.transactions);
+  const spentAt = data.transactions.filter((t) => t.amount > 0);
+  // A store or person the question names ("Costco", "Christian Lim"). Without a period, that means all of it.
+  const merchant = matchMerchant(question, spentAt);
+  // Only spending-type questions about a store reach back through all history ("interest" can also be a merchant's first word).
+  const range = transactionRange(question, new Date(), 30, !!merchant && /\b(spen[dt]|spending|spnd|paid|pay|refund\w*|biggest|largest|bought)\b/.test(text));
+  const transactions = selectedTransactions(data, range).filter((transaction) => !transaction.pending);
+  // Spending and the refunds/paybacks that come off it; earned money and family support aren't spending.
+  const counted = transactions.filter((t) => !isTransfer(t, transferIds) && (moneyKind(t) === "spent" || moneyKind(t) === "offset"));
   // Asked about a period before the history starts: say so instead of answering about a different period.
   const earliest = data.transactions.reduce((min, t) => (t.date < min ? t.date : min), "9999-12-31");
-  const noDataFor = !transactions.length && data.transactions.length && range.start < earliest
-    ? `I don't have any transactions for ${range.label}. Your history in NorthStar starts ${shortDate(earliest)}, ${earliest.slice(0, 4)}.`
+  const noDataFor = !transactions.length && data.transactions.length && range.start < earliest && range.label !== "all time"
+    ? `I don't have any transactions for ${range.label}. Your history in NorthStar starts ${when(earliest)}.`
     : null;
+  // A person (Venmo, Zelle) rather than a store: payments to them carry a note ('Christian Lim "🍕"') or went
+  // through NorthStar's people review.
+  const named = merchant ? data.transactions.filter((t) => t.amount > 0 && payee(t.name) === merchant) : [];
+  const isPerson = named.filter((t) => t.review || /"[^"]*"\s*$/.test(t.name)).length > named.length / 2;
+  // The same person through Zelle reads "ZELLE TO LIM CHRISTIAN ON 08/08…": every part of their name, in any order.
+  const nameParts = merchant && isPerson ? merchant.toLowerCase().split(/\s+/).filter((w) => w.length >= 2) : [];
+  const atMerchant = (t: BankTransaction) => !!merchant && (payee(t.name) === merchant
+    || (nameParts.length >= 2 && /\bzelle\b/i.test(t.name) && nameParts.every((w) => new RegExp(`\\b${w.replace(/[^a-z0-9]/g, "")}\\b`, "i").test(t.name))));
 
-  if (/\b(recurring|subscription|subscriptions)\b/.test(text) || /\b(upcoming|next)\b.*\bbills?\b|\bbills?\b.*\b(upcoming|next)\b/.test(text)) {
+  if (/\b(recurring|subscription|subscriptions)\b/.test(text) || /\b(upcoming|next)\b.*\bbills?\b|\bbills?\b.*\b(upcoming|next|due)\b|\bwhat bills\b/.test(text)) {
     const allBills = billsFor({ transactions: data.transactions.filter((transaction) => !transaction.pending), recurring: data.recurring }, transferIds);
-    const nextThirtyDays = allBills.filter((bill) => bill.daysUntil >= 0 && bill.daysUntil <= 30);
-    const bills = /\b(next month|next 30 days|coming month)\b/.test(text) ? nextThirtyDays : allBills.slice(0, 6);
+    // Subscriptions are services you signed up for; rent, utilities and loans are bills but not subscriptions.
+    const categoryOf = (name: string) => data.transactions.find((t) => t.name === name && t.amount > 0)?.category;
+    const subscriptionsOnly = /\bsubscriptions?\b/.test(text);
+    const pool = subscriptionsOnly ? allBills.filter((b) => !["RENT_AND_UTILITIES", "LOAN_PAYMENTS"].includes(categoryOf(b.name) ?? "")) : allBills;
+    const nextThirtyDays = pool.filter((bill) => bill.daysUntil >= 0 && bill.daysUntil <= 30);
+    const bills = /\b(next month|next 30 days|coming month)\b/.test(text) ? nextThirtyDays : pool.slice(0, 8);
     if (!bills.length) {
-      return "I couldn't identify recurring bills from your posted transaction history yet. NorthStar needs at least two similarly priced charges from the same merchant on a regular schedule before it projects a bill.";
+      return subscriptionsOnly
+        ? "I don't see any subscriptions yet. NorthStar counts one after it sees the same charge from a company on a regular schedule a few times."
+        : "I couldn't find recurring bills in your history yet. NorthStar needs to see the same charge on a regular schedule a few times before it predicts the next one.";
     }
-    const projected = bills.reduce((sum, bill) => sum + bill.amount, 0);
-    const detail = bills.map((bill) => `• ${bill.name}: about ${money.format(bill.amount)} (${bill.cadence.toLowerCase()}; expected ${bill.nextDue}, in ${bill.daysUntil} day${bill.daysUntil === 1 ? "" : "s"})`).join("\n");
-    return `Here are the recurring charges NorthStar projects${bills === nextThirtyDays ? " in the next 30 days" : " next"}:\n${detail}\n\nExpected next charges total about ${money.format(projected)}. These are projections based on repeated posted transactions, so a merchant's billing date or amount can change.`;
+    const total = bills.reduce((sum, bill) => sum + bill.amount, 0);
+    const monthly = bills.reduce((sum, bill) => sum + (bill.cadence === "Weekly" ? bill.amount * 52 / 12 : bill.cadence === "Every 2 weeks" ? bill.amount * 26 / 12 : bill.amount), 0);
+    const detail = bills.map((bill) => `• ${shortMerchant(bill.name)}: **${exact(Math.round(bill.amount * 100) / 100)}** ${bill.daysUntil === 0 ? "today" : bill.daysUntil === 1 ? "tomorrow" : `on ${shortDate(bill.nextDue)}`}${bill.cadence === "Monthly" ? "" : ` (${bill.cadence.toLowerCase()})`}`).join("\n");
+    const headline = subscriptionsOnly
+      ? `**You have ${bills.length} subscription${bills.length === 1 ? "" : "s"}, about ${whole(monthly)} a month.**`
+      : `**${bills.length} bill${bills.length === 1 ? "" : "s"} coming up, about ${whole(total)} in all.**`;
+    return `${headline}\n${detail}\n\nDates and amounts are predicted from past charges, so they can shift a little.`;
+  }
+
+  // "When's my next paycheck?": Plaid's own prediction from the paycheck stream it detected.
+  if (/\b(next|when)\b.*\b(pay ?check|pay ?day|get paid|direct deposit)\b|\bwhen (do|will) i get paid\b|\bnext (pay|payment from work)\b/.test(text)) {
+    const answer = nextPaycheck(data);
+    if (answer) return answer;
+  }
+
+  // "How are my investments doing?": what they're worth now against what was paid for them.
+  if (/\b(investments?|portfolio|stocks?|holdings?|brokerage|robinhood|fidelity|schwab|wealthfront|roth|ira)\b/.test(text) && /\b(doing|perform\w*|up|down|gain\w*|los[st]|losing|return\w*|profit\w*|made|make)\b/.test(text)) {
+    const answer = investmentGains(data, text);
+    if (answer) return answer;
   }
 
   // "How much money do I have" is a balance question; "how much money have I earned/made" is about income.
@@ -231,59 +433,161 @@ function instantAnswer(question: string, data: ChatData, goals: z.infer<typeof C
       if (account.type === "credit" || account.type === "loan") debts += account.current;
       else assets += account.current;
     }
-    const cash = data.accounts
-      .filter((account) => account.type === "depository" && (account.subtype === "checking" || account.subtype === "savings"))
-      .reduce((sum, account) => sum + (account.available ?? account.current), 0);
-    return `Based on your current connected-account balances, you have ${money.format(assets)} in assets and ${money.format(debts)} in credit-card and loan balances, for an estimated net worth of ${money.format(assets - debts)}. Spendable checking and savings cash is ${money.format(cash)}.\n\nThis uses current balances, not a credit report or a complete net-worth statement.`;
+    const cashAccounts = data.accounts.filter((account) => account.type === "depository");
+    const cash = cashAccounts.reduce((sum, account) => sum + (account.available ?? account.current), 0);
+    const invested = data.accounts.filter((a) => a.type === "investment").reduce((sum, a) => sum + a.current, 0);
+    if (/\b(cash|money)\b/.test(text) && !/\bnet worth\b/.test(text)) {
+      const largest = [...cashAccounts].sort((a, b) => (b.available ?? b.current) - (a.available ?? a.current)).slice(0, 3);
+      const onHold = cashAccounts.reduce((sum, a) => sum + a.current, 0) - cash;
+      return `**You have ${exact(Math.round(cash * 100) / 100)} in cash** across checking, savings and Venmo${onHold >= 1 ? `, after ${whole(onHold)} held for pending charges` : ""}.\n${largest.map((a) => `• ${a.institution} ${a.name}: ${whole(a.available ?? a.current)}`).join("\n")}${invested ? `\n\nPlus ${whole(invested)} invested.` : ""}`;
+    }
+    // Current balances throughout, so the lines add up to the total.
+    const cashNow = cashAccounts.reduce((sum, a) => sum + a.current, 0);
+    return `**Your net worth is ${exact(Math.round((assets - debts) * 100) / 100)}.**\n• Cash: ${whole(cashNow)}\n• Investments: ${whole(invested)}\n• Owed on cards and loans: ${whole(debts)}`;
   }
 
   if (noDataFor && /\b(spent|spend|spnd|spending|earn|earned|made|income|money|cash ?flow|positive|negative)\b/.test(text)) return noDataFor;
 
+  // "Did I get a refund from Amazon?": money back from a store, never pay that happens to share its name.
+  if (/\brefund(s|ed)?\b|\b(returned|return)\b.*\b(money|back)\b/.test(text)) {
+    const refunds = counted.filter((t) => t.amount < 0 && (!merchant || atMerchant(t)) && !t.review);
+    const where = merchant ? ` from ${merchant}` : "";
+    if (!refunds.length) return `**No, I don't see a refund${where}** ${range.label === "all time" ? "in your history" : `${periodOpener(range.label).toLowerCase()}`}.${merchant ? "" : " Refunds can take a few days to post after a return."}`;
+    const total = -refunds.reduce((s, t) => s + t.amount, 0);
+    const list = [...refunds].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 5).map((t) => `• ${when(t.date)}: ${exact(-t.amount)}${merchant ? "" : ` from ${shortMerchant(t.name, t)}`}`);
+    return `**Yes, ${exact(Math.round(total * 100) / 100)} in ${refunds.length === 1 ? "a refund" : `${refunds.length} refunds`}${where}.**\n${list.join("\n")}${refunds.length > 5 ? `\n…and ${refunds.length - 5} more.` : ""}`;
+  }
+
+  // "What was my biggest purchase last month?": exact, from every purchase in the period.
+  if (/\b(biggest|largest|most expensive|highest|top)\b.*\b(purchases?|charges?|expenses?|transactions?|things? i bought|buys?)\b/.test(text)) {
+    const bought = counted.filter((t) => t.amount > 0 && (!merchant || atMerchant(t))).sort((a, b) => b.amount - a.amount).slice(0, 3);
+    if (!bought.length) return `I don't see any purchases ${periodOpener(range.label).toLowerCase()}.`;
+    const [top, ...rest] = bought;
+    return `**${range.label === "all time" ? "Of everything on record" : periodOpener(range.label)}, your biggest purchase was ${exact(top.amount)} at ${shortMerchant(top.name, top)}** on ${when(top.date)}.${rest.length ? `\nNext: ${rest.map((t) => `${shortMerchant(t.name, t)} ${whole(t.amount)} (${shortDate(t.date)})`).join(", ")}.` : ""}`;
+  }
+
+  // "Am I spending more this month than last month?" / "this week than last week": the fair comparison is
+  // the same number of days, so a partial month isn't compared with a whole one.
+  const periods = comparisonPeriods(question);
+  if (periods && /\b(spent|spend|spending|spnd)\b/.test(text)) {
+    const subject = matchSubcategory(question);
+    const category = subject ? null : matchCategory(question);
+    const keep = (t: BankTransaction) => (subject ? subject.test(t) : category ? t.category === category : true);
+    const [prev, cur] = periods;
+    const days = Math.round((Date.parse(cur.endExclusive!) - Date.parse(cur.start)) / 86_400_000);
+    const prevSameEnd = isoDate(new Date(Date.parse(prev.start) + days * 86_400_000));
+    const spend = (start: string, endExclusive: string) => windowTotals(data.transactions.filter((t) => t.date >= start && t.date < endExclusive && keep(t)), transferIds).spendingTotal;
+    const now = spend(cur.start, cur.endExclusive!);
+    const before = spend(prev.start, prevSameEnd < prev.endExclusive! ? prevSameEnd : prev.endExclusive!);
+    const full = spend(prev.start, prev.endExclusive!);
+    const unit = /week/.test(cur.label) ? "week" : "month";
+    const diff = now - before;
+    const about = subject ? ` on ${subject.label}` : category ? ` on ${categoryLabel(category)}` : "";
+    const verdict = Math.abs(diff) < Math.max(10, before * 0.05)
+      ? `About the same as last ${unit}`
+      : diff > 0 ? `Yes, ${whole(diff)} more than at this point last ${unit}` : `No, ${whole(-diff)} less than at this point last ${unit}`;
+    return `**${verdict}.**\n• This ${unit} so far${about}: **${exact(now)}**\n• Same days last ${unit}: ${exact(before)}\n• All of last ${unit}: ${exact(full)}`;
+  }
+
+  // "How much did I spend and how much did I make…": answer both halves, not just the first one matched.
+  const asksSpending = /\b(spent|spend|spending|spnd)\b/.test(text);
+  const asksEarning = /\b(made|make|earn|earned|income|money came in|money in|inflows?|received|get paid|got paid)\b/.test(text);
+  if (asksSpending && asksEarning && !periods && !/\b(more|less) than\b/.test(text)) {
+    const totals = windowTotals(transactions, transferIds);
+    const earned = transactions.filter((t) => !isTransfer(t, transferIds) && moneyKind(t) === "earned");
+    const net = totals.netCashFlow;
+    const outcome = net > 0 ? `you're up ${exact(net)}` : net < 0 ? `you're down ${exact(-net)}` : "you broke even";
+    const made = earnedBreakdown(earned);
+    const spentOn = categoryBreakdown(totals.spendingByCategory);
+    return `**${periodOpener(range.label)}, ${outcome}.**\n`
+      + `• Made **${exact(totals.earnedTotal)}**${made ? `: ${made}` : ""}\n`
+      + (totals.familySupportTotal ? `• Family support (529): **${exact(totals.familySupportTotal)}**\n` : "")
+      + `• Spent **${exact(totals.spendingTotal)}**${spentOn ? `: ${spentOn}` : ""}`
+      + guessNote(totals);
+  }
+
   if (/\b(am i|are we|was i|were we|i'?m) (positive|negative|in the (red|green)|ahead|behind|up|down)\b|\bnet (cash ?flow|income|change)\b|\bcash ?flow\b|\b(more|less) than i (spent|spend|made|make|earned|earn)\b|\b(spent|spend) more than i\b/.test(text)) {
     const totals = windowTotals(transactions, transferIds);
-    const lastDay = range.endExclusive ? shortDate(new Date(Date.parse(range.endExclusive) - 86_400_000).toISOString().slice(0, 10)) : "today";
     const net = totals.netCashFlow;
     // "Did I spend more than I made?" and "am I in the red?" are yes when net is negative.
     const askedNegative = /\b(am i|are we|was i|were we|i'?m) (negative|in the red|behind|down)\b|\b(spent|spend) more than i\b|\b(made|make|earned|earn) less than i\b/.test(text);
     const verdict = net === 0 ? "You broke even" : (askedNegative ? net < 0 : net > 0) ? "Yes" : "No";
-    const outcome = net > 0 ? `so you're up ${exact(net)}` : net < 0 ? `so you're down ${exact(-net)}` : "so you broke even";
-    const period = range.label === "this month" ? "So far this month" : range.label === "this week" ? "So far this week" : range.label === "last calendar month" ? "Last month" : range.label === "last calendar week" ? "Last week" : `Over ${range.label}`;
+    const outcome = net > 0 ? `you're up ${exact(net)}` : net < 0 ? `you're down ${exact(-net)}` : "you broke even";
     const biggest = totals.spendingByMerchant[0];
     // Only lead with yes/no when the question asks one ("am I…", "did I…"), not for "what is my cash flow".
-    const yesNo = /\b(am i|are we|was i|were we|did i|do i|have i|i'?m)\b/.test(text);
-    return `${yesNo ? `${verdict}. ` : ""}${period} (${shortDate(range.start)}–${lastDay}), ${exact(totals.inflowTotal)} came in and ${exact(totals.spendingTotal)} went out, ${outcome}.${biggest && net < 0 ? ` The biggest expense was ${biggest.merchant} (${exact(biggest.total)}).` : ""}`;
+    // "Am I up or down?" offers both, so a yes or no would answer nothing.
+    const yesNo = /\b(am i|are we|was i|were we|did i|do i|have i|i'?m)\b/.test(text) && !/\bup or down\b|\bpositive or negative\b|\bahead or behind\b/.test(text);
+    const inLine = totals.familySupportTotal ? `${exact(totals.inflowTotal)} came in (${exact(totals.familySupportTotal)} of it from your 529)` : `${exact(totals.inflowTotal)} came in`;
+    return `**${yesNo ? `${verdict}. ` : ""}${periodOpener(range.label)}, ${outcome}.**\n• ${inLine}\n• Spent ${exact(totals.spendingTotal)}${biggest && net < 0 ? `, biggest was ${shortMerchant(biggest.merchant)} (${whole(biggest.total)})` : ""}${guessNote(totals)}`;
   }
 
-  if (/\b(spent|spending|spend|spnd)\b/.test(text) && /\b(how much|what|where|categories?|on|at)\b/.test(text)) {
-    // Two-period comparisons go to the model, which gets exact totals for both periods.
-    if (comparisonPeriods(question)) return null;
-    const spending = transactions.filter((transaction) => transaction.amount > 0 && !isTransfer(transaction, transferIds));
-    const merchant = matchMerchant(question, data.transactions.filter((t) => t.amount > 0));
-    const category = merchant ? null : matchCategory(question);
-    // "On coffee", "for clothes": narrower than a category we can match exactly, so let the model look.
-    if (!merchant && !category && hasUnmatchedSubject(question)) return null;
-    const count = (n: number) => `${n} purchase${n === 1 ? "" : "s"}`;
+  const subject = merchant ? null : matchSubcategory(question);
+  const category = merchant || subject ? null : matchCategory(question);
+  const keep = (t: BankTransaction) => (merchant ? atMerchant(t) : subject ? subject.test(t) : category ? t.category === category : true);
+  const about = merchant ? `${isPerson ? "with" : "at"} ${merchant}` : subject ? `on ${subject.label}` : category ? `on ${categoryLabel(category)}` : "";
+
+  // "What's my average monthly spending?", "How much do I spend on groceries a month?": the last three full months.
+  if (asksSpending && AVERAGE_WORDS.test(text) && !namesPeriod(question.replace(AVERAGE_WORDS, " "))) {
+    if (!merchant && !subject && !category && hasUnmatchedSubject(question)) return null;
+    const now = new Date();
+    const months = [1, 2, 3].map((back) => {
+      const start = new Date(now.getFullYear(), now.getMonth() - back, 1);
+      const end = new Date(now.getFullYear(), now.getMonth() - back + 1, 1);
+      const list = data.transactions.filter((t) => t.date >= isoDate(start) && t.date < isoDate(end) && keep(t));
+      return { name: start.toLocaleDateString("en-US", { month: "long" }), list, total: windowTotals(list, transferIds).spendingTotal };
+    });
+    if (earliest > isoDate(new Date(now.getFullYear(), now.getMonth() - 3, 1))) return null;
+    const average = months.reduce((s, m) => s + m.total, 0) / 3;
+    // One big charge (tuition, a deposit) can make an average misleading: name it.
+    const outlier = months
+      .map((m) => ({ m, top: m.list.filter((t) => t.amount > 0 && !isTransfer(t, transferIds)).sort((a, b) => b.amount - a.amount)[0] }))
+      .find(({ m, top }) => top && top.amount > 1000 && top.amount > m.total * 0.5 && top.amount > average);
+    const withoutIt = outlier ? (months.reduce((s, m) => s + m.total, 0) - outlier.top.amount) / 3 : 0;
+    const warehouse = subject?.label === "groceries" ? data.transactions.filter((t) => t.date >= isoDate(new Date(now.getFullYear(), now.getMonth() - 3, 1)) && t.date < isoDate(new Date(now.getFullYear(), now.getMonth(), 1)) && t.amount > 0 && !t.pending && WAREHOUSE_STORES.test(t.name) && !subject.test(t) && !isTransfer(t, transferIds)) : [];
+    const warehouseNote = warehouse.length ? `\n\nNot included: about ${whole(warehouse.reduce((s, t) => s + t.amount, 0) / 3)} a month at ${[...new Set(warehouse.map((t) => shortMerchant(t.name)))].join(" and ")}. Banks file it as shopping, so its groceries can't be split out.` : "";
+    return `**You spend about ${whole(average)} a month${about ? ` ${about}` : ""}**, averaged over ${months[2].name} to ${months[0].name}.\n${months.map((m) => `• ${m.name}: ${whole(m.total)}`).join("\n")}${outlier ? `\n\n${outlier.m.name} includes ${exact(outlier.top.amount)} at ${shortMerchant(outlier.top.name, outlier.top)}. Without it, about ${whole(withoutIt)} a month.` : ""}${warehouseNote}`;
+  }
+
+  // "How much have I paid Christian?" is spending with a person; "did I get paid" is not.
+  const paidSomeone = !!merchant && /\b(paid|pay|sent|send|given|gave)\b/.test(text) && !/\b(paid me|pay me|sent me|gave me|get paid|got paid)\b/.test(text);
+  if ((/\b(spent|spending|spend|spnd)\b/.test(text) || paidSomeone) && /\b(how much|what|where|categories?|on|at)\b/.test(text)) {
+    // "On boba runs", "for clothes": narrower than anything we can match exactly, so let the model look.
+    if (!merchant && !subject && !category && hasUnmatchedSubject(question)) return null;
+    const count = (n: number) => `${n} ${isPerson ? "payment" : "purchase"}${n === 1 ? "" : "s"}`;
+    const describe = (list: typeof counted) => {
+      const bought = list.filter((t) => t.amount > 0);
+      const back = -list.filter((t) => t.amount < 0).reduce((sum, t) => sum + t.amount, 0);
+      const net = Math.round((bought.reduce((sum, t) => sum + t.amount, 0) - back) * 100) / 100;
+      return { bought, back, net, after: back > 0.004 ? `, after ${whole(back)} ${isPerson ? "back" : "in refunds and paybacks"}` : "" };
+    };
+    const opener = periodOpener(range.label);
     if (merchant) {
-      const matched = spending.filter((t) => t.name === merchant);
-      const total = matched.reduce((sum, t) => sum + t.amount, 0);
-      return `You spent ${money.format(total)} at ${merchant} during ${range.label} (${count(matched.length)}).`;
+      const m = describe(counted.filter(atMerchant));
+      if (!m.bought.length) {
+        const last = data.transactions.filter((t) => atMerchant(t) && t.amount > 0 && !t.pending).sort((a, b) => b.date.localeCompare(a.date))[0];
+        return `**${opener}, you didn't spend anything ${about}.**${last ? `\nYour last charge there was ${exact(last.amount)} on ${when(last.date)}.` : ""}`;
+      }
+      const since = range.label === "all time" ? ` since ${when(m.bought.reduce((min, t) => (t.date < min ? t.date : min), "9999"))}` : "";
+      const verb = isPerson ? "paid" : "spent";
+      const headline = range.label === "all time" ? `You've ${verb} ${exact(m.net)} ${isPerson ? "to" : "at"} ${merchant}` : `${opener}, you ${verb} ${exact(m.net)} ${isPerson ? "to" : "at"} ${merchant}`;
+      const latest = [...m.bought].sort((a, b) => b.date.localeCompare(a.date))[0];
+      return `**${headline}** (${count(m.bought.length)}${since}${m.after}).\nMost recent: ${exact(latest.amount)} on ${when(latest.date)}.${guessNote(windowTotals(counted.filter(atMerchant), transferIds))}`;
     }
-    if (category) {
-      const matched = spending.filter((t) => t.category === category);
-      const total = matched.reduce((sum, t) => sum + t.amount, 0);
-      const byMerchant = new Map<string, number>();
-      for (const t of matched) byMerchant.set(t.name, (byMerchant.get(t.name) ?? 0) + t.amount);
-      const top = [...byMerchant].sort(([, x], [, y]) => y - x).slice(0, 3).map(([name, amount]) => `${name} (${money.format(amount)})`);
-      return `You spent ${money.format(total)} on ${categoryLabel(category)} during ${range.label} (${count(matched.length)}).${top.length ? ` Biggest: ${top.join(", ")}.` : ""}`;
+    if (subject || category) {
+      const subset = counted.filter(keep);
+      const c = describe(subset);
+      const top = merchantBreakdown(c.bought);
+      // Plaid files Costco and other warehouse stores under shopping, so their groceries can't be counted here.
+      const warehouse = subject?.label === "groceries" ? counted.filter((t) => t.amount > 0 && WAREHOUSE_STORES.test(t.name) && !subject.test(t)) : [];
+      const warehouseNote = warehouse.length ? `\n\nNot included: ${whole(warehouse.reduce((s, t) => s + t.amount, 0))} at ${[...new Set(warehouse.map((t) => shortMerchant(t.name)))].join(" and ")}. Banks file it as shopping, so its groceries can't be split out.` : "";
+      if (!c.bought.length) return `**${opener}, you didn't spend anything ${about}.**${warehouseNote}`;
+      return `**${opener}, you spent ${exact(c.net)} ${about}**${c.after}.${top ? `\nBiggest: ${top}.` : ""}${warehouseNote}${guessNote(windowTotals(subset, transferIds))}`;
     }
-    const total = spending.reduce((sum, transaction) => sum + transaction.amount, 0);
-    const categories = new Map<string, number>();
-    for (const transaction of spending) categories.set(transaction.category, (categories.get(transaction.category) ?? 0) + transaction.amount);
-    const biggest = [...categories.entries()]
-      .sort(([, x], [, y]) => y - x)
-      .slice(0, 3)
-      .map(([cat, amount]) => `${categoryLabel(cat)} (${money.format(amount)})`);
-    return `You had ${money.format(total)} in posted spending during ${range.label}, excluding transfers and loan/card payments.${biggest.length ? ` Largest categories: ${biggest.join(", ")}.` : ""}`;
+    const totals = windowTotals(transactions, transferIds);
+    const spentOn = categoryBreakdown(totals.spendingByCategory);
+    const offsets = totals.refundsAndPaybacks ? ` after ${whole(totals.refundsAndPaybacks)} in refunds and paybacks` : "";
+    if (!totals.grossSpending) return `**${opener}, you didn't spend anything.**`;
+    return `**${opener}, you spent ${exact(totals.spendingTotal)}**${offsets}.${spentOn ? `\nBiggest: ${spentOn}.` : ""}${guessNote(totals)}`;
   }
 
   if (/\b(goal|goals|how close|saving for|savings progress)\b/.test(text) && goals.length) {
@@ -291,34 +595,37 @@ function instantAnswer(question: string, data: ChatData, goals: z.infer<typeof C
       const remaining = Math.max(0, goal.target - goal.saved);
       const percent = goal.target ? Math.min(100, (goal.saved / goal.target) * 100) : 100;
       const finish = goalFinishDate(goal);
-      const weeks = goal.weekly > 0 ? Math.ceil(remaining / goal.weekly) : 0;
-      const timing = remaining === 0 ? "It's fully funded." : finish ? `At ${money.format(goal.weekly)}/week, that's about ${weeks} week${weeks === 1 ? "" : "s"}, so around ${finish}.` : "Add a weekly savings amount to estimate a finish date.";
-      return `${goal.name}: ${money.format(goal.saved)} of ${money.format(goal.target)} saved (${percent.toFixed(0)}%), ${money.format(remaining)} to go. ${timing}`;
+      const timing = remaining === 0 ? "Fully funded." : finish ? `On track for ${finish} at ${exact(goal.weekly)}/week.` : "Add a weekly amount to see a finish date.";
+      return `**${goal.name}**: ${exact(goal.saved)} of ${exact(goal.target)} (${percent.toFixed(0)}%). ${timing}`;
     };
     const named = matchGoal(question, goals);
     if (named) return describe(named);
-    return `Here's where your goals stand:\n${goals.map((goal) => `• ${describe(goal)}`).join("\n")}`;
+    const saved = goals.reduce((s, g) => s + g.saved, 0);
+    const target = goals.reduce((s, g) => s + g.target, 0);
+    return `**You've saved ${exact(saved)} of ${exact(target)} across ${goals.length} goal${goals.length === 1 ? "" : "s"}.**\n${goals.map((goal) => `• ${describe(goal)}`).join("\n")}`;
   }
 
   if (/\b(interest|apy)\b/.test(text)) {
-    const accountNames = new Map(data.accounts.map((account) => [account.id, `${account.institution} — ${account.name}`]));
     const interest = transactions.filter((transaction) => transaction.amount < 0 && /\binterest\b|\bapy\b/i.test(transaction.name));
-    if (!interest.length) return `I couldn't find any posted transactions explicitly labeled interest or APY during ${range.label}. I don't infer interest from balance changes.`;
+    if (!interest.length) return `**I don't see any interest ${periodOpener(range.label).toLowerCase()}.** I only count deposits your bank labels as interest.`;
     const byAccount = new Map<string, number>();
     for (const transaction of interest) {
-      const name = accountNames.get(transaction.accountId) ?? "Unknown account";
+      const account = data.accounts.find((a) => a.id === transaction.accountId);
+      const name = account ? `${account.institution} ${account.name}` : "Unknown account";
       byAccount.set(name, (byAccount.get(name) ?? 0) + Math.abs(transaction.amount));
     }
-    const total = [...byAccount.values()].reduce((sum, value) => sum + value, 0);
-    const detail = [...byAccount.entries()].map(([name, amount]) => `• ${name}: ${money.format(amount)}`).join("\n");
-    return `I found ${money.format(total)} in posted interest during ${range.label}:\n${detail}\n\nThis excludes dividends and anything not explicitly labeled interest or APY.`;
+    const total = Math.round([...byAccount.values()].reduce((sum, value) => sum + value, 0) * 100) / 100;
+    const detail = byAccount.size > 1 ? `\n${[...byAccount.entries()].sort(([, a], [, b]) => b - a).map(([name, amount]) => `• ${name}: ${exact(Math.round(amount * 100) / 100)}`).join("\n")}` : ` All of it from ${[...byAccount.keys()][0]}.`;
+    return `**${periodOpener(range.label)}, you earned ${exact(total)} in interest.**${detail}`;
   }
 
   if (/\b(made|make|earn|earned|income|money came in|money in|inflow|inflows|deposits|received|did i get|have i gotten|get paid|got paid)\b/.test(text)) {
-    const inflows = transactions.filter((transaction) => transaction.amount < 0 && !isTransfer(transaction, transferIds));
-    const total = inflows.reduce((sum, transaction) => sum + Math.abs(transaction.amount), 0);
-    const largest = [...inflows].sort((a, b) => a.amount - b.amount).slice(0, 3).map((transaction) => `${transaction.name} (${money.format(Math.abs(transaction.amount))})`);
-    return `You had ${money.format(total)} in posted inflows during ${range.label}${largest.length ? `. Largest entries: ${largest.join(", ")}.` : "."}\n\nThis is posted money in, excluding transactions categorized as transfers or loan payments; it is not necessarily wages or investment return.`;
+    const totals = windowTotals(transactions, transferIds);
+    const earned = transactions.filter((t) => !isTransfer(t, transferIds) && moneyKind(t) === "earned");
+    const made = earnedBreakdown(earned);
+    const support = totals.familySupportTotal ? `\nPlus ${exact(totals.familySupportTotal)} from your 529 (not counted as made).` : "";
+    // Only guesses about money in matter here; a guessed payment out doesn't change what you made.
+    return `**${periodOpener(range.label)}, you made ${exact(totals.earnedTotal)}.**${made ? `\nFrom ${made}.` : ""}${support}${guessNote(windowTotals(earned, transferIds))}`;
   }
   return null;
 }
@@ -331,7 +638,7 @@ const FINANCE_SYSTEM_PROMPT = `You are Polaris, the in-app financial assistant i
 
 Use conversation history to interpret replies to your own clarification questions. Acknowledge the facts the user supplied, use them to answer the original question, and ask only for information that is still missing. Treat corrections as replacing earlier statements. Do not infer units, account type, tax eligibility, or risk tolerance from ambiguous replies such as "yes" or a bare number; ask a concise clarification. Distinguish user-stated assumptions from dashboard facts. Follow explicit topic changes instead of forcing the previous topic. If history is insufficient, say what context you need rather than inventing it.
 
-Be direct: name the key figures behind a number (totals, the biggest item), not every transaction. Plaid transaction amounts use a positive number for money out and a negative number for money in. Treat transfers, card payments, and pending transactions carefully; do not count them as earnings unless the data clearly supports that. For questions about "money made," explain whether you are reporting posted inflows, net cash flow, or something else. For interest, report only transactions whose description clearly identifies interest; do not infer it from a balance change. Explain when the available data cannot answer the question.
+Be direct: name the key figures behind a number (totals, the biggest item), not every transaction. Plaid transaction amounts use a positive number for money out and a negative number for money in. Treat transfers, card payments, and pending transactions carefully; do not count them as earnings unless the data clearly supports that. Money moved between the user's own connected accounts (for example Wealthfront to Wells Fargo, or checking to savings), is a transfer, never income, earnings, or spending, whatever its category says. Money from a 529 college savings plan such as ScholarShare is family support (category FAMILY_SUPPORT): it counts as money in for cash flow, but never call it income, earnings, or pay. For questions about "money made," explain whether you are reporting posted inflows, net cash flow, or something else. For interest, report only transactions whose description clearly identifies interest; do not infer it from a balance change. Explain when the available data cannot answer the question.
 
 Explain and compare US retirement and tax-advantaged accounts when asked: traditional and Roth IRAs, traditional and Roth 401(k)s, 403(b)s, governmental versus nongovernmental 457(b)s, SEP/SIMPLE IRAs, solo 401(k)s, HSAs, health FSAs, and 529 plans. Cover purpose, eligibility, federal contribution and withdrawal tax treatment, access restrictions, and relevant trade-offs. Distinguish account structures from their underlying investments. Do not infer eligibility from a dashboard balance. Do not quote unverified annual contribution limits, income thresholds, or deadlines; explain that a live tax-rule lookup is unavailable and direct users to the applicable tax-year IRS guidance and plan documents. Mention state treatment may differ.
 
@@ -340,7 +647,7 @@ Give useful investment education and planning options: explain diversified low-c
 // Polaris (a narrow chat panel) renders a small markdown subset: bold, italics, bullet and numbered lists.
 const CHAT_PANEL_FORMAT = [
   "Format for a narrow chat panel. Make answers easy to skim: put the direct answer and its key number in **bold** (one or two bold phrases per answer, not whole sentences). Use *italics* only for a term you are defining. When listing three or more items or steps, use short \"- \" bullet lines or \"1. \" numbered steps, one idea per line, with a blank line before the list. Keep paragraphs to one to three sentences. Do not use headings, tables, links, or code blocks.",
-  "Numbers: the context includes exact sums the app computed (windowTotals, and comparison when the question compares two periods). windowTotals.inflowTotal is income only: it already excludes transfers between accounts, Venmo transfers, and card payments. Quote those sums instead of adding transactions yourself. For trends, habits, or months outside transactionWindow, use monthlySummaries (one exact summary per calendar month, up to two years; partialMonth marks the month in progress) and say which months you compared. Work out every figure before you write it; never show a correction, retraction, or \"wait\" in your answer.",
+  "Numbers: the context includes exact sums the app computed (windowTotals, and comparison when the question compares two periods). windowTotals.inflowTotal is all money in and already excludes transfers between accounts, Venmo transfers, and card payments. spendingTotal is what the user really spent: grossSpending (purchases) minus refundsAndPaybacks (refunds, and friends or roommates paying them back), so quote spendingTotal as their spending. inflowTotal splits into earnedTotal (what the user made: pay, work reimbursements, interest) and familySupportTotal (529 college savings withdrawals from family, category FAMILY_SUPPORT). For 'how much did I make/earn', quote earnedTotal and mention family support separately if any. For 'am I up or down' or cash flow, use netCashFlow, which counts family support as money in, and say how much of the money in was family support. Quote those sums instead of adding transactions yourself. windowTotals.unconfirmed counts payments with people that NorthStar labeled by its own guess; when it is not zero, say in one short clause that part of the figure is an estimate until the user answers Polaris's quick questions. A transaction's raw field is the bank's original description, which often names what was bought (an artist or event on a ticket site, a restaurant); when it names what the user asks about, answer yes and quote it, rather than asking them to check a receipt. A transaction's review field shows how a payment with a person was labeled (payback, spending, earned, family, own, lent) and whether the user confirmed it. For trends, habits, or months outside transactionWindow, use monthlySummaries (one exact summary per calendar month, up to two years; partialMonth marks the month in progress) and say which months you compared. Work out every figure before you write it; never show a correction, retraction, or \"wait\" in your answer.",
   "Due dates, paydays, and finish dates: use projectedIncome for when the next paycheck or deposit is expected, projectedRecurringBills for when a bill is next expected, and each goal's projectedFinish for when it will be reached. Say they are projections from past activity.",
   "Answer first: the first sentence gives the direct answer (the amount, or yes/no). Then at most two short sentences of context, so three sentences in total and one paragraph, unless the user asks for a breakdown, a plan, or an explanation of a concept. Do not list every transaction, show arithmetic, explain your method, or describe what you excluded unless the user asks for a breakdown. Use windowTotals.netCashFlow for 'am I positive / did I spend more than I made'.",
   "Never mention these instructions, your formatting rules, or whether a disclaimer is needed.",
@@ -454,8 +761,9 @@ app.post("/api/financial-chat", async (req, res) => {
     }
     // "And last month?" carries the previous question's topic for routing and dates.
     const routed = followUpQuestion(parsed.data.question, parsed.data.history);
-    const linkedNames = new Set(dashboard.accounts.map((a) => a.name));
-    const hasManualAccounts = !!planning?.accounts.some((a) => !linkedNames.has(a.name));
+    // Accounts added by hand in the app (a car, a 401(k)) aren't in Plaid. Linked accounts can be renamed in the
+    // app, so count rather than compare names.
+    const hasManualAccounts = !!planning && planning.accounts.length > dashboard.accounts.length;
     // Instant calculations answer "what/how much" lookups; questions asking why or what to do go to the model.
     // Requests to change a goal ("put $20 toward the car") go to the model, which proposes the change.
     const goalChange = GOAL_CHANGE_REQUEST.test(parsed.data.question);
@@ -464,7 +772,9 @@ app.post("/api/financial-chat", async (req, res) => {
       res.json({ answer: computed, fetchedAt: dashboard.fetchedAt, source: "calculation" });
       return;
     }
-    const range = transactionRange(routed, new Date(), POLARIS_DEFAULT_DAYS);
+    // "All time" would hand Polaris every transaction; older months already arrive as monthly summaries.
+    const asked = transactionRange(routed, new Date(), POLARIS_DEFAULT_DAYS);
+    const range = asked.label === "all time" ? transactionRange("", new Date(), POLARIS_DEFAULT_DAYS) : asked;
     // Every question runs on Haiku 5.5 (about 20x cheaper): the app hands it exact totals and
     // monthly summaries. Sonnet runs only when the user taps "Get a deeper answer", with a lean
     // context. Planning and trade-off questions offer that button.
@@ -728,37 +1038,11 @@ app.post("/api/scan", async (req, res) => {
   }
 });
 
-/** Milliseconds until 3:15 AM local time, leaving normal daytime use uninterrupted. */
-function untilNextDailySnapshot(now = new Date()) {
-  const next = new Date(now);
-  next.setHours(3, 15, 0, 0);
-  if (next <= now) next.setDate(next.getDate() + 1);
-  return next.getTime() - now.getTime();
-}
-
-/**
- * Local NorthStar keeps one fresh daily balance snapshot while it is running.
- * If the computer is off, the next successful dashboard load still records a
- * point and the chart coverage visibly shows the missed day instead of filling it.
- */
-function scheduleDailySnapshot() {
-  const capture = async () => {
-    try {
-      // Plaid's saved balances (free) are plenty for one chart point a day; live checks are usually billed.
-      if (plaidConfigured) await loadDashboardData();
-    } catch (err) {
-      console.error("Daily net-worth snapshot failed", err instanceof Error ? err.message : err);
-    } finally {
-      setTimeout(capture, untilNextDailySnapshot());
-    }
-  };
-  setTimeout(capture, untilNextDailySnapshot());
-}
-
 // On Vercel the app runs as a serverless function (api/index.ts imports it); locally it listens on a port.
 if (!process.env.VERCEL) {
   const PORT = Number(process.env.PORT ?? 8787);
-  scheduleDailySnapshot();
+  // Save a net-worth point each day the server is running (checked hourly), not just when the app is opened.
+  startDailySnapshots();
   // 127.0.0.1 only: other devices on the same Wi-Fi can't reach your bank data.
   app.listen(PORT, "127.0.0.1", () => console.log(`Scan API on http://127.0.0.1:${PORT}`));
 }

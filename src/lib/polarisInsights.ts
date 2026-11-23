@@ -2,7 +2,7 @@
 // and "what changed?" for this month. Pure arithmetic over your transactions: no AI call.
 import { addDays, todayISO } from "./dates";
 import { formatMoneyRaw } from "./finance";
-import { billsFor, categoryLabel, detectTransferIds, isTransfer, spendableCash, type BankData, type BankTransaction } from "./money";
+import { billsFor, categoryLabel, detectTransferIds, isTransfer, moneyKind, spendableCash, type BankData, type BankTransaction } from "./money";
 import type { MoneyGoal } from "./types";
 
 const usd = (n: number) => formatMoneyRaw(Math.round(n));
@@ -12,14 +12,19 @@ const weekday = (iso: string) => new Date(`${iso}T12:00:00`).toLocaleDateString(
 
 /** Money out in [start, endExclusive): no transfers between your accounts, card payments, or pending charges. */
 function spending(transactions: BankTransaction[], transferIds: Set<string>, start: string, endExclusive: string) {
-  const list = transactions.filter((t) => !t.pending && t.amount > 0 && t.date >= start && t.date < endExclusive && !isTransfer(t, transferIds));
+  const inWindow = transactions.filter((t) => !t.pending && t.date >= start && t.date < endExclusive && !isTransfer(t, transferIds));
+  const list = inWindow.filter((t) => moneyKind(t) === "spent");
+  // Refunds and people paying you back come off spending (and off their category).
+  const offsets = inWindow.filter((t) => moneyKind(t) === "offset");
   const byCategory = new Map<string, number>();
   const byMerchant = new Map<string, number>();
+  for (const t of [...list, ...offsets]) byCategory.set(t.category, (byCategory.get(t.category) ?? 0) + t.amount);
+  // A person once, not once per Venmo note ('Joaquin Boyd "Utilities"' and 'Joaquin Boyd "Electric"').
   for (const t of list) {
-    byCategory.set(t.category, (byCategory.get(t.category) ?? 0) + t.amount);
-    byMerchant.set(t.name, (byMerchant.get(t.name) ?? 0) + t.amount);
+    const name = t.name.replace(/\s*"[^"]*"\s*$/, "").trim() || t.name;
+    byMerchant.set(name, (byMerchant.get(name) ?? 0) + t.amount);
   }
-  return { total: list.reduce((sum, t) => sum + t.amount, 0), byCategory, byMerchant, largest: [...list].sort((a, b) => b.amount - a.amount)[0] };
+  return { total: [...list, ...offsets].reduce((sum, t) => sum + t.amount, 0), byCategory, byMerchant, largest: [...list].sort((a, b) => b.amount - a.amount)[0] };
 }
 
 const earliestDate = (transactions: BankTransaction[]) => transactions.reduce((min, t) => (t.date < min ? t.date : min), "9999-12-31");
