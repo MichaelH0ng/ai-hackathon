@@ -12,6 +12,7 @@ import { checkAffordability, type AffordResult } from "../lib/polarisAfford";
 import { bestAlternative, fixVoiceText } from "../lib/voiceFix";
 import { billHeadsUp, WHAT_CHANGED, weeklyCheckIn, whatChanged } from "../lib/polarisInsights";
 import { requestPriceCheck } from "../lib/priceCheckRequest";
+import { onAskPolaris } from "../lib/polarisAsk";
 import { useReminders } from "../lib/polarisReminders";
 import type { BankData, ReviewLabel } from "../lib/money";
 import { PaymentQuestion, StoreQuestion } from "./PaymentQuestion";
@@ -513,6 +514,16 @@ export function MoneyAssistant({ context, goals = [], budget = { income: 0, esse
     }
     setMessages(current => current.map(m => (m.id === replyId ? { ...m, ...reply, pending: false } : m)));
   }
+
+  // Other screens (like Activity) can hand Polaris a question. The ref keeps the newest `ask`, which sees the current chat.
+  const askRef = useRef(ask);
+  useEffect(() => { askRef.current = ask; });
+  useEffect(() => onAskPolaris(text => {
+    setTucked(false);
+    try { localStorage.setItem(TUCK_KEY, "0"); } catch { /* the tab still opens for this visit */ }
+    setOpen(true);
+    void askRef.current(text);
+  }), []);
 
   /** Saves everything a confirmed change does: goals, a new goal, budget lines, a reminder. */
   function commit(result: { updatedGoals: MoneyGoal[]; newGoal?: MoneyGoal; budget?: Partial<Budget>; reminder?: Reminder; removedGoalIds?: string[] }) {
