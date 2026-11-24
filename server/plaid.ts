@@ -555,6 +555,8 @@ async function loadFromPlaid(liveBalances: boolean): Promise<BankData> {
         if (last?.length) accounts.push(...last);
         else problem = code;
       }
+      // Any error (sign-in needed, bank down…) or an empty list leaves this bank out of the total.
+      const accountsMissing = !accounts.length;
       // A unified connection to a bank-only institution (Venmo, a checking account) has nothing to
       // hold, so don't ask: Plaid answers PRODUCTS_NOT_SUPPORTED and the bank would look broken.
       const hasInvestmentAccount = accounts.some((a) => a.type === "investment" || a.type === "brokerage");
@@ -593,6 +595,7 @@ async function loadFromPlaid(liveBalances: boolean): Promise<BankData> {
       const extras: Extras = item.kind === "investments" ? { at: 0, debts: [], recurring: [], needsDebtConsent: false } : await loadExtras(item, accounts, ready && !problem);
       return {
         accounts,
+        accountsMissing,
         // Only for recognizing your own accounts in transfers; never counted in balances.
         knownAccounts: accounts.length ? accounts : lastKnownAccounts.get(item.itemId) ?? [],
         liveAt,
@@ -635,9 +638,9 @@ async function loadFromPlaid(liveBalances: boolean): Promise<BankData> {
     // When every bank's balance was last checked live (the oldest of them), or null if any is Plaid's saved copy.
     balancesCheckedAt: perItem.length && perItem.every((r) => r.liveAt) ? new Date(Math.min(...perItem.map((r) => r.liveAt!))).toISOString() : null,
   };
-  // Don't store a whole-net-worth snapshot if any institution's account list
-  // failed: a partial total would be less trustworthy than no point at all.
-  const accountLoadFailed = perItem.some((item) => item.status.problem === "ACCOUNTS_FAILED");
+  // Don't store a whole-net-worth snapshot if any institution's accounts are missing, whatever
+  // the error: a total without one bank would be saved as a fake drop (Fidelity, Nov 20-23).
+  const accountLoadFailed = perItem.some((item) => item.accountsMissing);
   const snapshots = getSnapshots();
   if (data.accounts.length && !accountLoadFailed) {
     try {

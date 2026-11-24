@@ -322,6 +322,30 @@ describe("a bank that fails on one load", () => {
     expect(second.transactions.find((t) => t.id === "t1")?.category).toMatch(/^TRANSFER/);
   });
 
+  it("doesn't save a net-worth point that leaves out a bank, whatever its error", async () => {
+    const wells = { itemId: "wells", accessToken: "private-access-token", institution: "Wells Fargo", kind: "bank" };
+    const fidelity = { itemId: "fid", accessToken: "private-access-token-2", institution: "Fidelity", kind: "bank" };
+    mocks.items = [wells, fidelity];
+    const checking = { account_id: "chk", name: "Everyday Checking", mask: "2793", type: "depository", subtype: "checking", balances: { current: 2000, available: 2000 } };
+    const roth = { account_id: "roth", name: "ROTH IRA", mask: "1111", type: "depository", subtype: "savings", balances: { current: 10000, available: 10000 } };
+    mocks.client.accountsGet.mockImplementation(({ access_token }: { access_token: string }) =>
+      Promise.resolve({ data: { accounts: [access_token === "private-access-token" ? checking : roth] } }));
+    mocks.client.liabilitiesGet.mockResolvedValue({ data: { liabilities: {} } });
+    mocks.client.transactionsRecurringGet.mockResolvedValue({ data: { inflow_streams: [], outflow_streams: [] } });
+    mocks.client.transactionsSync.mockResolvedValue({ data: { added: [], modified: [], removed: [], next_cursor: "c", has_more: false } });
+    const { loadDashboardData } = await import("./plaid.ts");
+    const first = await loadDashboardData();
+    expect(first.netWorthSnapshots?.at(-1)?.value).toBe(12000);
+    // Fidelity needs you to sign in again: not the generic "accounts failed" code.
+    mocks.client.accountsGet.mockImplementation(({ access_token }: { access_token: string }) =>
+      access_token === "private-access-token" ? Promise.resolve({ data: { accounts: [checking] } }) : Promise.reject({ response: { data: { error_code: "ITEM_LOGIN_REQUIRED" } } }));
+    vi.spyOn(Date, "now").mockReturnValue(Date.now() + 61_000);
+    const second = await loadDashboardData();
+    vi.restoreAllMocks();
+    expect(second.accounts.map((a) => a.id)).toEqual(["chk"]);
+    expect(second.netWorthSnapshots?.at(-1)?.value).toBe(12000);
+  });
+
   it("reads saved balances once a minute, and keeps showing them when Plaid says it's been asked too often", async () => {
     mocks.items = [{ itemId: "wells", accessToken: "private-access-token", institution: "Wells Fargo", kind: "bank" }];
     const checking = { account_id: "chk", name: "WELLS FARGO ACTIVE CASH VISA\uFFFD\uFFFD CARD", mask: "2793", type: "depository", subtype: "checking", balances: { current: 2000, available: 1700 } };
