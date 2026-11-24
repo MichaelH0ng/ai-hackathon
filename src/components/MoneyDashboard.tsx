@@ -1,9 +1,25 @@
 import { CategoryIcon } from "./CategoryIcon";
-import { ArrowDownLeft, ArrowUpRight, Eye, Landmark, Lock, RefreshCw, Search, ShieldCheck, Unplug, Wallet, X } from "lucide-react";
+import { AlertTriangle, ArrowDownLeft, ArrowUpRight, Download, Eye, Landmark, Lock, RefreshCw, Search, ShieldCheck, Sparkles, Unplug, Wallet, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePlaidLink } from "react-plaid-link";
-import { formatDate } from "../lib/dates";
-import { formatExact } from "../lib/finance";
+import { formatDate, toISO } from "../lib/dates";
+import { formatExact, formatExactRaw } from "../lib/finance";
+import {
+  type ActivityRange,
+  type ActivitySort,
+  categoryChanges,
+  changeText,
+  goalImpact,
+  outByDay,
+  priceChanges,
+  rangeStart,
+  sortTransactions,
+  summarize,
+  toCsv,
+  unusualCharges,
+} from "../lib/activityInsights";
+import { askPolaris } from "../lib/polarisAsk";
+import { BudgetPace, SpendingOverview, TransactionDetail } from "./ActivityVisuals";
 import {
   type FlowPeriod,
   categoryLabel,
@@ -15,6 +31,7 @@ import {
   topCategories,
 } from "../lib/money";
 import type { MoneyGoal } from "../lib/types";
+import type { BankTransaction } from "../lib/money";
 import { interestOrFee, type InterestOrFee } from "../lib/accountInsights";
 import { type Bank, post } from "../lib/useBank";
 import { type ConnectKind, finishConnection, introSeen, markIntroSeen, rememberLinkSession } from "../lib/plaidConnect";
@@ -31,11 +48,15 @@ const BILLS_SHOWN = 5;
 /** Money dashboard: your real balances and spending from Plaid. */
 export function MoneyDashboard({
   bank,
+  goals,
+  monthlyBudget = 0,
   accountId,
   onAccountFilterChange,
   focus,
   onFocusChange,
 }: {
+  /** Essentials plus lifestyle from the plan, for the "this month vs. your plan" bar. 0 hides the bar. */
+  monthlyBudget?: number;
   /** From Accounts' Interest & fees: only interest earned, interest charged, or fees, since a date. */
   focus?: { kind: InterestOrFee; since: string; label: string } | null;
   onFocusChange?: (focus: null) => void;
@@ -56,6 +77,11 @@ export function MoneyDashboard({
   const setAccountFilter = (id: string) => { setAccountFilterState(id); onAccountFilterChange?.(id || null); };
   useEffect(() => { setAccountFilterState(accountId ?? ""); }, [accountId]);
   const [category, setCategory] = useState<string | null>(null);
+  const [range, setRange] = useState<ActivityRange>("all");
+  const [sort, setSort] = useState<ActivitySort>("newest");
+  /** One day picked from the trend chart or calendar. It replaces the date range while set. */
+  const [day, setDay] = useState<string | null>(null);
+  const [detailId, setDetailId] = useState<string | null>(null);
   const clearFocus = () => onFocusChange?.(null);
   const [shown, setShown] = useState(PAGE);
   const [showAllBills, setShowAllBills] = useState(false);
@@ -74,6 +100,10 @@ export function MoneyDashboard({
   }, [waiting, load]);
 
   const transferIds = useMemo(() => detectTransferIds(data?.transactions ?? []), [data]);
+  const unusual = useMemo(() => unusualCharges(data?.transactions ?? [], transferIds), [data, transferIds]);
+  const unusualById = useMemo(() => new Map(unusual.map((u) => [u.id, u])), [unusual]);
+  const priceUps = useMemo(() => priceChanges(data?.transactions ?? [], transferIds), [data, transferIds]);
+  const changes = useMemo(() => categoryChanges(data?.transactions ?? [], transferIds), [data, transferIds]);
 
   if (loading && !data) {
     return (
@@ -112,27 +142,78 @@ export function MoneyDashboard({
   const accountName = new Map(data.accounts.map((a) => [a.id, a.name]));
   // The transaction list: newest first, narrowed by search, direction, account, and category.
   const needle = query.trim().toLowerCase();
-  const filtered = [...data.transactions]
-    .sort((a, b) => b.date.localeCompare(a.date))
-    .filter((t) =>
+  const since = day ? null : rangeStart(range);
+  const filtered = sortTransactions(
+    data.transactions.filter((t) =>
       (!needle || t.name.toLowerCase().includes(needle) || categoryLabel(t.category).toLowerCase().includes(needle))
       && (direction === "all" || (direction === "out" ? t.amount > 0 : t.amount < 0))
       && (!accountFilter || t.accountId === accountFilter)
       && (!category || (t.category === category && !isTransfer(t, transferIds)))
-      && (!focus || (!t.pending && t.date >= focus.since && interestOrFee(t) === focus.kind)));
+      && (!day || t.date === day)
+      && (!since || t.date >= since)
+      && (!focus || (!t.pending && t.date >= focus.since && interestOrFee(t) === focus.kind))),
+    sort,
+  );
+  const totals = summarize(filtered, transferIds);
+  const dayOut = outByDay(filtered, transferIds);
   // Each row's place in the list, for the staggered entrance (later rows wait a little longer, capped).
   const rowOrder = new Map(filtered.slice(0, shown).map((t, i) => [t.id, i]));
+  // Date sorts group under day headers. "Biggest first" is one run, so it gets a single heading instead.
   const byDay: [string, typeof filtered][] = [];
   for (const t of filtered.slice(0, shown)) {
+    const key = sort === "biggest" ? "biggest" : t.date;
     const last = byDay.at(-1);
-    if (last && last[0] === t.date) last[1].push(t);
-    else byDay.push([t.date, [t]]);
+    if (last && last[0] === key) last[1].push(t);
+    else byDay.push([key, [t]]);
   }
+  const detail = detailId ? data.transactions.find((t) => t.id === detailId) ?? null : null;
+  const changeByKey = new Map(changes.map((c) => [c.key, c]));
+  /** The category worth asking Polaris about: the one picked, else the one that rose the most. */
+  const askTarget = (category ? changeByKey.get(category) : undefined)
+    ?? changes.filter((c) => c.pct !== null && c.pct >= 0.1 && c.current - c.previous >= 10).sort((a, b) => (b.current - b.previous) - (a.current - a.previous))[0];
+  const showList = () => listTop.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   /** "Where it went" → the matching transactions, last 30 days' spending in that category. */
   const showCategory = (key: string) => {
     setCategory((current) => (current === key ? null : key));
     setShown(PAGE);
-    listTop.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    showList();
+  };
+  const pickDay = (next: string | null) => {
+    setDay(next);
+    setShown(PAGE);
+    if (next) showList();
+  };
+  const exportCsv = () => {
+    const csv = toCsv(filtered, (id) => accountName.get(id) ?? "Account", transferIds);
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `northstar-transactions-${toISO(new Date())}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+  const askAboutCategory = () => {
+    if (!askTarget) return;
+    const how = askTarget.pct === null ? "" : ` (${changeText(askTarget)} from the 30 days before)`;
+    askPolaris(`My ${askTarget.label} spending was ${formatExactRaw(askTarget.current)} over the last 30 days${how}. What changed, and where could I trim?`);
+  };
+  const askAboutTransaction = (t: BankTransaction) => {
+    const amount = formatExactRaw(Math.abs(t.amount));
+    setDetailId(null);
+    askPolaris(t.amount > 0
+      ? `I spent ${amount} at ${t.name} on ${t.date}. Is that normal for me, and could I have spent less there?`
+      : `I received ${amount} from ${t.name} on ${t.date}. What was that, and is it normal?`);
+  };
+  /** Search for one merchant and jump to the list. */
+  const seeMerchant = (name: string) => {
+    setDetailId(null);
+    setQuery(name);
+    setDay(null);
+    setCategory(null);
+    setShown(PAGE);
+    setTimeout(showList, 0);
   };
   const problems = data.status.filter((s) => s.problem);
   const latestActivityUpdate = data.status
@@ -215,6 +296,38 @@ export function MoneyDashboard({
         </Card>
       </div>
 
+      {/* Spending over time, and this month against the plan. */}
+      <div className={`grid gap-4 [&>*]:min-w-0 ${monthlyBudget > 0 ? "lg:grid-cols-2" : ""}`}>
+        <SpendingOverview transactions={data.transactions} transferIds={transferIds} selectedDay={day} onSelectDay={pickDay} />
+        {monthlyBudget > 0 && <BudgetPace transactions={data.transactions} transferIds={transferIds} budget={monthlyBudget} />}
+      </div>
+
+      {/* Charges that changed or look bigger than usual. Only shown when there is something to look at. */}
+      {(priceUps.length > 0 || unusual.length > 0) && (
+        <Card>
+          <h2 className="flex items-center gap-2 text-lg font-bold text-ink"><AlertTriangle className="h-5 w-5 text-amber-600" aria-hidden="true" /> Worth a look</h2>
+          <ul className="mt-2 divide-y divide-stone-100">
+            {priceUps.slice(0, 3).map((p) => (
+              <li key={`price-${p.name}`}>
+                <button type="button" onClick={() => seeMerchant(p.name)} className="flex min-h-11 w-full items-center justify-between gap-3 py-2 text-left text-sm hover:bg-stone-50">
+                  <span className="min-w-0"><span className="block truncate font-semibold text-stone-800">{p.name} went up</span><span className="text-xs text-stone-500">{money(p.from)} to {money(p.to)} on {formatDate(p.date)}</span></span>
+                  <strong className="shrink-0 tabular-nums text-amber-700">+{money(p.to - p.from)}</strong>
+                </button>
+              </li>
+            ))}
+            {unusual.slice(0, 3).map((u) => (
+              <li key={`unusual-${u.id}`}>
+                <button type="button" onClick={() => setDetailId(u.id)} className="flex min-h-11 w-full items-center justify-between gap-3 py-2 text-left text-sm hover:bg-stone-50">
+                  <span className="min-w-0"><span className="block truncate font-semibold text-stone-800">{u.name} was higher than usual</span><span className="text-xs text-stone-500">{formatDate(u.date)} · you normally pay about {money(u.typical)}</span></span>
+                  <strong className="shrink-0 tabular-nums text-ink">{money(u.amount)}</strong>
+                </button>
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs text-stone-500">Based on what you usually pay each merchant. A flag isn't a problem, just a nudge to check it.</p>
+        </Card>
+      )}
+
       {/* Where it went: tap a category to see those transactions below. */}
       <Card>
         <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -235,10 +348,21 @@ export function MoneyDashboard({
                   <span className="mt-1 block h-2 rounded-full bg-stone-100">
                     <span className="block h-full rounded-full bg-brand-500" style={{ width: `${(c.value / maxCat) * 100}%` }} />
                   </span>
+                  {(() => {
+                    const text = changeText(changeByKey.get(c.key) ?? { pct: null });
+                    if (!text) return null;
+                    const pct = changeByKey.get(c.key)?.pct ?? 0;
+                    return <span className={`mt-1 block text-xs ${text.startsWith("up") ? "text-amber-700" : pct < 0 ? "text-emerald-700" : "text-stone-500"}`}>{text} vs. the 30 days before</span>;
+                  })()}
                 </button>
               </li>
             ))}
           </ul>
+        )}
+        {askTarget && (
+          <button type="button" onClick={askAboutCategory} className="mt-2 inline-flex min-h-11 items-center gap-2 rounded-xl px-3 text-sm font-bold text-brand-700 hover:bg-brand-50">
+            <Sparkles className="h-4 w-4" aria-hidden="true" /> Ask Polaris about {askTarget.label.toLowerCase()}
+          </button>
         )}
       </Card>
 
@@ -246,7 +370,12 @@ export function MoneyDashboard({
       <Card>
         <div ref={listTop} className="flex flex-wrap items-baseline justify-between gap-2 scroll-mt-36">
           <h2 className="text-lg font-bold text-ink">Transactions</h2>
-          <p className="text-sm text-stone-500">{filtered.length === data.transactions.length ? `${filtered.length} total` : `${filtered.length} of ${data.transactions.length}`}</p>
+          <div className="flex items-center gap-3">
+            <p className="text-sm text-stone-500">{filtered.length === data.transactions.length ? `${filtered.length} total` : `${filtered.length} of ${data.transactions.length}`}</p>
+            <button type="button" onClick={exportCsv} disabled={filtered.length === 0} className="inline-flex min-h-11 items-center gap-1.5 rounded-xl px-3 text-sm font-bold text-brand-700 hover:bg-brand-50 disabled:opacity-40">
+              <Download className="h-4 w-4" aria-hidden="true" /> Export CSV
+            </button>
+          </div>
         </div>
         <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto_auto]">
           <label className="relative block">
@@ -265,6 +394,23 @@ export function MoneyDashboard({
             </label>
           )}
         </div>
+        <div className="mt-2 grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+          <Segmented label="Date range" size="md" className={`w-full sm:w-auto ${day ? "opacity-50" : ""}`} options={[{ value: "7d", label: "7 days" }, { value: "30d", label: "30 days" }, { value: "90d", label: "90 days" }, { value: "all", label: "All" }]} value={range} onChange={(next) => { setRange(next); setDay(null); setShown(PAGE); }} />
+          <label className="block">
+            <span className="sr-only">Sort by</span>
+            <select value={sort} onChange={(e) => { setSort(e.target.value as ActivitySort); setShown(PAGE); }} className="min-h-11 w-full rounded-xl bg-stone-50 px-3 text-sm font-medium text-stone-800 ring-1 ring-stone-300">
+              <option value="newest">Newest first</option>
+              <option value="oldest">Oldest first</option>
+              <option value="biggest">Biggest first</option>
+            </select>
+          </label>
+        </div>
+        {day && (
+          <p className="mt-3 flex flex-wrap items-center gap-2 text-sm text-stone-600">
+            Showing <strong className="text-ink">{formatDate(day)}</strong>
+            <button type="button" onClick={() => pickDay(null)} className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 font-bold text-brand-700 hover:bg-brand-50"><X className="h-4 w-4" aria-hidden="true" /> Clear</button>
+          </p>
+        )}
         {focus && (
           <p className="mt-3 flex flex-wrap items-center gap-2 text-sm text-stone-600">
             Showing <strong className="text-ink">{focus.kind === "earned" ? "interest earned" : focus.kind === "charged" ? "interest charged" : "bank fees"}</strong> · {focus.label.toLowerCase()}
@@ -277,28 +423,40 @@ export function MoneyDashboard({
             <button type="button" onClick={() => setCategory(null)} className="inline-flex min-h-9 items-center gap-1 rounded-lg px-2 font-bold text-brand-700 hover:bg-brand-50"><X className="h-4 w-4" aria-hidden="true" /> Clear</button>
           </p>
         )}
+        {filtered.length > 0 && (
+          <p className="mt-3 text-sm text-stone-600" aria-live="polite">
+            <strong className="tabular-nums text-ink">{money(totals.out)}</strong> out · <strong className="tabular-nums text-[var(--color-gain)]">{money(totals.in)}</strong> in
+            {totals.pending > 0 && <span className="text-stone-500"> · {totals.pending} pending not counted</span>}
+          </p>
+        )}
         {filtered.length === 0 ? (
           <p className="mt-6 pb-2 text-center text-sm text-stone-500">No transactions match. Try a different search or filter.</p>
         ) : (
           <div className="mt-2">
-            {byDay.map(([day, list]) => (
-              <section key={day} aria-label={formatDate(day)}>
-                <h3 className="sticky top-0 z-[1] mt-3 bg-[var(--night-surface,transparent)] py-1 text-xs font-bold uppercase tracking-wider text-stone-500">{formatDate(day)}</h3>
+            {byDay.map(([groupKey, list]) => (
+              <section key={groupKey} aria-label={groupKey === "biggest" ? "Biggest transactions" : formatDate(groupKey)}>
+                <h3 className="sticky top-0 z-[1] mt-3 flex items-baseline justify-between gap-2 bg-[var(--night-surface,transparent)] py-1 text-xs font-bold uppercase tracking-wider text-stone-500">
+                  <span>{groupKey === "biggest" ? "Biggest first" : formatDate(groupKey)}</span>
+                  {groupKey !== "biggest" && (dayOut.get(groupKey) ?? 0) > 0 && <span className="tabular-nums normal-case tracking-normal">{money(dayOut.get(groupKey)!)} out</span>}
+                </h3>
                 <ul className="divide-y divide-stone-100">
                   {list.map((t) => {
                     const order = rowOrder.get(t.id) ?? 0;
                     const out = t.amount > 0;
                     const transfer = isTransfer(t, transferIds);
                     return (
-                      <li key={t.id} style={{ "--i": order } as React.CSSProperties} className="ns-enter flex items-center gap-3 py-2.5 text-sm">
-                        <CategoryIcon category={transfer ? (t.amount < 0 ? "TRANSFER_IN" : "TRANSFER_OUT") : t.category} logo={transfer ? undefined : t.logo} />
-                        <span className="min-w-0 flex-1">
-                          <span className="block truncate font-semibold text-stone-800">{t.name}</span>
-                          <span className="block truncate text-xs text-stone-500">
-                            {transfer ? "Transfer" : categoryLabel(t.category)} · {accountName.get(t.accountId) ?? "Account"}{t.pending ? " · pending" : ""}
+                      <li key={t.id} style={{ "--i": order } as React.CSSProperties} className="ns-enter text-sm">
+                        <button type="button" onClick={() => setDetailId(t.id)} aria-haspopup="dialog" className="flex min-h-11 w-full items-center gap-3 rounded-lg py-2.5 text-left hover:bg-stone-50">
+                          <CategoryIcon category={transfer ? (t.amount < 0 ? "TRANSFER_IN" : "TRANSFER_OUT") : t.category} logo={transfer ? undefined : t.logo} />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate font-semibold text-stone-800">{t.name}</span>
+                            <span className="block truncate text-xs text-stone-500">
+                              {sort === "biggest" ? `${formatDate(t.date)} · ` : ""}{transfer ? "Transfer" : categoryLabel(t.category)} · {accountName.get(t.accountId) ?? "Account"}{unusualById.has(t.id) ? " · higher than usual" : ""}
+                            </span>
                           </span>
-                        </span>
-                        <span className={`shrink-0 font-bold tabular-nums ${out ? "text-ink" : "text-[var(--color-gain)]"}`}>{out ? "−" : "+"}{money(Math.abs(t.amount))}</span>
+                          {t.pending && <span className="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold uppercase tracking-wide text-amber-700 ring-1 ring-amber-500/60">Pending</span>}
+                          <span className={`shrink-0 font-bold tabular-nums ${out ? "text-ink" : "text-[var(--color-gain)]"}`}>{out ? "−" : "+"}{money(Math.abs(t.amount))}</span>
+                        </button>
                       </li>
                     );
                   })}
@@ -313,6 +471,25 @@ export function MoneyDashboard({
           </div>
         )}
       </Card>
+
+      {detail && (() => {
+        const transfer = isTransfer(detail, transferIds);
+        const impact = detail.amount > 0 && !transfer ? goalImpact(detail.amount, goals) : null;
+        const flagged = unusualById.get(detail.id);
+        const account = data.accounts.find((a) => a.id === detail.accountId);
+        return (
+          <TransactionDetail
+            transaction={detail}
+            transfer={transfer}
+            accountLabel={account ? `${account.name}${account.mask ? ` ••${account.mask}` : ""}` : "Account"}
+            goalLine={impact ? `That's about ${impact.days} day${impact.days === 1 ? "" : "s"} of what you save toward ${impact.goalName}.` : null}
+            unusualLine={flagged ? `Higher than usual. You normally pay about ${money(flagged.typical)} here.` : null}
+            onClose={() => setDetailId(null)}
+            onSeeMerchant={() => seeMerchant(detail.name)}
+            onAsk={() => askAboutTransaction(detail)}
+          />
+        );
+      })()}
     </Shell>
   );
 }
