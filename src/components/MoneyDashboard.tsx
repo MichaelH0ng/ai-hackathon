@@ -20,6 +20,7 @@ import {
 } from "../lib/activityInsights";
 import { askPolaris } from "../lib/polarisAsk";
 import { BudgetPace, SpendingOverview, TransactionDetail } from "./ActivityVisuals";
+import { MonthlyFlowChart, MonthPaceChart, TopMerchantsChart, WeekdayChart } from "./ActivityCharts";
 import {
   type FlowPeriod,
   categoryLabel,
@@ -300,6 +301,14 @@ export function MoneyDashboard({
       <div className={`grid gap-4 [&>*]:min-w-0 ${monthlyBudget > 0 ? "lg:grid-cols-2" : ""}`}>
         <SpendingOverview transactions={data.transactions} transferIds={transferIds} selectedDay={day} onSelectDay={pickDay} />
         {monthlyBudget > 0 && <BudgetPace transactions={data.transactions} transferIds={transferIds} budget={monthlyBudget} />}
+      </div>
+
+      {/* More ways to see the same money: by month, pace vs. last month, by weekday, and by merchant. */}
+      <div className="grid gap-4 lg:grid-cols-2 [&>*]:min-w-0">
+        <MonthlyFlowChart transactions={data.transactions} transferIds={transferIds} />
+        <MonthPaceChart transactions={data.transactions} transferIds={transferIds} />
+        <WeekdayChart transactions={data.transactions} transferIds={transferIds} />
+        <TopMerchantsChart transactions={data.transactions} transferIds={transferIds} onPick={seeMerchant} />
       </div>
 
       {/* Charges that changed or look bigger than usual. Only shown when there is something to look at. */}

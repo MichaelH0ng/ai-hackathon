@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import type { BankTransaction } from "./money";
 import type { MoneyGoal } from "./types";
 import {
-  budgetPace, categoryChanges, changeText, dailySpending, goalImpact, heatLevel, monthGrid, monthSpending, outByDay,
-  priceChanges, rangeStart, sortTransactions, summarize, toCsv, unusualCharges,
+  budgetPace, categoryChanges, changeText, dailySpending, goalImpact, heatLevel, monthGrid, monthlyFlow, monthPace, monthSpending,
+  niceMax, outByDay, priceChanges, rangeStart, sortTransactions, summarize, toCsv, topMerchants, unusualCharges, weekdaySpending,
 } from "./activityInsights";
 
 let n = 0;
@@ -149,5 +149,78 @@ describe("csv export", () => {
   it("defuses names that start like spreadsheet formulas", () => {
     const csv = toCsv([tx({ name: "=HYPERLINK(\"http://x\")" })], () => "Checking", none);
     expect(csv.split("\n")[1]).toContain("\"'=HYPERLINK(");
+  });
+});
+
+describe("monthly flow", () => {
+  it("totals money in and out per month and marks the current month partial", () => {
+    const list = [
+      tx({ date: "2026-09-10", amount: 100 }), tx({ date: "2026-09-12", amount: -500, category: "INCOME" }),
+      tx({ date: "2026-11-02", amount: 60 }), tx({ date: "2026-11-03", amount: 500, category: "TRANSFER_OUT" }),
+    ];
+    const rows = monthlyFlow(list, none, 6, NOW);
+    expect(rows.map((r) => r.month)).toEqual(["2026-09", "2026-10", "2026-11"]); // nothing before the first transaction
+    expect(rows[0]).toMatchObject({ out: 100, in: 500, partial: false });
+    expect(rows[1]).toMatchObject({ out: 0, in: 0 });
+    expect(rows[2]).toMatchObject({ out: 60, in: 0, partial: true });
+  });
+  it("is empty with no transactions", () => {
+    expect(monthlyFlow([], none, 6, NOW)).toEqual([]);
+  });
+});
+
+describe("month pace", () => {
+  it("builds running totals for this month and last", () => {
+    const list = [
+      tx({ date: "2026-11-02", amount: 10 }), tx({ date: "2026-11-10", amount: 30 }),
+      tx({ date: "2026-10-02", amount: 20 }), tx({ date: "2026-10-20", amount: 50 }),
+    ];
+    const pace = monthPace(list, none, NOW); // Nov 14
+    expect(pace.today).toBe(14);
+    expect(pace.thisTotal).toBe(40);
+    expect(pace.lastTotal).toBe(70);
+    expect(pace.lastSameDay).toBe(20); // by Oct 14 last month: only the Oct 2 charge
+    expect(pace.points).toHaveLength(31);
+    expect(pace.points[13]).toMatchObject({ day: 14, current: 40, previous: 20 });
+    expect(pace.points[14]?.current).toBeNull(); // nothing after today
+    expect(pace.points[30]).toMatchObject({ day: 31, previous: 70 }); // October has 31 days, so its line runs to the end
+    expect(pace.points[30]?.current).toBeNull();
+  });
+});
+
+describe("weekday spending", () => {
+  it("averages by weekday over the days that exist", () => {
+    // Nov 9 and Nov 2 2026 are Mondays; the history starts Nov 1 (a Sunday).
+    const list = [tx({ date: "2026-11-01", amount: 5 }), tx({ date: "2026-11-02", amount: 40 }), tx({ date: "2026-11-09", amount: 20 })];
+    const rows = weekdaySpending(list, none, 90, NOW);
+    const monday = rows[1]!;
+    expect(monday.label).toBe("Mon");
+    expect(monday.days).toBe(2);
+    expect(monday.total).toBe(60);
+    expect(monday.average).toBe(30);
+    expect(rows[0]!.days).toBe(2); // Nov 1 and Nov 8
+    expect(rows.reduce((s, r) => s + r.days, 0)).toBe(14); // Nov 1 to Nov 14
+  });
+  it("returns zeros with no data", () => {
+    expect(weekdaySpending([], none, 90, NOW).every((r) => r.average === 0 && r.days === 0)).toBe(true);
+  });
+});
+
+describe("top merchants", () => {
+  it("groups by name, skips transfers, pending, and money in", () => {
+    const list = [
+      tx({ name: "Trader Joe's", amount: 40, date: "2026-11-10" }), tx({ name: "trader joe's", amount: 25, date: "2026-11-05" }),
+      tx({ name: "Chipotle", amount: 12, date: "2026-11-06" }), tx({ name: "Chipotle", amount: 99, pending: true }),
+      tx({ name: "Savings", amount: 500, category: "TRANSFER_OUT" }), tx({ name: "Refund", amount: -30 }),
+      tx({ name: "Old", amount: 80, date: "2026-08-01" }),
+    ];
+    const rows = topMerchants(list, none, 30, NOW);
+    expect(rows).toEqual([{ name: "Trader Joe's", total: 65, count: 2 }, { name: "Chipotle", total: 12, count: 1 }]);
+  });
+});
+
+describe("niceMax", () => {
+  it("rounds up to a clean gridline value", () => {
+    expect([0, 3, 7, 130, 1800, 2600, 9000].map(niceMax)).toEqual([1, 5, 10, 200, 2000, 5000, 10000]);
   });
 });

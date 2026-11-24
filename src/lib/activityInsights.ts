@@ -255,3 +255,125 @@ export function toCsv(list: BankTransaction[], accountName: (id: string) => stri
   );
   return ["Date,Description,Category,Account,Amount,Status", ...rows].join("\n");
 }
+
+// ---------- more charts ----------
+
+export interface MonthFlow { month: string; label: string; out: number; in: number; partial: boolean }
+
+/**
+ * Money in and out for each of the last `months` calendar months, oldest first, this month last. Months before
+ * your first transaction are dropped so a short history doesn't show empty columns. Same rule as the cash flow card.
+ */
+export function monthlyFlow(transactions: BankTransaction[], transferIds: Set<string>, months = 6, now = new Date()): MonthFlow[] {
+  const keyOf = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  const buckets = new Map<string, { out: number; in: number }>();
+  let earliest = "";
+  for (const t of transactions) {
+    if (t.pending || isTransfer(t, transferIds)) continue;
+    if (!earliest || t.date < earliest) earliest = t.date;
+    const key = t.date.slice(0, 7);
+    const bucket = buckets.get(key) ?? { out: 0, in: 0 };
+    if (t.amount > 0) bucket.out += t.amount;
+    else bucket.in += -t.amount;
+    buckets.set(key, bucket);
+  }
+  if (!earliest) return [];
+  const result: MonthFlow[] = [];
+  for (let i = months - 1; i >= 0; i--) {
+    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const key = keyOf(d);
+    if (key < earliest.slice(0, 7)) continue;
+    const b = buckets.get(key) ?? { out: 0, in: 0 };
+    result.push({ month: key, label: d.toLocaleDateString("en-US", { month: "short" }), out: b.out, in: b.in, partial: i === 0 });
+  }
+  return result;
+}
+
+export interface PacePoint { day: number; current: number | null; previous: number | null }
+
+/**
+ * Running spending through this month next to last month's, by day of the month. `current` stops at today and
+ * `previous` stops at the end of last month. `lastSameDay` is last month's running total at this point in the month.
+ */
+export function monthPace(transactions: BankTransaction[], transferIds: Set<string>, now = new Date()) {
+  const perDay = new Map<string, number>();
+  for (const t of transactions) perDay.set(t.date, (perDay.get(t.date) ?? 0) + spendDelta(t, transferIds));
+  const running = (year: number, month: number, upTo: number) => {
+    const values: number[] = [];
+    let total = 0;
+    for (let day = 1; day <= upTo; day++) {
+      total += Math.max(0, perDay.get(toISO(new Date(year, month, day))) ?? 0);
+      values.push(total);
+    }
+    return values;
+  };
+  const today = now.getDate();
+  const prevMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const prevDays = new Date(now.getFullYear(), now.getMonth(), 0).getDate();
+  const current = running(now.getFullYear(), now.getMonth(), today);
+  const previous = running(prevMonth.getFullYear(), prevMonth.getMonth(), prevDays);
+  const days = Math.max(today, prevDays, new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate());
+  const points: PacePoint[] = Array.from({ length: days }, (_, i) => ({ day: i + 1, current: current[i] ?? null, previous: previous[i] ?? null }));
+  return {
+    points,
+    thisTotal: current.at(-1) ?? 0,
+    lastTotal: previous.at(-1) ?? 0,
+    lastSameDay: previous[Math.min(today, prevDays) - 1] ?? 0,
+    today,
+  };
+}
+
+export interface WeekdaySpend { weekday: number; label: string; average: number; total: number; days: number }
+
+const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+/**
+ * The average you spend on each day of the week over the last `days` days. Counts every such day in the window,
+ * including ones with no spending, and starts no earlier than your first transaction so a short history isn't diluted.
+ */
+export function weekdaySpending(transactions: BankTransaction[], transferIds: Set<string>, days = 90, now = new Date()): WeekdaySpend[] {
+  const today = toISO(now);
+  let start = addDays(today, -(days - 1));
+  const perDay = new Map<string, number>();
+  let earliest = "";
+  for (const t of transactions) {
+    if (!earliest || t.date < earliest) earliest = t.date;
+    perDay.set(t.date, (perDay.get(t.date) ?? 0) + spendDelta(t, transferIds));
+  }
+  if (earliest && earliest > start) start = earliest;
+  const rows = WEEKDAYS.map((label, weekday) => ({ weekday, label, average: 0, total: 0, days: 0 }));
+  if (!earliest) return rows;
+  for (let date = start; date <= today; date = addDays(date, 1)) {
+    const row = rows[new Date(`${date}T00:00:00`).getDay()]!;
+    row.days += 1;
+    row.total += Math.max(0, perDay.get(date) ?? 0);
+  }
+  for (const row of rows) row.average = row.days ? row.total / row.days : 0;
+  return rows;
+}
+
+export interface Merchant { name: string; total: number; count: number }
+
+/** Where the most money went over the last `days` days, by merchant name: posted, non-transfer money out. */
+export function topMerchants(transactions: BankTransaction[], transferIds: Set<string>, days = 30, now = new Date(), limit = 6): Merchant[] {
+  const since = addDays(toISO(now), -days);
+  const groups = new Map<string, Merchant>();
+  for (const t of transactions) {
+    if (t.pending || t.amount <= 0 || t.date < since || isTransfer(t, transferIds)) continue;
+    const key = t.name.trim().toLowerCase();
+    if (!key) continue;
+    const group = groups.get(key) ?? { name: t.name.trim(), total: 0, count: 0 };
+    group.total += t.amount;
+    group.count += 1;
+    groups.set(key, group);
+  }
+  return [...groups.values()].sort((a, b) => b.total - a.total).slice(0, limit);
+}
+
+/** A round number at or above `value` for a chart's top gridline: 1, 2, 2.5, 5 or 10 times a power of ten. */
+export function niceMax(value: number): number {
+  if (value <= 0) return 1;
+  const power = 10 ** Math.floor(Math.log10(value));
+  for (const step of [1, 2, 2.5, 5, 10]) if (value <= step * power) return step * power;
+  return 10 * power;
+}
