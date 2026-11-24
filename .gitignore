@@ -26,7 +26,6 @@ dist-ssr
 # Secrets — API keys must never be pushed to GitHub
 .env
 .env.*
-!.env.example
 *api-key*
 *api_key*
 *.key
