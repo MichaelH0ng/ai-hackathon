@@ -27,7 +27,7 @@ Optional:
 - **On your phone** (same Wi-Fi): `npm run dev:phone` and open the "Network" URL.
 - **Tests**: `npm test`
 
-
+# Creates the 30-second demo for our North Star Pitch
 ## 30-second demo
 
 1. **Home**: tap **Try it with sample data**. In "How much can you save this week?", turn the dial from $15 to $30. The $1,199 new phone goal moves closer as you increase weekly savings. Tap **Save $30/week to my plan**.
