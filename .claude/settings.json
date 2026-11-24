@@ -3,6 +3,19 @@
     "allow": [
       "mcp__claude-in-chrome__tabs_context_mcp",
       "ClaudeInChromeDomain(localhost:5173)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.*)",
+      "Read(**/.env)",
+      "Read(**/.env.*)",
+      "Bash(cat .env*)",
+      "Bash(head .env*)",
+      "Bash(tail .env*)",
+      "Bash(less .env*)",
+      "Bash(more .env*)",
+      "Bash(grep * .env*)",
+      "Bash(source .env*)"
     ]
   }
 }
