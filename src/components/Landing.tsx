@@ -1,9 +1,10 @@
 import { ArrowRight, CalendarClock, PiggyBank, Plus, RefreshCw, Sparkles, Target } from "lucide-react";
 import { useMemo } from "react";
-import { addDays, daysBetween, formatDate, formatWeekday, parseISO, todayISO } from "../lib/dates";
+import { daysBetween, formatDate, formatWeekday, todayISO } from "../lib/dates";
 import { formatExact, formatMoney, weeklyNeededForDeadline } from "../lib/finance";
 import { assetsByInstitution, billsFor, detectTransferIds, mergeNetWorthHistory, netWorthSeries } from "../lib/money";
 import { buildForecast, cashFromAccounts } from "../lib/safeToSpend";
+import { greeting, nextPaycheck } from "../lib/homeInsights";
 import type { MoneyGoal } from "../lib/types";
 import { balancesAreFresh, type Bank } from "../lib/useBank";
 import { AssetSplit } from "./AssetSplit";
@@ -138,17 +139,7 @@ export function HomeOverview({ data, goals = [], profileName = "", onCheck, onMo
         : { value: `${formatMoney(gap)}/week short`, detail: `${activeGoal.name} by ${formatDate(activeGoal.deadline)}` };
     })();
     const today = todayISO();
-    // This investing cadence is every other Friday. Anchor that schedule to the
-    // latest posted Friday Robinhood transfer, rather than Plaid's broader stream cadence.
-    const latestRobinhoodFriday = data.transactions
-      .filter((transaction) => !transaction.pending && transaction.category === "TRANSFER_OUT" && /robinhood/i.test(transaction.name) && parseISO(transaction.date).getDay() === 5)
-      .sort((a, b) => b.date.localeCompare(a.date))[0] ?? null;
-    const nextRobinhoodInvestment = (() => {
-      if (!latestRobinhoodFriday) return null;
-      let nextDate = addDays(latestRobinhoodFriday.date, 14);
-      while (nextDate < today) nextDate = addDays(nextDate, 14);
-      return nextDate;
-    })();
+    const paycheck = nextPaycheck(data, today);
 
     return [
       {
@@ -174,19 +165,25 @@ export function HomeOverview({ data, goals = [], profileName = "", onCheck, onMo
         tone: "blue",
       },
       { label: "Goal check-in", ...goalPace, tone: "violet" },
-      nextRobinhoodInvestment ? {
-        label: "Next Robinhood investment",
-        value: nextRobinhoodInvestment === today ? "Today" : formatWeekday(nextRobinhoodInvestment),
-        detail: "Every other Friday · based on your latest Robinhood investment.",
+      // Plaid's prediction from past paychecks; the amount is what the last one actually was.
+      paycheck ? {
+        label: "Next paycheck",
+        value: paycheck.date === today ? "Today" : formatWeekday(paycheck.date),
+        detail: `About ${formatExact(paycheck.amount)} from ${paycheck.payer}${paycheck.frequency ? ` · ${paycheck.frequency}` : ""}`,
+        tone: "sky",
+      } : nextIncome ? {
+        label: "Next paycheck",
+        value: nextIncome.date === today ? "Today" : formatWeekday(nextIncome.date),
+        detail: `About ${formatExact(nextIncome.amount)} · ${nextIncome.name}`,
         tone: "sky",
       } : {
-        label: "Next Robinhood investment",
-        value: "No date detected",
-        detail: "We will add it once a Friday Robinhood investment is detected.",
+        label: "Next paycheck",
+        value: "Not detected yet",
+        detail: "We will show it once a regular paycheck is spotted.",
         tone: "sky",
       },
     ];
-  }, [data.accounts, data.transactions, goals, view.bills, view.chartTransactions, hidden]);
+  }, [data, goals, view.bills, hidden]);
   const lastBankUpdate = data.status
     .map((status) => status.lastUpdatedAt)
     .filter((stamp): stamp is string => !!stamp && !Number.isNaN(Date.parse(stamp)))
@@ -206,7 +203,7 @@ export function HomeOverview({ data, goals = [], profileName = "", onCheck, onMo
       <PageBanner
         icon={<Sparkles size={15} aria-hidden="true" />}
         kicker="YOUR NORTHSTAR"
-        lead={firstName ? "Welcome," : "Welcome to"}
+        lead={firstName ? `${greeting()},` : "Welcome to"}
         highlight={firstName || "NorthStar"}
         aside={
           <div className="home-sync">

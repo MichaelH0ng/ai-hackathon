@@ -10,6 +10,7 @@ import { categoryLabel, comparisonPeriods, goalFinishDate, hasUnmatchedSubject, 
 import { shortDate } from "../src/lib/safeToSpendExplain.js";
 import { recurring } from "../src/lib/safeToSpend.js";
 import { todayISO } from "../src/lib/dates.js";
+import { FREQUENCY_WORDS, payerName, paycheckStreams } from "../src/lib/homeInsights.js";
 import { buildPlan, planFacts, templateProposal } from "./savingsPlan.js";
 
 const ScanResult = z.object({
@@ -295,25 +296,12 @@ const namesPeriod = (question: string) => transactionRange(question, new Date(),
 const WAREHOUSE_STORES = /\b(costco|sam'?s club|target|walmart)\b/i;
 const AVERAGE_WORDS = /\b(average|avg|typical(ly)?|usually|normally)\b|\b(a|per|each|every) month\b|\bmonthly\b/;
 
-/** "State of California" from "PAYROLL ST OF CA CA PAYROLL XX7052", or the payer's own words. */
-function payerName(name: string): string {
-  if (/\bST(ATE)? OF CA\b/i.test(name)) return "State of California";
-  const words = name.replace(/\b(payroll|ppd|ach|dir(ect)? dep(osit)?|pay|xx+\w*)\b|\d+|[*#:]/gi, " ").replace(/\s+/g, " ").trim();
-  return words ? words.toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase()) : "Your employer";
-}
-
-const FREQUENCY_WORDS: Record<string, string> = { WEEKLY: "weekly", BIWEEKLY: "every two weeks", SEMI_MONTHLY: "twice a month", MONTHLY: "monthly", ANNUALLY: "yearly" };
-
 /**
  * The next paycheck Plaid predicts. Only income streams that look like pay: not interest, and not
  * money from your own accounts (a regular Wealthfront transfer is labeled income by Plaid too).
  */
 function nextPaycheck(data: ChatData): string | null {
-  const today = todayISO();
-  const own = [...new Set(data.accounts.map((a) => a.institution.toLowerCase().split(/\s+/)[0]))].filter((w) => w.length >= 4);
-  const streams = (data.recurring ?? []).filter((s) => s.direction === "in" && s.isActive && s.category === "INCOME" && s.nextDate && s.nextDate >= today
-    && s.amount >= 20 && !/\binterest\b/i.test(s.name) && !own.some((w) => s.name.toLowerCase().includes(w)))
-    .sort((a, b) => a.nextDate!.localeCompare(b.nextDate!));
+  const streams = paycheckStreams(data, todayISO());
   const next = streams[0];
   if (!next) return null;
   // The paychecks themselves, to show what they've actually been: amounts vary for hourly and state pay.
